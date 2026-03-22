@@ -1,5 +1,5 @@
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -19,29 +19,19 @@ def get_db():
 
 
 def init_db():
-    from app import models  # noqa: F401 — ensure models are registered
+    from app import models  # noqa: F401 — ensure all models are registered
     Base.metadata.create_all(bind=engine)
-    _run_migrations()
+    _seed_defaults()
 
 
-def _run_migrations():
-    """Apply schema changes that create_all won't handle on existing DBs."""
-    from sqlalchemy import text
-    with engine.connect() as conn:
-        result = conn.execute(text("PRAGMA table_info(scrapers)"))
-        columns = [row[1] for row in result]
-        
-        if "thumbnail_url" not in columns:
-            conn.execute(text("ALTER TABLE scrapers ADD COLUMN thumbnail_url VARCHAR"))
-            print("[DB] Migration: added thumbnail_url column to scrapers.")
-            
-        if "homepage_url" not in columns:
-            conn.execute(text("ALTER TABLE scrapers ADD COLUMN homepage_url VARCHAR"))
-            print("[DB] Migration: added homepage_url column to scrapers.")
-            
-        if "local_thumbnail_path" not in columns:
-            conn.execute(text("ALTER TABLE scrapers ADD COLUMN local_thumbnail_path VARCHAR"))
-            print("[DB] Migration: added local_thumbnail_path column to scrapers.")
-            
-        conn.commit()
-
+def _seed_defaults():
+    """Seed default values into app_settings if they don't exist."""
+    db = SessionLocal()
+    try:
+        from app.models import AppSetting
+        if not db.get(AppSetting, "timezone"):
+            db.add(AppSetting(key="timezone", value="UTC"))
+            db.commit()
+            print("[DB] Seeded default timezone = UTC")
+    finally:
+        db.close()

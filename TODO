@@ -1,6 +1,9 @@
-1. Implement TAGS/Genres filtering system
-2. Manually clicking to execute the scraper
-3. A better way of implementing the scrapers. I dont like that I have to copy and then modify the name to match filesystem then add py and then add to the scraper registry like app.src.blahblah. It's too much work.
-4. A better way of displaying and storing the payload. A road for generalizing this scraper hub more than the manhwa scraper.
-5. Separate integrations panel, not just discord
-6. A proxy support system
+DO NOT READ THIS FILE. IT IS FOR MY REFERENCE ONLY.
+
+1. Add a versioning to the scraper, that is, when I edit the scraper (which btw, the edit menu should match the register menu) I should be able to see the previous versions and revert to them. So, now I dont know how will you save the scraper code, I can think of saving it as a file in the database, but I'm not sure if that's a good idea. If that would be the case, I wanna be able to see the code from UI and revert to it. Maybe add a git like versioning system? that can show the changes too, but this is a bit too far fetched/overkill
+3. A proxy support system
+4. change default text values of register scraper modal
+5. Change whatever heck this hint is: "Code Functionality * (Upload the .py template. Must subclass BaseScraper and implement def scrape(self))"
+6. cant drag and drop script
+7. When adding homepage it forces you to add https:// saying no scheme found, when i put just youtube.com, auto add https:// when missing
+

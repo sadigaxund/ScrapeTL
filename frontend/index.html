@@ -4,8 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Anime Scraper Registry</title>
-  <meta name="description" content="Manage, schedule, and monitor anime scrapers with Discord notifications." />
+  <title>ScraperHub</title>
+  <meta name="description" content="Manage, schedule, and monitor scrapers with integrations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css" />
@@ -32,6 +32,12 @@
         <span class="nav-icon">⏳</span> Queue
         <span class="badge" id="queue-badge" style="display:none"></span>
       </button>
+      <button class="nav-item" data-tab="integrations" id="nav-integrations">
+        <span class="nav-icon">🔗</span> Integrations
+      </button>
+      <button class="nav-item" data-tab="settings" id="nav-settings">
+        <span class="nav-icon">⚙️</span> Settings
+      </button>
     </nav>
     <div class="sidebar-footer">
       <div class="auto-refresh">
@@ -48,9 +54,10 @@
     <header class="topbar">
       <div class="topbar-left">
         <h1 class="page-title" id="page-title">Scrapers</h1>
-        <p class="page-subtitle" id="page-subtitle">Manage your anime scraper plugins</p>
+        <p class="page-subtitle" id="page-subtitle">Manage your scraper plugins</p>
       </div>
       <div class="topbar-right">
+        <button class="btn btn-primary" onclick="openWizardModal()" id="main-add-btn" style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Scraper</button>
         <button class="btn btn-ghost" onclick="refreshAll()" title="Refresh">⟳ Refresh</button>
       </div>
     </header>
@@ -60,54 +67,33 @@
 
     <!-- ── Scrapers Tab ──────────────────────────── -->
     <section class="tab-panel active" id="tab-scrapers">
-      <!-- Register form -->
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Register Scraper</h2>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Name</label>
-            <input type="text" id="scraper-name" placeholder="My Anime Scraper" />
-          </div>
-          <div class="form-group flex-2">
-            <label>Scraper File (Module)</label>
-            <select id="scraper-module" onchange="autoFillName(this)">
-              <option value="">— Select Detected Scraper —</option>
-            </select>
-          </div>
-        </div>
-        <div class="form-row" style="margin-top:12px">
-          <div class="form-group flex-2">
-            <label>Homepage URL <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-            <input type="text" id="scraper-homepage" placeholder="https://example.com" />
-          </div>
-          <div class="form-group flex-2">
-            <label>Description</label>
-            <input type="text" id="scraper-desc" placeholder="Optional description" />
-          </div>
-        </div>
-        <div class="form-row" style="align-items:flex-start;margin-top:12px">
-          <div class="form-group flex-2">
-            <label>Thumbnail URL <span
-                style="font-weight:400;text-transform:none;color:var(--text-muted)">(optional)</span></label>
-            <input type="text" id="scraper-thumb" placeholder="https://…/cover.jpg"
-              oninput="previewThumb(this.value)" />
-          </div>
-          <div class="form-group" style="flex:0 0 auto">
-            <label>&nbsp;</label>
-            <div id="thumb-preview" class="thumb-preview">
-              <img id="thumb-preview-img" src="" alt="" style="display:none" />
-              <span id="thumb-preview-placeholder" class="thumb-placeholder">🎌</span>
+
+      <!-- Filter bar & Tag Manager (combined) -->
+      <div class="card" style="padding:16px 20px; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:20px;">
+      <!-- Filter bar + compact tag manager -->
+      <div class="card" style="padding:14px 20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+          <!-- Filter chips -->
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+            <span style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-right:4px">TAG:</span>
+            <div id="tag-filter-chips" style="display:flex;gap:6px;flex-wrap:wrap">
+              <button class="tag-chip tag-chip--active" data-tag-id="" onclick="filterByTag(this, '')">All</button>
             </div>
           </div>
-          <div class="form-group form-group--action">
-            <label>&nbsp;</label>
-            <button class="btn btn-primary" onclick="registerScraper()">+ Register</button>
-          </div>
+          <!-- Manage tags toggle -->
+          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="toggleTagManager()">🏷️ Manage Tags <span id="tag-manager-arrow">▾</span></button>
         </div>
-        <div class="available-hint" style="display:none">
-          <span id="available-modules"></span>
+
+        <!-- Collapsible tag manager -->
+        <div id="tag-manager-panel" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-light)">
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input type="text" id="new-tag-name" placeholder="Tag name" style="width:130px; padding:6px 10px; font-size:13px;" />
+            <input type="color" id="new-tag-color" value="#6366f1" style="width:32px;height:28px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--border)" title="Pick colour" />
+            <button class="btn btn-ghost" style="padding:5px 10px; font-size:12px;" onclick="createTag()">+ Add</button>
+            <div id="tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-left:8px">
+              <span style="color:var(--text-muted);font-size:12px">No tags yet.</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -118,7 +104,7 @@
           <span class="card-count" id="scraper-count">0</span>
         </div>
         <div id="scrapers-list" class="item-list">
-          <div class="empty-state">No scrapers registered yet.</div>
+          <div class="empty-state">No scrapers registered yet. Click "+ Add Scraper" to create one.</div>
         </div>
       </div>
     </section>
@@ -157,8 +143,7 @@
             <button class="btn btn-primary" onclick="createSchedule()">+ Schedule</button>
           </div>
         </div>
-        <p class="cron-hint">Format: <code>minute hour day month weekday</code> — e.g. <code>0 12 * * *</code> = every
-          day at 12:00 local time</p>
+        <p class="cron-hint">Format: <code>minute hour day month weekday</code> — times are in the <strong>configured timezone</strong> (see Settings).</p>
       </div>
 
       <div class="card">
@@ -188,27 +173,7 @@
             </select>
           </div>
         </div>
-        <div class="table-wrapper">
-          <table class="data-table" id="logs-table">
-            <thead>
-              <tr>
-                <th>Scraper</th>
-                <th>Status</th>
-                <th>Title</th>
-                <th>Release Date</th>
-                <th>Episode URL</th>
-                <th>Episodes</th>
-                <th>Triggered By</th>
-                <th>Run At</th>
-              </tr>
-            </thead>
-            <tbody id="logs-body">
-              <tr>
-                <td colspan="8" class="empty-td">No logs yet.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <div id="logs-list" class="logs-list"></div>
         <div class="pagination" id="logs-pagination"></div>
       </div>
     </section>
@@ -241,43 +206,277 @@
       </div>
     </section>
 
-  </main>
-
-  <!-- ── Edit Modal ──────────────────────────── -->
-  <div class="modal-overlay" id="edit-modal" style="display:none" onclick="closeEditModal(event)">
-    <div class="modal-box">
-      <div class="modal-header">
-        <h2 class="card-title">Edit Scraper</h2>
-        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeEditModal()">✕</button>
-      </div>
-      <input type="hidden" id="edit-id" />
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Name</label>
-        <input type="text" id="edit-name" placeholder="Scraper name" />
-      </div>
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Homepage URL <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
-        <input type="text" id="edit-homepage" placeholder="https://example.com" />
-      </div>
-      <div class="form-group" style="margin-bottom:14px">
-        <label>Description</label>
-        <input type="text" id="edit-desc" placeholder="Optional description" />
-      </div>
-      <div class="form-group" style="margin-bottom:20px">
-        <label>Thumbnail URL <span
-            style="font-weight:400;text-transform:none;color:var(--text-muted)">(optional)</span></label>
-        <div style="display:flex;gap:12px;align-items:center">
-          <input type="text" id="edit-thumb" placeholder="https://…/cover.jpg" oninput="previewEditThumb(this.value)"
-            style="flex:1" />
-          <div id="edit-thumb-preview" class="thumb-preview thumb-preview--sm">
-            <img id="edit-thumb-img" src="" alt="" style="display:none" />
-            <span id="edit-thumb-placeholder" class="thumb-placeholder" style="font-size:18px">🎌</span>
+    <!-- ── Integrations Tab ──────────────────────── -->
+    <section class="tab-panel" id="tab-integrations">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">New Integration</h2>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="integ-name" placeholder="My Discord Channel" />
+          </div>
+          <div class="form-group">
+            <label>Type</label>
+            <select id="integ-type" onchange="onIntegTypeChange(this.value)">
+              <option value="discord_webhook">Discord Webhook</option>
+            </select>
+          </div>
+        </div>
+        <!-- Discord webhook fields -->
+        <div id="integ-discord-fields" class="form-row" style="margin-top:12px">
+          <div class="form-group flex-2">
+            <label>Webhook URL</label>
+            <input type="text" id="integ-webhook-url" placeholder="https://discord.com/api/webhooks/…" />
+          </div>
+          <div class="form-group form-group--action">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" onclick="createIntegration()">+ Create</button>
           </div>
         </div>
       </div>
-      <div style="display:flex;gap:10px;justify-content:flex-end">
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Integrations</h2>
+          <span class="card-count" id="integ-count">0</span>
+        </div>
+        <div id="integrations-list" class="item-list">
+          <div class="empty-state">No integrations yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Settings Tab ──────────────────────────── -->
+    <section class="tab-panel" id="tab-settings">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Timezone</h2>
+        </div>
+        <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px">
+          All cron schedules are interpreted in this timezone. Changing this takes effect immediately.
+        </p>
+        <div class="form-row" style="align-items:flex-end">
+          <div class="form-group flex-2">
+            <label>IANA Timezone</label>
+            <input type="text" id="tz-search" placeholder="Type to search… e.g. Asia/Baku" oninput="filterTzOptions(this.value)" />
+            <select id="tz-select" size="6" style="margin-top:6px;height:160px;font-family:monospace;font-size:13px">
+            </select>
+          </div>
+          <div class="form-group form-group--action" style="margin-bottom:0">
+            <button class="btn btn-primary" onclick="saveTimezone()">💾 Save Timezone</button>
+          </div>
+        </div>
+        <p id="tz-current" style="margin-top:12px;font-size:13px;color:var(--text-muted)">Current: loading…</p>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── SETUP WIZARD MODAL ─────────────────────────────── -->
+  <div class="modal-overlay" id="wizard-modal" style="display:none" onclick="closeWizardModal(event)">
+    <div class="modal-box" style="max-width: 640px;">
+      <div class="modal-header">
+        <h2 class="card-title">🤖 Scraper Setup Wizard</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeWizardModal()">✕</button>
+      </div>
+      
+      <form id="wizard-form" onsubmit="submitWizard(event)">
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group flex-2">
+            <label>Name *</label>
+            <input type="text" id="wiz-name" placeholder="My Scraper" required />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group flex-2">
+            <label>Description</label>
+            <input type="text" id="wiz-desc" placeholder="Short description of what this scraper does" />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group flex-2">
+            <label>Homepage URL</label>
+            <input type="text" id="wiz-home" placeholder="youtube.com or https://example.com" />
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
+            <div class="form-group flex-2">
+              <label>Thumbnail Image <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+              <input type="text" id="wiz-thumb-url" placeholder="Paste URL here..." oninput="previewWizThumb(this.value)" style="margin-bottom:8px;" />
+              
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label for="wiz-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px;">
+                  📁 Upload Photo...
+                </label>
+                <input type="file" id="wiz-thumb-file" accept="image/*" style="display:none" onchange="handleWizThumbFile(this)" />
+                <span id="wiz-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
+              </div>
+            </div>
+
+            <div id="wiz-thumb-preview" class="thumb-preview" style="width:84px; height:84px;">
+              <img id="wiz-thumb-img" src="" alt="" style="display:none" />
+              <span id="wiz-thumb-placeholder" class="thumb-placeholder" style="font-size:32px">🎌</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px">
+          <label>Scraper Script (.py) * <span style="font-weight:400;color:var(--text-muted);text-transform:none">— must define <code>class YourScraper(BaseScraper)</code> with <code>def scrape(self)</code></span></label>
+          <div class="upload-zone wizard-upload-zone" id="wiz-code-zone" onclick="document.getElementById('wiz-code-file').click()">
+            <div style="font-size:24px; margin-bottom:8px;">📄</div>
+            <div id="wiz-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag & Drop your .py file here</div>
+            <div style="font-size:12px; margin-top:4px;">or click to browse</div>
+            <input type="file" id="wiz-code-file" accept=".py" style="display:none" onchange="handleWizCodeFile(this)" required />
+          </div>
+        </div>
+
+        <!-- Version + Commit row -->
+        <div class="form-row" style="margin-bottom:20px;gap:12px">
+          <div class="form-group" style="flex:0 0 auto">
+            <label>Initial Version</label>
+            <div style="display:flex;gap:4px;align-items:center">
+              <span style="color:var(--text-muted);font-size:13px">v</span>
+              <input type="number" id="wiz-ver-major" min="0" value="1" style="width:52px;text-align:center" />
+              <span style="color:var(--text-muted)">.</span>
+              <input type="number" id="wiz-ver-minor" min="0" value="0" style="width:52px;text-align:center" />
+              <span style="color:var(--text-muted)">.</span>
+              <input type="number" id="wiz-ver-patch" min="0" value="0" style="width:52px;text-align:center" />
+            </div>
+          </div>
+          <div class="form-group flex-2">
+            <label>Release Notes <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+            <input type="text" id="wiz-commit" placeholder="Initial release" />
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
+          <button type="button" class="btn btn-ghost" onclick="closeWizardModal()">Cancel</button>
+          <button type="submit" class="btn btn-primary" id="wiz-submit-btn">✨ Build Scraper</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Edit Scraper Modal ─────────────────────────────── -->
+  <div class="modal-overlay" id="edit-modal" style="display:none" onclick="closeEditModal(event)">
+    <div class="modal-box" style="max-width:640px">
+      <div class="modal-header">
+        <h2 class="card-title">✏️ Edit Scraper</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeEditModal()">✕</button>
+      </div>
+      <input type="hidden" id="edit-id" />
+
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group flex-2">
+          <label>Name *</label>
+          <input type="text" id="edit-name" placeholder="My Scraper" required />
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group flex-2">
+          <label>Description</label>
+          <input type="text" id="edit-desc" placeholder="What does this scraper do?" />
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group flex-2">
+          <label>Homepage URL <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+          <input type="text" id="edit-homepage" placeholder="youtube.com or https://example.com" />
+        </div>
+      </div>
+
+      <div style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
+          <div class="form-group flex-2">
+            <label>Thumbnail Image <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+            <input type="text" id="edit-thumb" placeholder="Paste URL here..." oninput="previewEditThumb(this.value)" style="margin-bottom:8px;" />
+            <div style="display:flex; align-items:center; gap:8px;">
+              <label for="edit-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px;">
+                📁 Upload Photo...
+              </label>
+              <input type="file" id="edit-thumb-file" accept="image/*" style="display:none" onchange="handleEditThumbFile(this)" />
+              <span id="edit-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
+            </div>
+          </div>
+          <div id="edit-thumb-preview" class="thumb-preview" style="width:84px; height:84px;">
+            <img id="edit-thumb-img" src="" alt="" style="display:none" />
+            <span id="edit-thumb-placeholder" class="thumb-placeholder" style="font-size:32px">🎌</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:24px">
+        <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional — drag &amp; drop or click to upload a new .py)</span></label>
+        <div class="upload-zone wizard-upload-zone" id="edit-code-zone" onclick="document.getElementById('edit-code-file').click()">
+          <div style="font-size:24px; margin-bottom:8px;">📄</div>
+          <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop a new .py file here</div>
+          <div style="font-size:12px; margin-top:4px;">or click to browse — leave empty to keep existing code</div>
+          <input type="file" id="edit-code-file" accept=".py" style="display:none" onchange="handleEditCodeFile(this)" />
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
         <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+        <button class="btn btn-primary" id="edit-submit-btn" onclick="saveEdit()">💾 Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Version History Modal ─────────────────────────────── -->
+  <div class="modal-overlay" id="versions-modal" style="display:none" onclick="closeVersionsModal(event)">
+    <div class="modal-box" style="max-width:720px">
+      <div class="modal-header">
+        <h2 class="card-title">🕓 Version History</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeVersionsModal()">✕</button>
+      </div>
+      <input type="hidden" id="versions-scraper-id" />
+      <div id="versions-list" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
+      <div id="ver-code-area" style="display:none">
+        <div style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-bottom:8px" id="ver-code-label">VERSION CODE</div>
+        <pre id="ver-code-view" style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;line-height:1.6;overflow:auto;max-height:320px;white-space:pre-wrap;word-break:break-all"></pre>
+      </div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-ghost" onclick="closeVersionsModal()">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Assign Integration Modal ──────────────────────── -->
+  <div class="modal-overlay" id="assign-integ-modal" style="display:none" onclick="closeAssignModal(event)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="card-title">Assign Integrations</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeAssignModal()">✕</button>
+      </div>
+      <input type="hidden" id="assign-scraper-id" />
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Toggle integrations for this scraper. Changes apply immediately.</p>
+      <div id="assign-integ-list" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-ghost" onclick="closeAssignModal()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Assign Tags Modal ──────────────────────────────── -->
+  <div class="modal-overlay" id="assign-tags-modal" style="display:none" onclick="closeAssignTagsModal(event)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="card-title">Manage Tags</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeAssignTagsModal()">✕</button>
+      </div>
+      <input type="hidden" id="assign-tags-scraper-id" />
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Toggle tags for this scraper.</p>
+      <div id="assign-tags-list" style="display:flex;flex-wrap:wrap;gap:8px;max-height:300px;overflow-y:auto"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-ghost" onclick="closeAssignTagsModal()">Done</button>
       </div>
     </div>
   </div>

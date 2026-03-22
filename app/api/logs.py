@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
@@ -31,9 +32,7 @@ def get_logs(
                 "scraper_id": log.scraper_id,
                 "scraper_name": log.scraper.name if log.scraper else None,
                 "status": log.status,
-                "title": log.title,
-                "release_date": log.release_date,
-                "website_url": log.website_url,
+                "payload": json.loads(log.payload) if log.payload else None,
                 "episode_count": log.episode_count,
                 "error_msg": log.error_msg,
                 "run_at": log.run_at.isoformat() if log.run_at else None,

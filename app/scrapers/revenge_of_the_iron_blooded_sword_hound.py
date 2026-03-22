@@ -33,12 +33,9 @@ HEADERS = {
 
 
 class Scraper(BaseScraper):
-    name = "Revenge of the Iron-Blooded Sword Hound"
     website_url = "https://erascans.com/manga/revenge-of-the-iron-blooded-sword-hound/"
-    description = "Scrapes the chapter list from the registered homepage URL."
 
     # ── helpers ───────────────────────────────────────────────────────────────
-
     def _fetch_soup(self) -> BeautifulSoup:
         resp = requests.get(self.website_url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
@@ -123,7 +120,7 @@ class Scraper(BaseScraper):
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def scrape_episodes_list(self) -> list[dict]:
+    def scrape(self) -> list[dict]:
         if not self.website_url:
             raise ValueError(
                 "No homepage URL configured. Set one in the scraper registry."

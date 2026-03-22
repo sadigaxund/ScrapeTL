@@ -1,0 +1,55 @@
+"""
+App Settings API — read/write key-value app configuration (e.g. timezone).
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import AppSetting
+import pytz
+
+router = APIRouter(prefix="/api/settings", tags=["settings"])
+
+# All valid IANA timezone strings pytz knows about (used for validation)
+VALID_TIMEZONES = sorted(pytz.all_timezones)
+
+
+class SettingUpdate(BaseModel):
+    value: str
+
+
+@router.get("")
+def get_settings(db: Session = Depends(get_db)):
+    rows = db.query(AppSetting).all()
+    return {r.key: r.value for r in rows}
+
+
+@router.get("/timezones")
+def list_timezones():
+    """Return all valid IANA timezone names so the frontend can build a select list."""
+    return VALID_TIMEZONES
+
+
+@router.put("/{key}")
+def update_setting(key: str, payload: SettingUpdate, db: Session = Depends(get_db)):
+    allowed_keys = {"timezone"}
+    if key not in allowed_keys:
+        raise HTTPException(status_code=400, detail=f"Unknown setting key: {key}")
+
+    if key == "timezone":
+        if payload.value not in VALID_TIMEZONES:
+            raise HTTPException(status_code=400, detail=f"Invalid timezone: {payload.value}")
+
+    row = db.get(AppSetting, key)
+    if row:
+        row.value = payload.value
+    else:
+        db.add(AppSetting(key=key, value=payload.value))
+    db.commit()
+
+    # Hot-reload the scheduler timezone so new schedules pick it up immediately
+    if key == "timezone":
+        from app import scheduler as sched
+        sched.reload_timezone(payload.value)
+
+    return {"key": key, "value": payload.value}
