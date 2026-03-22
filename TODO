@@ -1,0 +1,6 @@
+1. Implement TAGS/Genres filtering system
+2. Manually clicking to execute the scraper
+3. A better way of implementing the scrapers. I dont like that I have to copy and then modify the name to match filesystem then add py and then add to the scraper registry like app.src.blahblah. It's too much work.
+4. A better way of displaying and storing the payload. A road for generalizing this scraper hub more than the manhwa scraper.
+5. Separate integrations panel, not just discord
+6. A proxy support system

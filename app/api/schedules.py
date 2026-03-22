@@ -1,0 +1,93 @@
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import Schedule, Scraper
+from app import scheduler as sched
+
+router = APIRouter(prefix="/api/schedules", tags=["schedules"])
+
+
+class ScheduleCreate(BaseModel):
+    scraper_id: int
+    cron_expression: str   # standard 5-part cron, e.g. "0 12 * * *"
+
+
+@router.get("")
+def list_schedules(db: Session = Depends(get_db)):
+    schedules = db.query(Schedule).order_by(Schedule.created_at.desc()).all()
+    return [
+        {
+            "id": s.id,
+            "scraper_id": s.scraper_id,
+            "scraper_name": s.scraper.name if s.scraper else None,
+            "cron_expression": s.cron_expression,
+            "enabled": s.enabled,
+            "last_run": s.last_run.isoformat() if s.last_run else None,
+            "next_run": s.next_run.isoformat() if s.next_run else None,
+            "created_at": s.created_at.isoformat() if s.created_at else None,
+        }
+        for s in schedules
+    ]
+
+
+@router.post("")
+def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db)):
+    scraper = db.get(Scraper, payload.scraper_id)
+    if not scraper:
+        raise HTTPException(status_code=404, detail="Scraper not found.")
+
+    # Validate cron expression
+    try:
+        from croniter import croniter
+        if not croniter.is_valid(payload.cron_expression):
+            raise ValueError("invalid")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid cron expression.")
+
+    schedule = Schedule(
+        scraper_id=payload.scraper_id,
+        cron_expression=payload.cron_expression,
+        enabled=True,
+    )
+    db.add(schedule)
+    db.commit()
+    db.refresh(schedule)
+
+    # Register with APScheduler and compute next_run
+    sched.add_schedule_job(schedule.id, scraper.id, payload.cron_expression)
+    job = sched.get_scheduler().get_job(f"schedule_{schedule.id}")
+    if job and job.next_run_time:
+        schedule.next_run = job.next_run_time.replace(tzinfo=None)
+        db.commit()
+
+    return {"id": schedule.id, "next_run": schedule.next_run.isoformat() if schedule.next_run else None}
+
+
+@router.patch("/{schedule_id}/toggle")
+def toggle_schedule(schedule_id: int, db: Session = Depends(get_db)):
+    schedule = db.get(Schedule, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found.")
+
+    schedule.enabled = not schedule.enabled
+    db.commit()
+
+    if schedule.enabled:
+        sched.add_schedule_job(schedule.id, schedule.scraper_id, schedule.cron_expression)
+    else:
+        sched.remove_schedule_job(schedule.id)
+
+    return {"id": schedule.id, "enabled": schedule.enabled}
+
+
+@router.delete("/{schedule_id}")
+def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
+    schedule = db.get(Schedule, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found.")
+    sched.remove_schedule_job(schedule.id)
+    db.delete(schedule)
+    db.commit()
+    return {"detail": "Deleted."}
