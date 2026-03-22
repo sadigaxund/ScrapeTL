@@ -2,7 +2,7 @@ import json
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import ScrapeLog, TaskQueue
+from app.models import ScrapeLog, TaskQueue, Scraper
 
 router = APIRouter(tags=["logs"])
 
@@ -11,6 +11,7 @@ router = APIRouter(tags=["logs"])
 def get_logs(
     db: Session = Depends(get_db),
     scraper_id: int = Query(None),
+    tag_id: int = Query(None),
     status: str = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0),
@@ -18,6 +19,8 @@ def get_logs(
     q = db.query(ScrapeLog).order_by(ScrapeLog.run_at.desc())
     if scraper_id:
         q = q.filter(ScrapeLog.scraper_id == scraper_id)
+    if tag_id:
+        q = q.join(Scraper).filter(Scraper.tags.any(id=tag_id))
     if status:
         q = q.filter(ScrapeLog.status == status)
 

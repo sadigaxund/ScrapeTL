@@ -26,8 +26,23 @@ def get_settings(db: Session = Depends(get_db)):
 
 @router.get("/timezones")
 def list_timezones():
-    """Return all valid IANA timezone names so the frontend can build a select list."""
-    return VALID_TIMEZONES
+    """Return all valid IANA timezone names with UTC offset formatting."""
+    import datetime
+    now = datetime.datetime.utcnow()
+    res = []
+    for tz in VALID_TIMEZONES:
+        try:
+            z = pytz.timezone(tz)
+            offset_delta = z.utcoffset(now)
+            if offset_delta is None: continue
+            total_mins = int(offset_delta.total_seconds() / 60)
+            h = abs(total_mins) // 60
+            m = abs(total_mins) % 60
+            sign = "+" if total_mins >= 0 else "-"
+            res.append({"id": tz, "label": f"(UTC{sign}{h:02d}:{m:02d}) {tz}"})
+        except:
+            pass
+    return res
 
 
 @router.put("/{key}")

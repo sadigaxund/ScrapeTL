@@ -65,10 +65,11 @@ def _scraper_dict(s: Scraper):
         "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in s.tags],
         "integrations": [{"id": i.id, "name": i.name, "type": i.type} for i in s.integrations],
         "version_count": len(s.versions) if s.versions else 0,
+        "latest_version": s.versions[0].version_label if s.versions else None,
     }
 
 
-def _snapshot_version(db: Session, scraper: Scraper, version_label: str = None, commit_message: str = None) -> None:
+def _snapshot_version(db: Session, scraper: Scraper, version_label: Optional[str] = None, commit_message: Optional[str] = None) -> None:
     """Read the live .py file and store it as a new ScraperVersion."""
     module_name = scraper.module_path.split(".")[-1]
     file_path = os.path.join(SCRAPERS_DIR, f"{module_name}.py")
@@ -271,9 +272,6 @@ async def update_scraper(
             text = contents.decode("utf-8")
         except UnicodeDecodeError:
             raise HTTPException(status_code=400, detail="File must be UTF-8 encoded.")
-
-        # Snapshot old code before overwriting
-        _snapshot_version(db, scraper, version_label=None, commit_message="(pre-edit backup)")
 
         module_name = scraper.module_path.split(".")[-1]
         dest_path = os.path.join(SCRAPERS_DIR, f"{module_name}.py")

@@ -31,6 +31,11 @@ let state = {
     currentLogsPage: 0,
     logsPageSize:    50,
     activeTagFilter: '',   // '' = all
+    logFilters: {
+        scraperId: '',
+        tagId: '',
+        status: ''
+    }
 };
 
 /* ── Utilities ──────────────────────────────────────── */
@@ -87,6 +92,22 @@ function ensureHttps(url) {
     url = url.trim();
     if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
     return url;
+}
+
+// Global click to close custom dropdowns
+document.addEventListener('click', e => {
+    document.querySelectorAll('.custom-dropdown').forEach(d => {
+        if (!d.contains(e.target)) d.classList.remove('open');
+    });
+});
+
+function filterDropdownConfig(inputEl) {
+    const q = inputEl.value.toLowerCase();
+    const items = inputEl.closest('.custom-dropdown-menu').querySelectorAll('.dropdown-item');
+    items.forEach(item => {
+        const text = item.textContent.toLowerCase();
+        item.style.display = text.includes(q) ? 'flex' : 'none';
+    });
 }
 
 /* ── Thumbnail helpers ──────────────────────────────── */
@@ -163,9 +184,6 @@ async function loadScrapers() {
     state.tags     = tags;
     document.getElementById('scraper-count').textContent = scrapers.length;
 
-    // Render tag manager
-    renderTagManager(tags);
-
     // Render tag filter chips
     renderTagFilterChips(tags);
 
@@ -173,6 +191,7 @@ async function loadScrapers() {
     renderScrapersList(scrapers);
 
     populateScraperSelects(scrapers);
+    renderLogFilters();
 }
 
 function renderTagManager(tags) {
@@ -242,7 +261,7 @@ function renderScrapersList(scrapers) {
           ${thumbEl}
           <div class="item-info">
             <div class="item-name">
-              ${s.name}
+              ${s.name} ${s.latest_version ? `<span style="font-size:12px;color:var(--accent);font-weight:500;margin-left:6px;background:var(--accent-glow);padding:2px 6px;border-radius:12px;">v${s.latest_version}</span>` : ''}
               ${s.homepage_url ? `<a href="${s.homepage_url}" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:12px;padding:2px 6px;margin-left:8px;text-decoration:none">🔗 Visit</a>` : ''}
             </div>
             <div class="item-meta">${s.module_path}</div>
@@ -251,26 +270,22 @@ function renderScrapersList(scrapers) {
             ${integBadges ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${integBadges}</div>` : ''}
           </div>
           <div class="item-actions">
-            <span class="status-badge ${healthInfo.cls}" title="Health">${healthInfo.icon} ${healthInfo.label}</span>
-            <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '\u25cf Active' : '\u25cb Disabled'}</span>
-            <button class="btn btn-run" onclick="runScraper(${s.id}, this)">▶ Run Now</button>
-            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openAssignTagsModal(${s.id})">🏷️ Tags</button>
-            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openAssignModal(${s.id})">🔗 Integ</button>
-            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openEditModal(${s.id})">✏️ Edit</button>
-            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openVersionsModal(${s.id})">🕓 History${s.version_count ? ` <span style='opacity:.7'>(${s.version_count})</span>` : ''}</button>
-            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleScraper(${s.id})">${s.enabled ? 'Disable' : 'Enable'}</button>
-            <button class="btn btn-danger" onclick="deleteScraper(${s.id})">✕</button>
+            <div style="display:flex; gap:6px;">
+              <span class="status-badge ${healthInfo.cls}" title="Health">${healthInfo.icon} ${healthInfo.label}</span>
+              <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '\u25cf Active' : '\u25cb Disabled'}</span>
+            </div>
+            <div class="action-btn-group">
+              <button class="icon-btn" onclick="openAssignTagsModal(${s.id})" title="Manage Tags">🏷️</button>
+              <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
+              <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
+              <button class="icon-btn" onclick="openEditModal(${s.id})" title="Edit Scraper">✏️</button>
+              <button class="icon-btn" onclick="toggleScraper(${s.id})" title="${s.enabled ? 'Disable' : 'Enable'}">${s.enabled ? '⏸️' : '▶️'}</button>
+              <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
+            </div>
+            <button class="btn btn-run" onclick="runScraper(${s.id}, this)">⚡ Run</button>
           </div>
         </div>`;
     }).join('');
-}
-
-function toggleTagManager() {
-    const panel = document.getElementById('tag-manager-panel');
-    const arrow = document.getElementById('tag-manager-arrow');
-    const open  = panel.style.display === 'block';
-    panel.style.display = open ? 'none' : 'block';
-    arrow.textContent   = open ? '\u25be' : '\u25b4';
 }
 
 function integIcon(type) {
@@ -412,7 +427,45 @@ async function deleteScraper(id) {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ── Tags ────────────────────────────────────────────── */
+/* ── Assign Tags Modal ──────────────────────────────── */
+function openAssignTagsModal(scraperId) {
+    document.getElementById('assign-tags-scraper-id').value = scraperId;
+    renderAssignTagsList();
+    document.getElementById('assign-tags-modal').style.display = 'flex';
+}
+
+function renderAssignTagsList() {
+    const scraperId = parseInt(document.getElementById('assign-tags-scraper-id').value);
+    const scraper = state.scrapers.find(s => s.id === scraperId);
+    if (!scraper) return;
+    const assignedIds = new Set((scraper.tags || []).map(t => t.id));
+    const container = document.getElementById('assign-tags-list');
+
+    if (!state.tags.length) {
+        container.innerHTML = '<span style="color:var(--text-muted)">No tags created yet.</span>';
+    } else {
+        container.innerHTML = state.tags.map(t => {
+            const on = assignedIds.has(t.id);
+            const style = on 
+                ? `background:${t.color}22; border-color:${t.color}; color:${t.color};` 
+                : `background:transparent; border-color:var(--border-strong); color:var(--text-secondary); opacity:0.8;`;
+            const check = on ? '✓' : '+';
+            return `
+            <div class="tag-pill tag-pill-hover" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:6px 14px; transition:all 0.2s; ${style}" 
+                 onclick="toggleTagAssignment(${scraperId}, ${t.id}, ${on})" title="${on ? 'Click to unassign' : 'Click to assign'}">
+                <span style="font-weight:700; width:12px; text-align:center;">${check}</span>
+                <span style="font-weight:600;">${t.name}</span>
+                <span onclick="event.stopPropagation(); deleteTag(${t.id})" class="tag-del-btn" title="Permanently Delete Tag">✕</span>
+            </div>`;
+        }).join('');
+    }
+}
+
+function selectCustomColor(hex) {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+    document.getElementById('new-tag-color').value = hex;
+}
+
 async function createTag() {
     const name  = document.getElementById('new-tag-name').value.trim();
     const color = document.getElementById('new-tag-color').value;
@@ -421,59 +474,41 @@ async function createTag() {
         await apiFetch(API.tags, { method: 'POST', body: JSON.stringify({ name, color }) });
         document.getElementById('new-tag-name').value = '';
         toast('Tag created!', 'success');
-        loadScrapers();
+        
+        // Refresh state
+        const [scrapers, tags] = await Promise.all([apiFetch(API.scrapers), apiFetch(API.tags)]);
+        state.scrapers = scrapers; state.tags = tags;
+        renderTagFilterChips(tags);
+        renderScrapersList(scrapers);
+        renderAssignTagsList();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function toggleTagAssignment(scraperId, tagId, isAssigned) {
+    try {
+        if (isAssigned) {
+            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'DELETE' });
+        } else {
+            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'POST' });
+        }
+        const scrapers = await apiFetch(API.scrapers);
+        state.scrapers = scrapers;
+        renderScrapersList(scrapers);
+        renderAssignTagsList();
     } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteTag(id) {
-    if (!confirm('Delete this tag?')) return;
+    if (!confirm('Globally delete this tag from all scrapers?')) return;
     try {
         await apiFetch(`${API.tags}/${id}`, { method: 'DELETE' });
         toast('Tag deleted.', 'info');
-        loadScrapers();
-    } catch (e) { toast(e.message, 'error'); }
-}
-
-/* ── Assign Tags Modal ──────────────────────────────── */
-function openAssignTagsModal(scraperId) {
-    document.getElementById('assign-tags-scraper-id').value = scraperId;
-    const scraper = state.scrapers.find(s => s.id === scraperId);
-    const assignedIds = new Set((scraper?.tags || []).map(t => t.id));
-    const container = document.getElementById('assign-tags-list');
-
-    if (!state.tags.length) {
-        container.innerHTML = '<span style="color:var(--text-muted)">No tags created yet. Create tags in the Scrapers tab.</span>';
-    } else {
-        container.innerHTML = state.tags.map(t => {
-            const on = assignedIds.has(t.id);
-            return `
-            <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-light)">
-                <span class="tag-pill" style="background:${t.color}22;border-color:${t.color};color:${t.color};min-width:80px;text-align:center">${t.name}</span>
-                <button class="btn ${on ? 'btn-danger' : 'btn-primary'}" style="font-size:12px;padding:4px 12px"
-                    onclick="toggleTagAssignment(${scraperId}, ${t.id}, ${on}, this)">
-                    ${on ? 'Remove' : 'Assign'}
-                </button>
-            </div>`;
-        }).join('');
-    }
-    document.getElementById('assign-tags-modal').style.display = 'flex';
-}
-
-async function toggleTagAssignment(scraperId, tagId, isAssigned, btn) {
-    try {
-        if (isAssigned) {
-            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'DELETE' });
-            btn.textContent = 'Assign'; btn.className = 'btn btn-primary'; btn.className += ' btn-primary';
-            btn.setAttribute('onclick', `toggleTagAssignment(${scraperId}, ${tagId}, false, this)`);
-        } else {
-            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'POST' });
-            btn.textContent = 'Remove'; btn.className = 'btn btn-danger';
-            btn.setAttribute('onclick', `toggleTagAssignment(${scraperId}, ${tagId}, true, this)`);
-        }
-        // Refresh state silently
-        const scrapers = await apiFetch(API.scrapers);
-        state.scrapers = scrapers;
+        
+        const [scrapers, tags] = await Promise.all([apiFetch(API.scrapers), apiFetch(API.tags)]);
+        state.scrapers = scrapers; state.tags = tags;
+        renderTagFilterChips(tags);
         renderScrapersList(scrapers);
+        renderAssignTagsList();
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -550,15 +585,114 @@ async function deleteSchedule(id) {
 /* ════════════════════════════════════════════════
    LOGS — collapsible card view
 ════════════════════════════════════════════════ */
+function toggleDropdown(e, id) {
+    e.stopPropagation();
+    const dd = document.getElementById(id);
+    const isOpen = dd.classList.contains('open');
+    
+    // Close other dropdowns
+    document.querySelectorAll('.custom-dropdown').forEach(d => d.classList.remove('open'));
+    
+    // Toggle clicked
+    if (!isOpen) {
+        dd.classList.add('open');
+        const input = dd.querySelector('.dropdown-search input');
+        if (input) {
+            input.value = ''; // Reset search on open
+            filterDropdownConfig(input); // Reset list
+            setTimeout(() => input.focus(), 50); // Small delay for animation
+        }
+    }
+}
+
+function renderLogFilters() {
+    // Get active item instances
+    const aScrap = state.scrapers.find(s => String(s.id) === state.logFilters.scraperId);
+    const aTag = state.tags.find(t => String(t.id) === state.logFilters.tagId);
+    const statuses = [{ id: '', label: 'All' }, { id: 'success', label: '✅ Success' }, { id: 'failure', label: '❌ Failure' }];
+    const aStat = statuses.find(st => st.id === state.logFilters.status);
+
+    // Render summaries WITH clear buttons
+    let scrapLabel = `Scraper: <b style="margin-left:4px">${aScrap ? aScrap.name : 'All'}</b>`;
+    if (aScrap) scrapLabel += ` <span onclick="setLogFilter('scraperId', ''); event.stopPropagation();" style="margin-left:8px; cursor:pointer;" title="Clear filter">✕</span>`;
+    else scrapLabel += `<span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span>`;
+    document.getElementById('summary-scraper').innerHTML = scrapLabel;
+
+    let tagLabel = `Tag: <b style="margin-left:4px">${aTag ? aTag.name : 'All'}</b>`;
+    if (aTag) tagLabel += ` <span onclick="setLogFilter('tagId', ''); event.stopPropagation();" style="margin-left:8px; cursor:pointer;" title="Clear filter">✕</span>`;
+    else tagLabel += `<span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span>`;
+    document.getElementById('summary-tag').innerHTML = tagLabel;
+
+    let statLabel = `Status: <b style="margin-left:4px">${aStat && aStat.id ? aStat.label : 'All'}</b>`;
+    if (state.logFilters.status) statLabel += ` <span onclick="setLogFilter('status', ''); event.stopPropagation();" style="margin-left:8px; cursor:pointer;" title="Clear filter">✕</span>`;
+    else statLabel += `<span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span>`;
+    document.getElementById('summary-status').innerHTML = statLabel;
+
+    // Active pill highlights
+    document.getElementById('summary-scraper').className = aScrap ? 'tag-chip tag-chip--active' : 'tag-chip';
+    document.getElementById('summary-tag').className = aTag ? 'tag-chip tag-chip--active' : 'tag-chip';
+    document.getElementById('summary-status').className = state.logFilters.status ? 'tag-chip tag-chip--active' : 'tag-chip';
+    
+    if (aTag) document.getElementById('summary-tag').style.setProperty('--chip-color', aTag.color);
+    else document.getElementById('summary-tag').style.removeProperty('--chip-color');
+
+    // Build Scrapers menu (With Search)
+    let sHtml = `
+      <div class="dropdown-search">
+        <input type="text" placeholder="Search scrapers..." onkeyup="filterDropdownConfig(this)" onclick="event.stopPropagation()" />
+      </div>
+      <div class="dropdown-scroll-area">
+    `;
+    (state.scrapers || []).forEach(s => {
+        sHtml += `<button class="dropdown-item ${state.logFilters.scraperId === String(s.id) ? 'dropdown-item--active' : ''}" onclick="setLogFilter('scraperId', '${s.id}')">${s.name}</button>`;
+    });
+    sHtml += `</div>`;
+    document.getElementById('log-menu-scrapers').innerHTML = sHtml;
+
+    // Build Tags menu (With Search)
+    let tHtml = `
+      <div class="dropdown-search">
+        <input type="text" placeholder="Search tags..." onkeyup="filterDropdownConfig(this)" onclick="event.stopPropagation()" />
+      </div>
+      <div class="dropdown-scroll-area">
+    `;
+    (state.tags || []).forEach(t => {
+        tHtml += `<button class="dropdown-item ${state.logFilters.tagId === String(t.id) ? 'dropdown-item--active' : ''}" onclick="setLogFilter('tagId', '${t.id}')">
+            <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background:${t.color}"></span> ${t.name}
+        </button>`;
+    });
+    tHtml += `</div>`;
+    document.getElementById('log-menu-tags').innerHTML = tHtml;
+
+    // Build Status menu (No search needed)
+    let stHtml = `<div class="dropdown-scroll-area" style="padding-top:4px">`;
+    statuses.filter(st => st.id !== '').forEach(st => {
+        stHtml += `<button class="dropdown-item ${state.logFilters.status === st.id ? 'dropdown-item--active' : ''}" onclick="setLogFilter('status', '${st.id}')">${st.label}</button>`;
+    });
+    stHtml += `</div>`;
+    document.getElementById('log-menu-statuses').innerHTML = stHtml;
+}
+
+function setLogFilter(type, val) {
+    state.logFilters[type] = val;
+    state.currentLogsPage = 0;
+    
+    // Close dropdowns
+    document.querySelectorAll('.custom-dropdown').forEach(d => d.classList.remove('open'));
+    
+    renderLogFilters();
+    loadLogs();
+}
+
 async function loadLogs(page = null) {
     if (page !== null) state.currentLogsPage = page;
-    const scraperFilter = document.getElementById('log-filter-scraper').value;
-    const statusFilter  = document.getElementById('log-filter-status').value;
+    const { scraperId, tagId, status } = state.logFilters;
     const offset = state.currentLogsPage * state.logsPageSize;
 
     let url = `${API.logs}?limit=${state.logsPageSize}&offset=${offset}`;
-    if (scraperFilter) url += `&scraper_id=${scraperFilter}`;
-    if (statusFilter)  url += `&status=${statusFilter}`;
+    if (scraperId) url += `&scraper_id=${scraperId}`;
+    if (tagId)     url += `&tag_id=${tagId}`;
+    if (status)    url += `&status=${status}`;
 
     try {
         const data = await apiFetch(url);
@@ -788,34 +922,24 @@ async function loadSettings() {
             apiFetch(API.settings),
             _allTimezones.length ? Promise.resolve(_allTimezones) : apiFetch(API.timezones),
         ]);
-        if (!_allTimezones.length) _allTimezones = timezones;
+        if (!_allTimezones.length) _allTimezones = timezones; // timezones is now array of objects {id, label}
 
         const current = settings.timezone || 'UTC';
         document.getElementById('tz-current').textContent = `Current timezone: ${current}`;
-        renderTzOptions(_allTimezones, current);
+        
+        const dl = document.getElementById('tz-list');
+        if (dl) dl.innerHTML = _allTimezones.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+        document.getElementById('tz-input').value = current;
     } catch (e) { toast(e.message, 'error'); }
 }
 
-function renderTzOptions(zones, selected) {
-    const sel = document.getElementById('tz-select');
-    const search = document.getElementById('tz-search').value.toLowerCase();
-    const filtered = search ? zones.filter(z => z.toLowerCase().includes(search)) : zones;
-    sel.innerHTML = filtered.map(z => `<option value="${z}" ${z === selected ? 'selected' : ''}>${z}</option>`).join('');
-}
-
-function filterTzOptions(val) {
-    const current = document.getElementById('tz-current').textContent.replace('Current timezone: ', '');
-    renderTzOptions(_allTimezones, current);
-}
-
 async function saveTimezone() {
-    const sel = document.getElementById('tz-select');
-    const tz  = sel.value;
-    if (!tz) { toast('Please select a timezone.', 'error'); return; }
+    const val = document.getElementById('tz-input').value.trim();
+    if (!val) { toast('Please enter a timezone.', 'error'); return; }
     try {
-        await apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: tz }) });
-        toast(`Timezone set to ${tz}`, 'success');
-        document.getElementById('tz-current').textContent = `Current timezone: ${tz}`;
+        await apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: val }) });
+        toast(`Timezone set to ${val}`, 'success');
+        document.getElementById('tz-current').textContent = `Current timezone: ${val}`;
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -836,6 +960,25 @@ function openEditModal(id) {
     document.getElementById('edit-code-zone').style.borderColor = '';
     document.getElementById('edit-code-zone').style.background = '';
     document.getElementById('edit-code-file').value = '';
+    
+    // Disable version container initially
+    document.getElementById('edit-version-container').style.opacity = '0.4';
+    document.getElementById('edit-version-container').style.pointerEvents = 'none';
+    
+    // Default version fields if we have a previous version, otherwise empty
+    let nextPatch = 1;
+    let mj = '', mn = '', pt = '';
+    if (s.latest_version) {
+        let parts = s.latest_version.split('.');
+        if(parts.length === 3) {
+            mj = parts[0]; mn = parts[1]; pt = parseInt(parts[2]) + 1;
+        }
+    }
+    document.getElementById('edit-ver-major').value = mj;
+    document.getElementById('edit-ver-minor').value = mn;
+    document.getElementById('edit-ver-patch').value = pt;
+    document.getElementById('edit-commit').value = '';
+
     const img = document.getElementById('edit-thumb-img');
     const ph  = document.getElementById('edit-thumb-placeholder');
     if (s.thumbnail_url) { img.src = s.thumbnail_url; img.style.display = 'block'; ph.style.display = 'none'; }
@@ -854,6 +997,18 @@ function handleEditCodeFile(input) {
         document.getElementById('edit-code-text').textContent = `📄 ${file.name}`;
         document.getElementById('edit-code-zone').style.borderColor = 'var(--success)';
         document.getElementById('edit-code-zone').style.background = 'rgba(34, 197, 94, 0.05)';
+        
+        // Enable version container
+        document.getElementById('edit-version-container').style.opacity = '1';
+        document.getElementById('edit-version-container').style.pointerEvents = 'auto';
+    } else {
+        document.getElementById('edit-code-text').textContent = 'Drag & Drop a new .py file here';
+        document.getElementById('edit-code-zone').style.borderColor = '';
+        document.getElementById('edit-code-zone').style.background = '';
+        
+        // Disable version container
+        document.getElementById('edit-version-container').style.opacity = '0.4';
+        document.getElementById('edit-version-container').style.pointerEvents = 'none';
     }
 }
 
@@ -886,7 +1041,16 @@ async function saveEdit() {
     if (thumbFile) formData.append('thumbnail_file', thumbFile);
 
     const codeFile = document.getElementById('edit-code-file').files[0];
-    if (codeFile) formData.append('scraper_file', codeFile);
+    if (codeFile) {
+        formData.append('scraper_file', codeFile);
+        
+        // Append version info only if file uploaded
+        const major = document.getElementById('edit-ver-major').value || '0';
+        const minor = document.getElementById('edit-ver-minor').value || '0';
+        const patch = document.getElementById('edit-ver-patch').value || '0';
+        formData.append('version_label', `${major}.${minor}.${patch}`);
+        formData.append('commit_message', document.getElementById('edit-commit').value.trim() || 'Updated script via UI');
+    }
 
     try {
         await apiFetch(`${API.scrapers}/${id}`, {
@@ -898,6 +1062,25 @@ async function saveEdit() {
         loadScrapers();
     } catch (e) { toast(e.message, 'error'); }
     finally { btn.disabled = false; btn.textContent = '💾 Save Changes'; }
+}
+
+function bumpVersion(type) {
+    const mj = document.getElementById('edit-ver-major');
+    const mn = document.getElementById('edit-ver-minor');
+    const pt = document.getElementById('edit-ver-patch');
+    
+    let major = parseInt(mj.value) || 0;
+    let minor = parseInt(mn.value) || 0;
+    let patch = parseInt(pt.value) || 0;
+    
+    if (type === 'major') {
+        major++; minor = 0; patch = 0;
+    } else if (type === 'minor') {
+        minor++; patch = 0;
+    } else if (type === 'patch') {
+        patch++;
+    }
+    mj.value = major; mn.value = minor; pt.value = patch;
 }
 
 /* ════════════════════════════════════════════════

@@ -68,44 +68,33 @@
     <!-- ── Scrapers Tab ──────────────────────────── -->
     <section class="tab-panel active" id="tab-scrapers">
 
-      <!-- Filter bar & Tag Manager (combined) -->
-      <div class="card" style="padding:16px 20px; display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:20px;">
-      <!-- Filter bar + compact tag manager -->
-      <div class="card" style="padding:14px 20px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
-          <!-- Filter chips -->
-          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-            <span style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-right:4px">TAG:</span>
-            <div id="tag-filter-chips" style="display:flex;gap:6px;flex-wrap:wrap">
-              <button class="tag-chip tag-chip--active" data-tag-id="" onclick="filterByTag(this, '')">All</button>
-            </div>
-          </div>
-          <!-- Manage tags toggle -->
-          <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="toggleTagManager()">🏷️ Manage Tags <span id="tag-manager-arrow">▾</span></button>
-        </div>
-
-        <!-- Collapsible tag manager -->
-        <div id="tag-manager-panel" style="display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-light)">
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input type="text" id="new-tag-name" placeholder="Tag name" style="width:130px; padding:6px 10px; font-size:13px;" />
-            <input type="color" id="new-tag-color" value="#6366f1" style="width:32px;height:28px;padding:2px;border-radius:4px;cursor:pointer;border:1px solid var(--border)" title="Pick colour" />
-            <button class="btn btn-ghost" style="padding:5px 10px; font-size:12px;" onclick="createTag()">+ Add</button>
-            <div id="tags-list" style="display:flex;flex-wrap:wrap;gap:6px;margin-left:8px">
-              <span style="color:var(--text-muted);font-size:12px">No tags yet.</span>
+      <!-- Main Scrapers Card -->
+      <div class="card" style="padding:0; overflow:hidden;">
+        
+        <!-- Header & Filter bar + compact tag manager -->
+        <div style="padding:16px 24px; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02);">
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
+            <!-- Filter chips -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+              <span style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-right:4px">TAG:</span>
+              <div id="tag-filter-chips" style="display:flex;gap:6px;flex-wrap:wrap">
+                <button class="tag-chip tag-chip--active" data-tag-id="" onclick="filterByTag(this, '')">All</button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
 
-      <!-- Scrapers list -->
-      <div class="card">
-        <div class="card-header">
-          <h2 class="card-title">Registered Scrapers</h2>
-          <span class="card-count" id="scraper-count">0</span>
+        <!-- Scrapers list -->
+        <div style="padding:20px 24px;">
+          <div class="card-header" style="margin-bottom:16px;">
+            <h2 class="card-title">Registered Scrapers</h2>
+            <span class="card-count" id="scraper-count">0</span>
+          </div>
+          <div id="scrapers-list" class="item-list">
+            <div class="empty-state">No scrapers registered yet. Click "+ Add Scraper" to create one.</div>
+          </div>
         </div>
-        <div id="scrapers-list" class="item-list">
-          <div class="empty-state">No scrapers registered yet. Click "+ Add Scraper" to create one.</div>
-        </div>
+
       </div>
     </section>
 
@@ -160,18 +149,28 @@
     <!-- ── Logs Tab ──────────────────────────────── -->
     <section class="tab-panel" id="tab-logs">
       <div class="card">
-        <div class="card-header">
+        <div class="card-header" style="border-bottom:none; padding-bottom:12px;">
           <h2 class="card-title">Scrape History</h2>
-          <div class="filters">
-            <select id="log-filter-scraper" onchange="loadLogs()">
-              <option value="">All Scrapers</option>
-            </select>
-            <select id="log-filter-status" onchange="loadLogs()">
-              <option value="">All Status</option>
-              <option value="success">✅ Success</option>
-              <option value="failure">❌ Failure</option>
-            </select>
+        </div>
+        
+        <!-- Modern Filters -->
+        <div class="logs-filter-panel" style="padding:12px 20px; border-bottom:1px solid var(--border-light); display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          
+          <div class="custom-dropdown" id="dd-scraper" onclick="toggleDropdown(event, 'dd-scraper')">
+            <button class="tag-chip" id="summary-scraper">Scraper: <b style="margin-left:4px">All</b> <span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
+            <div class="custom-dropdown-menu" id="log-menu-scrapers" onclick="event.stopPropagation()"></div>
           </div>
+
+          <div class="custom-dropdown" id="dd-tag" onclick="toggleDropdown(event, 'dd-tag')">
+            <button class="tag-chip" id="summary-tag">Tag: <b style="margin-left:4px">All</b> <span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
+            <div class="custom-dropdown-menu" id="log-menu-tags" onclick="event.stopPropagation()"></div>
+          </div>
+
+          <div class="custom-dropdown" id="dd-status" onclick="toggleDropdown(event, 'dd-status')">
+            <button class="tag-chip" id="summary-status">Status: <b style="margin-left:4px">All</b> <span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
+            <div class="custom-dropdown-menu" id="log-menu-statuses" onclick="event.stopPropagation()"></div>
+          </div>
+
         </div>
         <div id="logs-list" class="logs-list"></div>
         <div class="pagination" id="logs-pagination"></div>
@@ -260,9 +259,8 @@
         <div class="form-row" style="align-items:flex-end">
           <div class="form-group flex-2">
             <label>IANA Timezone</label>
-            <input type="text" id="tz-search" placeholder="Type to search… e.g. Asia/Baku" oninput="filterTzOptions(this.value)" />
-            <select id="tz-select" size="6" style="margin-top:6px;height:160px;font-family:monospace;font-size:13px">
-            </select>
+            <input type="text" id="tz-input" list="tz-list" placeholder="Search timezone or UTC offset (e.g. +4) ..." />
+            <datalist id="tz-list"></datalist>
           </div>
           <div class="form-group form-group--action" style="margin-bottom:0">
             <button class="btn btn-primary" onclick="saveTimezone()">💾 Save Timezone</button>
@@ -337,16 +335,14 @@
         </div>
 
         <!-- Version + Commit row -->
+        <input type="hidden" id="wiz-ver-major" value="0" />
+        <input type="hidden" id="wiz-ver-minor" value="0" />
+        <input type="hidden" id="wiz-ver-patch" value="0" />
         <div class="form-row" style="margin-bottom:20px;gap:12px">
           <div class="form-group" style="flex:0 0 auto">
             <label>Initial Version</label>
-            <div style="display:flex;gap:4px;align-items:center">
-              <span style="color:var(--text-muted);font-size:13px">v</span>
-              <input type="number" id="wiz-ver-major" min="0" value="1" style="width:52px;text-align:center" />
-              <span style="color:var(--text-muted)">.</span>
-              <input type="number" id="wiz-ver-minor" min="0" value="0" style="width:52px;text-align:center" />
-              <span style="color:var(--text-muted)">.</span>
-              <input type="number" id="wiz-ver-patch" min="0" value="0" style="width:52px;text-align:center" />
+            <div style="display:flex;gap:4px;align-items:center;padding:9px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);font-size:14px;user-select:none;cursor:not-allowed">
+              v0.0.0
             </div>
           </div>
           <div class="form-group flex-2">
@@ -423,6 +419,35 @@
         </div>
       </div>
 
+      <div class="form-group" style="margin-bottom:24px">
+        <label>Release Notes & Version <span style="font-weight:400;color:var(--text-muted);text-transform:none">(requires new script)</span></label>
+        
+        <div id="edit-version-container" style="opacity:0.4; pointer-events:none; transition:opacity 0.2s">
+          <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content; margin-bottom:12px;">
+            <span style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
+            
+            <div class="semver-part">
+              <button type="button" class="semver-up" onclick="bumpVersion('major')" title="Bump Major">▲</button>
+              <input type="text" id="edit-ver-major" value="1" class="semver-input" readonly />
+            </div>
+            <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
+            
+            <div class="semver-part">
+              <button type="button" class="semver-up" onclick="bumpVersion('minor')" title="Bump Minor">▲</button>
+              <input type="text" id="edit-ver-minor" value="0" class="semver-input" readonly />
+            </div>
+            <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
+            
+            <div class="semver-part">
+              <button type="button" class="semver-up" onclick="bumpVersion('patch')" title="Bump Patch">▲</button>
+              <input type="text" id="edit-ver-patch" value="0" class="semver-input" readonly />
+            </div>
+          </div>
+          
+          <input type="text" id="edit-commit" placeholder="What changed? e.g. Fixed regex matching" style="width:100%" />
+        </div>
+      </div>
+
       <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
         <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
         <button class="btn btn-primary" id="edit-submit-btn" onclick="saveEdit()">💾 Save Changes</button>
@@ -465,18 +490,43 @@
     </div>
   </div>
 
-  <!-- ── Assign Tags Modal ──────────────────────────────── -->
+  <!-- ── Manage/Assign Tags Modal ──────────────────────────────── -->
   <div class="modal-overlay" id="assign-tags-modal" style="display:none" onclick="closeAssignTagsModal(event)">
-    <div class="modal-box">
+    <div class="modal-box" style="max-width:560px;">
       <div class="modal-header">
-        <h2 class="card-title">Manage Tags</h2>
+        <h2 class="card-title">Manage & Assign Tags</h2>
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeAssignTagsModal()">✕</button>
       </div>
       <input type="hidden" id="assign-tags-scraper-id" />
-      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Toggle tags for this scraper.</p>
-      <div id="assign-tags-list" style="display:flex;flex-wrap:wrap;gap:8px;max-height:300px;overflow-y:auto"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:16px">
-        <button class="btn btn-ghost" onclick="closeAssignTagsModal()">Done</button>
+      
+      <!-- Create New Tag Section -->
+      <div style="padding:14px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:16px;">
+        <h3 style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;">Create New Tag</h3>
+        <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+          <input type="text" id="new-tag-name" placeholder="Tag name" style="width:140px; padding:8px 12px; font-size:13px;" />
+          <input type="hidden" id="new-tag-color" value="#ef4444" />
+          <div class="color-swatches" id="color-swatches">
+            <div class="swatch selected" style="background:#ef4444" data-color="#ef4444" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#f97316" data-color="#f97316" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#f59e0b" data-color="#f59e0b" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#84cc16" data-color="#84cc16" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#22c55e" data-color="#22c55e" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#06b6d4" data-color="#06b6d4" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#3b82f6" data-color="#3b82f6" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#6366f1" data-color="#6366f1" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#a855f7" data-color="#a855f7" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#ec4899" data-color="#ec4899" onclick="selectSwatch(this)"></div>
+            <input type="color" id="new-tag-color-custom" style="width:24px;height:24px;padding:0;border:none;border-radius:50%;cursor:pointer;background:transparent;" title="Custom Color" onchange="selectCustomColor(this.value)" />
+          </div>
+          <button class="btn btn-primary" style="padding:7px 14px; font-size:12px;" onclick="createTag()">+ Add Tag</button>
+        </div>
+      </div>
+
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Click a tag below to toggle its assignment for this scraper.</p>
+      <div id="assign-tags-list" style="display:flex;flex-wrap:wrap;gap:8px;max-height:300px;overflow-y:auto;padding:4px;"></div>
+      
+      <div style="display:flex;justify-content:flex-end;border-top:1px solid var(--border-light);padding-top:16px;margin-top:16px;">
+        <button class="btn btn-primary" onclick="closeAssignTagsModal()">Done</button>
       </div>
     </div>
   </div>
