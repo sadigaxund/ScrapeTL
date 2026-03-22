@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anime Scraper Registry</title>
+  <meta name="description" content="Manage, schedule, and monitor anime scrapers with Discord notifications." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+  <!-- ── Sidebar ─────────────────────────────────────── -->
+  <aside class="sidebar">
+    <div class="logo">
+      <span class="logo-icon">🎌</span>
+      <span class="logo-text">ScraperHub</span>
+    </div>
+    <nav class="nav">
+      <button class="nav-item active" data-tab="scrapers" id="nav-scrapers">
+        <span class="nav-icon">🔌</span> Scrapers
+      </button>
+      <button class="nav-item" data-tab="schedules" id="nav-schedules">
+        <span class="nav-icon">📅</span> Schedules
+      </button>
+      <button class="nav-item" data-tab="logs" id="nav-logs">
+        <span class="nav-icon">📋</span> Logs
+      </button>
+      <button class="nav-item" data-tab="queue" id="nav-queue">
+        <span class="nav-icon">⏳</span> Queue
+        <span class="badge" id="queue-badge" style="display:none"></span>
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="auto-refresh">
+        <div class="pulse-dot"></div>
+        Auto-refresh: 30s
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main Content ───────────────────────────────── -->
+  <main class="main">
+
+    <!-- Header -->
+    <header class="topbar">
+      <div class="topbar-left">
+        <h1 class="page-title" id="page-title">Scrapers</h1>
+        <p class="page-subtitle" id="page-subtitle">Manage your anime scraper plugins</p>
+      </div>
+      <div class="topbar-right">
+        <button class="btn btn-ghost" onclick="refreshAll()" title="Refresh">⟳ Refresh</button>
+      </div>
+    </header>
+
+    <!-- Toast container -->
+    <div id="toast-container"></div>
+
+    <!-- ── Scrapers Tab ──────────────────────────── -->
+    <section class="tab-panel active" id="tab-scrapers">
+      <!-- Register form -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Register Scraper</h2>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Name</label>
+            <input type="text" id="scraper-name" placeholder="My Anime Scraper" />
+          </div>
+          <div class="form-group flex-2">
+            <label>Scraper File (Module)</label>
+            <select id="scraper-module" onchange="autoFillName(this)">
+              <option value="">— Select Detected Scraper —</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="form-group flex-2">
+            <label>Homepage URL <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+            <input type="text" id="scraper-homepage" placeholder="https://example.com" />
+          </div>
+          <div class="form-group flex-2">
+            <label>Description</label>
+            <input type="text" id="scraper-desc" placeholder="Optional description" />
+          </div>
+        </div>
+        <div class="form-row" style="align-items:flex-start;margin-top:12px">
+          <div class="form-group flex-2">
+            <label>Thumbnail URL <span
+                style="font-weight:400;text-transform:none;color:var(--text-muted)">(optional)</span></label>
+            <input type="text" id="scraper-thumb" placeholder="https://…/cover.jpg"
+              oninput="previewThumb(this.value)" />
+          </div>
+          <div class="form-group" style="flex:0 0 auto">
+            <label>&nbsp;</label>
+            <div id="thumb-preview" class="thumb-preview">
+              <img id="thumb-preview-img" src="" alt="" style="display:none" />
+              <span id="thumb-preview-placeholder" class="thumb-placeholder">🎌</span>
+            </div>
+          </div>
+          <div class="form-group form-group--action">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" onclick="registerScraper()">+ Register</button>
+          </div>
+        </div>
+        <div class="available-hint" style="display:none">
+          <span id="available-modules"></span>
+        </div>
+      </div>
+
+      <!-- Scrapers list -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Registered Scrapers</h2>
+          <span class="card-count" id="scraper-count">0</span>
+        </div>
+        <div id="scrapers-list" class="item-list">
+          <div class="empty-state">No scrapers registered yet.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Schedules Tab ─────────────────────────── -->
+    <section class="tab-panel" id="tab-schedules">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">New Schedule</h2>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Scraper</label>
+            <select id="sched-scraper">
+              <option value="">— Select —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Cron Expression</label>
+            <input type="text" id="sched-cron" placeholder="0 12 * * *" />
+          </div>
+          <div class="form-group">
+            <label>Preset</label>
+            <select id="sched-preset" onchange="applyCronPreset(this.value)">
+              <option value="">Custom</option>
+              <option value="0 12 * * *">Daily at noon</option>
+              <option value="0 0 * * *">Daily at midnight</option>
+              <option value="0 9 * * 1">Weekly Monday 9am</option>
+              <option value="0 */6 * * *">Every 6 hours</option>
+              <option value="0 */12 * * *">Every 12 hours</option>
+              <option value="*/30 * * * *">Every 30 minutes</option>
+            </select>
+          </div>
+          <div class="form-group form-group--action">
+            <label>&nbsp;</label>
+            <button class="btn btn-primary" onclick="createSchedule()">+ Schedule</button>
+          </div>
+        </div>
+        <p class="cron-hint">Format: <code>minute hour day month weekday</code> — e.g. <code>0 12 * * *</code> = every
+          day at 12:00 local time</p>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Active Schedules</h2>
+          <span class="card-count" id="schedule-count">0</span>
+        </div>
+        <div id="schedules-list" class="item-list">
+          <div class="empty-state">No schedules configured.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ── Logs Tab ──────────────────────────────── -->
+    <section class="tab-panel" id="tab-logs">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Scrape History</h2>
+          <div class="filters">
+            <select id="log-filter-scraper" onchange="loadLogs()">
+              <option value="">All Scrapers</option>
+            </select>
+            <select id="log-filter-status" onchange="loadLogs()">
+              <option value="">All Status</option>
+              <option value="success">✅ Success</option>
+              <option value="failure">❌ Failure</option>
+            </select>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table" id="logs-table">
+            <thead>
+              <tr>
+                <th>Scraper</th>
+                <th>Status</th>
+                <th>Title</th>
+                <th>Release Date</th>
+                <th>Episode URL</th>
+                <th>Episodes</th>
+                <th>Triggered By</th>
+                <th>Run At</th>
+              </tr>
+            </thead>
+            <tbody id="logs-body">
+              <tr>
+                <td colspan="8" class="empty-td">No logs yet.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="pagination" id="logs-pagination"></div>
+      </div>
+    </section>
+
+    <!-- ── Queue Tab ─────────────────────────────── -->
+    <section class="tab-panel" id="tab-queue">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">Task Queue</h2>
+          <span class="hint-label">Catch-up tasks for missed scraper runs</span>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table" id="queue-table">
+            <thead>
+              <tr>
+                <th>Scraper</th>
+                <th>Scheduled For</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Processed At</th>
+              </tr>
+            </thead>
+            <tbody id="queue-body">
+              <tr>
+                <td colspan="5" class="empty-td">Queue is empty.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ── Edit Modal ──────────────────────────── -->
+  <div class="modal-overlay" id="edit-modal" style="display:none" onclick="closeEditModal(event)">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h2 class="card-title">Edit Scraper</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeEditModal()">✕</button>
+      </div>
+      <input type="hidden" id="edit-id" />
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Name</label>
+        <input type="text" id="edit-name" placeholder="Scraper name" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Homepage URL <span style="font-weight:400;color:var(--text-muted)">(optional)</span></label>
+        <input type="text" id="edit-homepage" placeholder="https://example.com" />
+      </div>
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Description</label>
+        <input type="text" id="edit-desc" placeholder="Optional description" />
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label>Thumbnail URL <span
+            style="font-weight:400;text-transform:none;color:var(--text-muted)">(optional)</span></label>
+        <div style="display:flex;gap:12px;align-items:center">
+          <input type="text" id="edit-thumb" placeholder="https://…/cover.jpg" oninput="previewEditThumb(this.value)"
+            style="flex:1" />
+          <div id="edit-thumb-preview" class="thumb-preview thumb-preview--sm">
+            <img id="edit-thumb-img" src="" alt="" style="display:none" />
+            <span id="edit-thumb-placeholder" class="thumb-placeholder" style="font-size:18px">🎌</span>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;gap:10px;justify-content:flex-end">
+        <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
