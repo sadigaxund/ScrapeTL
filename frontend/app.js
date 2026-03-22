@@ -1,66 +1,53 @@
 /* ════════════════════════════════════════════════
-   Anime Scraper Registry — Frontend Logic
+   ScraperHub — Frontend Logic  v2
    Vanilla JS, no dependencies
 ════════════════════════════════════════════════ */
 
 const API = {
-    scrapers: '/api/scrapers',
-    schedules: '/api/schedules',
-    logs: '/api/logs',
-    queue: '/api/queue',
-    run: (id) => `/api/run/${id}`,
-    available: '/api/scrapers/available',
+    scrapers:     '/api/scrapers',
+    schedules:    '/api/schedules',
+    logs:         '/api/logs',
+    queue:        '/api/queue',
+    run:          (id) => `/api/run/${id}`,
+    available:    '/api/scrapers/available',
+    upload:       '/api/scrapers/upload',
+    tags:         '/api/tags',
+    scraperTags:  (sid, tid) => `/api/scrapers/${sid}/tags/${tid}`,
+    integrations: '/api/integrations',
+    scraperInteg: (sid, iid) => `/api/scrapers/${sid}/integrations/${iid}`,
+    verifyInteg:  (id) => `/api/integrations/${id}/verify`,
+    settings:     '/api/settings',
+    timezones:    '/api/settings/timezones',
+    versions:     (sid) => `/api/scrapers/${sid}/versions`,
+    versionCode:  (sid, vid) => `/api/scrapers/${sid}/versions/${vid}`,
+    revert:       (sid, vid) => `/api/scrapers/${sid}/revert/${vid}`,
 };
 
-/* ── Thumbnail preview helpers ──────────────── */
-function previewThumb(url) {
-    const img = document.getElementById('thumb-preview-img');
-    const ph = document.getElementById('thumb-preview-placeholder');
-    const box = document.getElementById('thumb-preview');
-    if (!url.trim()) {
-        img.style.display = 'none'; img.src = '';
-        ph.style.display = 'inline'; ph.textContent = '🎌';
-        box.style.borderColor = ''; return;
-    }
-    img.onload = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
-    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; box.style.borderColor = 'var(--failure)'; };
-    ph.textContent = '🎌'; img.src = url;
-}
-
-function previewEditThumb(url) {
-    const img = document.getElementById('edit-thumb-img');
-    const ph = document.getElementById('edit-thumb-placeholder');
-    if (!url.trim()) {
-        img.style.display = 'none'; img.src = '';
-        ph.style.display = 'inline'; ph.textContent = '🎌'; return;
-    }
-    img.onload = () => { ph.style.display = 'none'; img.style.display = 'block'; };
-    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; };
-    img.src = url;
-}
-
-/* ── State ──────────────────────────────────── */
+/* ── State ──────────────────────────────────────────── */
 let state = {
-    scrapers: [],
+    scrapers:        [],
+    tags:            [],
+    integrations:    [],
     currentLogsPage: 0,
-    logsPageSize: 50,
+    logsPageSize:    50,
+    activeTagFilter: '',   // '' = all
 };
 
-/* ── Utilities ──────────────────────────────── */
+/* ── Utilities ──────────────────────────────────────── */
 async function apiFetch(url, options = {}) {
-    try {
-        const res = await fetch(url, {
-            headers: { 'Content-Type': 'application/json' },
-            ...options,
-        });
-        if (!res.ok) {
-            const err = await res.json().catch(() => ({ detail: res.statusText }));
-            throw new Error(err.detail || `HTTP ${res.status}`);
-        }
-        return await res.json();
-    } catch (e) {
-        throw e;
+    const headers = {};
+    if (!(options.body instanceof FormData)) {
+        headers['Content-Type'] = 'application/json';
     }
+    const res = await fetch(url, {
+        ...options,
+        headers: { ...headers, ...(options.headers || {}) },
+    });
+    if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+    }
+    return res.json();
 }
 
 function toast(msg, type = 'info') {
@@ -75,34 +62,66 @@ function toast(msg, type = 'info') {
 function fmt(isoStr) {
     if (!isoStr) return '—';
     const d = new Date(isoStr + (isoStr.endsWith('Z') ? '' : 'Z'));
-    return d.toLocaleString(undefined, {
-        month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit',
-    });
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function statusBadge(status) {
     const map = {
-        success: ['✅', 'success'],
-        failure: ['❌', 'failure'],
-        pending: ['⏳', 'pending'],
-        running: ['⚡', 'running'],
-        done: ['✅', 'done'],
-        failed: ['❌', 'failed'],
-        manual: ['🖱️', 'manual'],
-        catchup: ['⚠️', 'catchup'],
+        success:   ['✅', 'success'],
+        failure:   ['❌', 'failure'],
+        pending:   ['⏳', 'pending'],
+        running:   ['⚡', 'running'],
+        done:      ['✅', 'done'],
+        failed:    ['❌', 'failed'],
+        manual:    ['🖱️', 'manual'],
+        catchup:   ['⚠️', 'catchup'],
         scheduler: ['🕐', 'scheduler'],
     };
     const [icon, cls] = map[status] || ['•', 'pending'];
     return `<span class="status-badge badge-${cls}">${icon} ${status}</span>`;
 }
 
-/* ── Tab Navigation ─────────────────────────── */
+/* ── URL helpers ────────────────────────────────────── */
+function ensureHttps(url) {
+    if (!url || !url.trim()) return '';
+    url = url.trim();
+    if (!url.startsWith('http://') && !url.startsWith('https://')) url = 'https://' + url;
+    return url;
+}
+
+/* ── Thumbnail helpers ──────────────────────────────── */
+function previewThumb(url) {
+    const img = document.getElementById('thumb-preview-img');
+    const ph  = document.getElementById('thumb-preview-placeholder');
+    const box = document.getElementById('thumb-preview');
+    if (!url.trim()) {
+        img.style.display = 'none'; img.src = '';
+        ph.style.display = 'inline'; ph.textContent = '🎌';
+        box.style.borderColor = ''; return;
+    }
+    img.onload  = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
+    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; box.style.borderColor = 'var(--failure)'; };
+    ph.textContent = '🎌'; img.src = url;
+}
+
+function previewEditThumb(url) {
+    const img = document.getElementById('edit-thumb-img');
+    const ph  = document.getElementById('edit-thumb-placeholder');
+    const box = document.getElementById('edit-thumb-preview');
+    if (!url || !url.trim()) { img.style.display = 'none'; img.src = ''; ph.style.display = 'inline'; ph.textContent = '🎌'; if(box) box.style.borderColor = ''; return; }
+    img.onload  = () => { ph.style.display = 'none'; img.style.display = 'block'; if(box) box.style.borderColor = 'var(--success)'; };
+    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; if(box) box.style.borderColor = 'var(--failure)'; };
+    img.src = url;
+}
+
+/* ── Tab Navigation ─────────────────────────────────── */
 const TAB_META = {
-    scrapers: { title: 'Scrapers', subtitle: 'Manage your anime scraper plugins' },
-    schedules: { title: 'Schedules', subtitle: 'Configure cron-based scrape schedules' },
-    logs: { title: 'Logs', subtitle: 'Full history of all scrape runs' },
-    queue: { title: 'Queue', subtitle: 'Catch-up tasks for missed scheduled runs' },
+    scrapers:     { title: 'Scrapers',     subtitle: 'Manage your scraper plugins' },
+    schedules:    { title: 'Schedules',    subtitle: 'Configure cron-based scrape schedules' },
+    logs:         { title: 'Logs',         subtitle: 'Full history of all scrape runs' },
+    queue:        { title: 'Queue',        subtitle: 'Catch-up tasks for missed scheduled runs' },
+    integrations: { title: 'Integrations', subtitle: 'Manage notification integrations' },
+    settings:     { title: 'Settings',     subtitle: 'App-wide configuration' },
 };
 
 function switchTab(name) {
@@ -110,7 +129,7 @@ function switchTab(name) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.querySelector(`[data-tab="${name}"]`).classList.add('active');
     document.getElementById(`tab-${name}`).classList.add('active');
-    document.getElementById('page-title').textContent = TAB_META[name].title;
+    document.getElementById('page-title').textContent    = TAB_META[name].title;
     document.getElementById('page-subtitle').textContent = TAB_META[name].subtitle;
 }
 
@@ -123,81 +142,139 @@ document.querySelectorAll('.nav-item').forEach(btn => {
 });
 
 function loadTab(tab) {
-    if (tab === 'scrapers') loadScrapers();
-    if (tab === 'schedules') loadSchedules();
-    if (tab === 'logs') loadLogs();
-    if (tab === 'queue') loadQueue();
+    if (tab === 'scrapers')     loadScrapers();
+    if (tab === 'schedules')    loadSchedules();
+    if (tab === 'logs')         loadLogs();
+    if (tab === 'queue')        loadQueue();
+    if (tab === 'integrations') loadIntegrations();
+    if (tab === 'settings')     loadSettings();
 }
 
-/* ── Scrapers ───────────────────────────────── */
+/* ════════════════════════════════════════════════
+   SCRAPERS
+════════════════════════════════════════════════ */
 async function loadScrapers() {
-    const [scrapers, available] = await Promise.all([
+    const [scrapers, tags] = await Promise.all([
         apiFetch(API.scrapers),
-        apiFetch(API.available).catch(() => ({})),
+        apiFetch(API.tags).catch(() => []),
     ]);
 
     state.scrapers = scrapers;
+    state.tags     = tags;
     document.getElementById('scraper-count').textContent = scrapers.length;
 
-    // Populate available modules dropdown
-    const mods = Object.entries(available);
-    const modSelect = document.getElementById('scraper-module');
-    const currentVal = modSelect.value;
+    // Render tag manager
+    renderTagManager(tags);
 
-    let optionsHtml = '<option value="">— Select Detected Scraper —</option>';
-    mods.forEach(([path, name]) => {
-        optionsHtml += `<option value="${path}">${name}</option>`;
+    // Render tag filter chips
+    renderTagFilterChips(tags);
+
+    // Render scrapers list (filtered)
+    renderScrapersList(scrapers);
+
+    populateScraperSelects(scrapers);
+}
+
+function renderTagManager(tags) {
+    const el = document.getElementById('tags-list');
+    if (!tags.length) {
+        el.innerHTML = '<span style="color:var(--text-muted);font-size:13px">No tags yet.</span>';
+        return;
+    }
+    el.innerHTML = tags.map(t => `
+        <span class="tag-pill" style="background:${t.color}22;border-color:${t.color};color:${t.color}">
+            ${t.name}
+            <button onclick="deleteTag(${t.id})" title="Delete tag" style="background:none;border:none;cursor:pointer;color:${t.color};margin-left:4px;padding:0;font-size:13px;line-height:1">×</button>
+        </span>
+    `).join('');
+}
+
+function renderTagFilterChips(tags) {
+    const container = document.getElementById('tag-filter-chips');
+    let html = `<button class="tag-chip ${state.activeTagFilter === '' ? 'tag-chip--active' : ''}" data-tag-id="" onclick="filterByTag(this, '')">All</button>`;
+    tags.forEach(t => {
+        const active = state.activeTagFilter === String(t.id);
+        html += `<button class="tag-chip ${active ? 'tag-chip--active' : ''}" data-tag-id="${t.id}" style="--chip-color:${t.color}" onclick="filterByTag(this, '${t.id}')">${t.name}</button>`;
     });
-    modSelect.innerHTML = optionsHtml;
-    if (currentVal && mods.some(([p]) => p === currentVal)) {
-        modSelect.value = currentVal;
+    container.innerHTML = html;
+}
+
+function filterByTag(btn, tagId) {
+    state.activeTagFilter = tagId;
+    document.querySelectorAll('.tag-chip').forEach(b => b.classList.remove('tag-chip--active'));
+    btn.classList.add('tag-chip--active');
+    renderScrapersList(state.scrapers);
+}
+
+function renderScrapersList(scrapers) {
+    const list = document.getElementById('scrapers-list');
+    let filtered = scrapers;
+    if (state.activeTagFilter) {
+        filtered = scrapers.filter(s => s.tags && s.tags.some(t => String(t.id) === String(state.activeTagFilter)));
     }
 
-    document.getElementById('available-modules').innerHTML = '';
-
-    window.autoFillName = function (selectElem) {
-        if (!selectElem.value) return;
-        const nameInput = document.getElementById('scraper-name');
-        if (!nameInput.value.trim()) {
-            nameInput.value = selectElem.options[selectElem.selectedIndex].text;
-        }
-    };
-
-    // Render list
-    const list = document.getElementById('scrapers-list');
-    if (!scrapers.length) {
-        list.innerHTML = '<div class="empty-state">No scrapers registered yet.</div>';
+    if (!filtered.length) {
+        list.innerHTML = '<div class="empty-state">No scrapers match the current filter.</div>';
         return;
     }
 
-    list.innerHTML = scrapers.map(s => {
+    list.innerHTML = filtered.map(s => {
         const thumbEl = s.thumbnail_url
-            ? `<img class="item-thumb" src="${s.thumbnail_url}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-thumb-placeholder',textContent:'🎌'}))" />`
+            ? `<img class="item-thumb" src="${s.thumbnail_url}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-thumb-placeholder',textContent:'\ud83c\udf8c'}))" />`
             : `<div class="item-thumb-placeholder">🎌</div>`;
+
+        const tagsHtml = s.tags && s.tags.length
+            ? s.tags.map(t => `<span class="tag-pill-sm" style="background:${t.color}22;border-color:${t.color};color:${t.color}">${t.name}</span>`).join('')
+            : '';
+
+        const integBadges = s.integrations && s.integrations.length
+            ? s.integrations.map(i => `<span class="integ-badge">${integIcon(i.type)} ${i.name}</span>`).join('')
+            : '';
+
+        const healthInfo = {
+            ok:       { icon: '\u2705', label: 'Healthy',  cls: 'badge-success' },
+            failing:  { icon: '\u274c', label: 'Failing',  cls: 'badge-failure' },
+            untested: { icon: '\u2699\ufe0f', label: 'Untested', cls: 'badge-pending' },
+        }[s.health || 'untested'];
+
         return `
-    <div class="item-card item-card--with-thumb">
-      ${thumbEl}
-      <div class="item-info">
-        <div class="item-name">
-          ${s.name}
-          ${s.homepage_url ? `<a href="${s.homepage_url}" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:12px;padding:2px 6px;margin-left:8px;text-decoration:none">🔗 Visit</a>` : ''}
-        </div>
-        <div class="item-meta">${s.module_path}</div>
-        ${s.description ? `<div class="item-meta" style="color:var(--text-secondary);margin-top:2px">${s.description}</div>` : ''}
-      </div>
-      <div class="item-actions">
-        <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '● Active' : '○ Disabled'}</span>
-        <button class="btn btn-run" onclick="runScraper(${s.id}, this)">▶ Run Now</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openEditModal(${s.id})">✏️ Edit</button>
-        <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleScraper(${s.id})">${s.enabled ? 'Disable' : 'Enable'}</button>
-        <button class="btn btn-danger" onclick="deleteScraper(${s.id})">✕</button>
-      </div>
-    </div>
-  `}).join('');
+        <div class="item-card item-card--with-thumb">
+          ${thumbEl}
+          <div class="item-info">
+            <div class="item-name">
+              ${s.name}
+              ${s.homepage_url ? `<a href="${s.homepage_url}" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:12px;padding:2px 6px;margin-left:8px;text-decoration:none">🔗 Visit</a>` : ''}
+            </div>
+            <div class="item-meta">${s.module_path}</div>
+            ${s.description ? `<div class="item-meta" style="color:var(--text-secondary);margin-top:2px">${s.description}</div>` : ''}
+            ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${tagsHtml}</div>` : ''}
+            ${integBadges ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${integBadges}</div>` : ''}
+          </div>
+          <div class="item-actions">
+            <span class="status-badge ${healthInfo.cls}" title="Health">${healthInfo.icon} ${healthInfo.label}</span>
+            <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '\u25cf Active' : '\u25cb Disabled'}</span>
+            <button class="btn btn-run" onclick="runScraper(${s.id}, this)">▶ Run Now</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openAssignTagsModal(${s.id})">🏷️ Tags</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openAssignModal(${s.id})">🔗 Integ</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openEditModal(${s.id})">✏️ Edit</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="openVersionsModal(${s.id})">🕓 History${s.version_count ? ` <span style='opacity:.7'>(${s.version_count})</span>` : ''}</button>
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleScraper(${s.id})">${s.enabled ? 'Disable' : 'Enable'}</button>
+            <button class="btn btn-danger" onclick="deleteScraper(${s.id})">✕</button>
+          </div>
+        </div>`;
+    }).join('');
+}
 
+function toggleTagManager() {
+    const panel = document.getElementById('tag-manager-panel');
+    const arrow = document.getElementById('tag-manager-arrow');
+    const open  = panel.style.display === 'block';
+    panel.style.display = open ? 'none' : 'block';
+    arrow.textContent   = open ? '\u25be' : '\u25b4';
+}
 
-    // Sync selector in schedules tab
-    populateScraperSelects(scrapers);
+function integIcon(type) {
+    return type === 'discord_webhook' ? '💬' : '🔗';
 }
 
 function populateScraperSelects(scrapers) {
@@ -211,60 +288,111 @@ function populateScraperSelects(scrapers) {
         ).join('');
         el.value = val;
     });
-    // schedules select has different placeholder
     const ss = document.getElementById('sched-scraper');
-    if (ss) {
-        ss.options[0].text = '— Select scraper —';
+    if (ss) ss.options[0].text = '— Select scraper —';
+}
+
+/* ── Wizard Modal ────────────────────────────────────── */
+function openWizardModal() {
+    document.getElementById('wizard-form').reset();
+    document.getElementById('wiz-thumb-filename').textContent = '';
+    previewWizThumb('');
+    const codeZone = document.getElementById('wiz-code-zone');
+    codeZone.style.borderColor = '';
+    document.getElementById('wiz-code-text').textContent = 'Drag & Drop your .py file here';
+    document.getElementById('wizard-modal').style.display = 'flex';
+}
+
+function closeWizardModal(e) {
+    if (e && e.target !== document.getElementById('wizard-modal')) return;
+    document.getElementById('wizard-modal').style.display = 'none';
+}
+
+function previewWizThumb(url) {
+    const img = document.getElementById('wiz-thumb-img');
+    const ph  = document.getElementById('wiz-thumb-placeholder');
+    const box = document.getElementById('wiz-thumb-preview');
+    if (!url.trim()) {
+        img.style.display = 'none'; img.src = '';
+        ph.style.display = 'inline'; ph.textContent = '🎌';
+        box.style.borderColor = ''; return;
+    }
+    img.onload  = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
+    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; box.style.borderColor = 'var(--failure)'; };
+    ph.textContent = '🎌'; img.src = url;
+}
+
+function handleWizThumbFile(input) {
+    const file = input.files[0];
+    if (file) {
+        document.getElementById('wiz-thumb-filename').textContent = file.name;
+        document.getElementById('wiz-thumb-url').value = ''; // clear url if file picked
+        const reader = new FileReader();
+        reader.onload = e => previewWizThumb(e.target.result);
+        reader.readAsDataURL(file);
     }
 }
 
-async function registerScraper() {
-    const name = document.getElementById('scraper-name').value.trim();
-    const module = document.getElementById('scraper-module').value.trim();
-    const desc = document.getElementById('scraper-desc').value.trim();
-    const docHomepage = document.getElementById('scraper-homepage');
-    const homepage = docHomepage ? docHomepage.value.trim() : "";
-    const thumb = document.getElementById('scraper-thumb').value.trim();
+function handleWizCodeFile(input) {
+    const file = input.files[0];
+    if (file) {
+        document.getElementById('wiz-code-text').textContent = `📄 ${file.name}`;
+        document.getElementById('wiz-code-zone').style.borderColor = 'var(--success)';
+        document.getElementById('wiz-code-zone').style.background = 'rgba(34, 197, 94, 0.05)';
+    }
+}
 
-    if (!module) { toast('Module path is required.', 'error'); return; }
+async function submitWizard(e) {
+    e.preventDefault();
+    const btn = document.getElementById('wiz-submit-btn');
+    btn.disabled = true;
+    btn.textContent = '\u23f3 Building\u2026';
+
+    // Build semver label
+    const major = document.getElementById('wiz-ver-major').value || '1';
+    const minor = document.getElementById('wiz-ver-minor').value || '0';
+    const patch = document.getElementById('wiz-ver-patch').value || '0';
+    const versionLabel = `${major}.${minor}.${patch}`;
+    const commitMsg = document.getElementById('wiz-commit').value.trim() || 'Initial release';
+
+    const formData = new FormData();
+    formData.append('name', document.getElementById('wiz-name').value);
+    formData.append('description', document.getElementById('wiz-desc').value);
+    formData.append('homepage_url', ensureHttps(document.getElementById('wiz-home').value));
+    formData.append('thumbnail_url', document.getElementById('wiz-thumb-url').value);
+    formData.append('version_label', versionLabel);
+    formData.append('commit_message', commitMsg);
+
+    const codeFile = document.getElementById('wiz-code-file').files[0];
+    formData.append('scraper_file', codeFile);
+
+    const thumbFile = document.getElementById('wiz-thumb-file').files[0];
+    if (thumbFile) formData.append('thumbnail_file', thumbFile);
 
     try {
-        await apiFetch(API.scrapers, {
+        await apiFetch(API.scrapers + '/wizard', {
             method: 'POST',
-            body: JSON.stringify({
-                name: name || module,
-                module_path: module,
-                description: desc,
-                homepage_url: homepage || null,
-                thumbnail_url: thumb || null
-            }),
+            body: formData
         });
-        toast('Scraper registered!', 'success');
-        document.getElementById('scraper-name').value = '';
-        document.getElementById('scraper-module').value = '';
-        document.getElementById('scraper-desc').value = '';
-        if (docHomepage) docHomepage.value = '';
-        document.getElementById('scraper-thumb').value = '';
-        previewThumb(''); // reset preview
+        toast('Scraper configured and built successfully!', 'success');
+        closeWizardModal();
         loadScrapers();
-    } catch (e) {
-        toast(e.message, 'error');
+    } catch (err) {
+        toast(err.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '\u2728 Build Scraper';
     }
 }
 
 async function runScraper(id, btn) {
-    btn.disabled = true;
-    btn.textContent = '⚡ Running…';
+    btn.disabled = true; btn.textContent = '⚡ Running…';
     try {
         const res = await apiFetch(API.run(id), { method: 'POST' });
         toast(res.detail, 'success');
         setTimeout(() => loadTab('logs'), 2500);
-    } catch (e) {
-        toast(e.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '▶ Run Now';
-    }
+    } catch (e) { toast(e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '▶ Run Now'; }
 }
 
 async function toggleScraper(id) {
@@ -272,9 +400,7 @@ async function toggleScraper(id) {
         const res = await apiFetch(`${API.scrapers}/${id}/toggle`, { method: 'PATCH' });
         toast(`Scraper ${res.enabled ? 'enabled' : 'disabled'}.`, 'info');
         loadScrapers();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteScraper(id) {
@@ -283,54 +409,115 @@ async function deleteScraper(id) {
         await apiFetch(`${API.scrapers}/${id}`, { method: 'DELETE' });
         toast('Scraper deleted.', 'info');
         loadScrapers();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ── Schedules ──────────────────────────────── */
+/* ── Tags ────────────────────────────────────────────── */
+async function createTag() {
+    const name  = document.getElementById('new-tag-name').value.trim();
+    const color = document.getElementById('new-tag-color').value;
+    if (!name) { toast('Tag name is required.', 'error'); return; }
+    try {
+        await apiFetch(API.tags, { method: 'POST', body: JSON.stringify({ name, color }) });
+        document.getElementById('new-tag-name').value = '';
+        toast('Tag created!', 'success');
+        loadScrapers();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteTag(id) {
+    if (!confirm('Delete this tag?')) return;
+    try {
+        await apiFetch(`${API.tags}/${id}`, { method: 'DELETE' });
+        toast('Tag deleted.', 'info');
+        loadScrapers();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ── Assign Tags Modal ──────────────────────────────── */
+function openAssignTagsModal(scraperId) {
+    document.getElementById('assign-tags-scraper-id').value = scraperId;
+    const scraper = state.scrapers.find(s => s.id === scraperId);
+    const assignedIds = new Set((scraper?.tags || []).map(t => t.id));
+    const container = document.getElementById('assign-tags-list');
+
+    if (!state.tags.length) {
+        container.innerHTML = '<span style="color:var(--text-muted)">No tags created yet. Create tags in the Scrapers tab.</span>';
+    } else {
+        container.innerHTML = state.tags.map(t => {
+            const on = assignedIds.has(t.id);
+            return `
+            <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-light)">
+                <span class="tag-pill" style="background:${t.color}22;border-color:${t.color};color:${t.color};min-width:80px;text-align:center">${t.name}</span>
+                <button class="btn ${on ? 'btn-danger' : 'btn-primary'}" style="font-size:12px;padding:4px 12px"
+                    onclick="toggleTagAssignment(${scraperId}, ${t.id}, ${on}, this)">
+                    ${on ? 'Remove' : 'Assign'}
+                </button>
+            </div>`;
+        }).join('');
+    }
+    document.getElementById('assign-tags-modal').style.display = 'flex';
+}
+
+async function toggleTagAssignment(scraperId, tagId, isAssigned, btn) {
+    try {
+        if (isAssigned) {
+            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'DELETE' });
+            btn.textContent = 'Assign'; btn.className = 'btn btn-primary'; btn.className += ' btn-primary';
+            btn.setAttribute('onclick', `toggleTagAssignment(${scraperId}, ${tagId}, false, this)`);
+        } else {
+            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'POST' });
+            btn.textContent = 'Remove'; btn.className = 'btn btn-danger';
+            btn.setAttribute('onclick', `toggleTagAssignment(${scraperId}, ${tagId}, true, this)`);
+        }
+        // Refresh state silently
+        const scrapers = await apiFetch(API.scrapers);
+        state.scrapers = scrapers;
+        renderScrapersList(scrapers);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function closeAssignTagsModal(e) {
+    if (e && e.target !== document.getElementById('assign-tags-modal')) return;
+    document.getElementById('assign-tags-modal').style.display = 'none';
+}
+
+/* ════════════════════════════════════════════════
+   SCHEDULES
+════════════════════════════════════════════════ */
 async function loadSchedules() {
     try {
         const schedules = await apiFetch(API.schedules);
         document.getElementById('schedule-count').textContent = schedules.length;
-
         const list = document.getElementById('schedules-list');
         if (!schedules.length) {
             list.innerHTML = '<div class="empty-state">No schedules configured.</div>';
             return;
         }
-
         list.innerHTML = schedules.map(s => `
-      <div class="item-card">
-        <div class="item-info">
-          <div class="item-name">${s.scraper_name || 'Unknown Scraper'}</div>
-          <div class="item-meta"><code style="color:#c4b5fd">${s.cron_expression}</code></div>
-        </div>
-        <div class="item-actions">
-          ${s.next_run ? `<span class="next-run-chip">⏭ ${fmt(s.next_run)}</span>` : ''}
-          ${s.last_run ? `<span style="font-size:11px;color:var(--text-muted)">Last: ${fmt(s.last_run)}</span>` : ''}
-          <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '● On' : '○ Off'}</span>
-          <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
-          <button class="btn btn-danger" onclick="deleteSchedule(${s.id})">✕</button>
-        </div>
-      </div>
-    `).join('');
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+        <div class="item-card">
+          <div class="item-info">
+            <div class="item-name">${s.scraper_name || 'Unknown Scraper'}</div>
+            <div class="item-meta"><code style="color:#c4b5fd">${s.cron_expression}</code></div>
+          </div>
+          <div class="item-actions">
+            ${s.next_run ? `<span class="next-run-chip">⏭ ${fmt(s.next_run)}</span>` : ''}
+            ${s.last_run ? `<span style="font-size:11px;color:var(--text-muted)">Last: ${fmt(s.last_run)}</span>` : ''}
+            <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '● On' : '○ Off'}</span>
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
+            <button class="btn btn-danger" onclick="deleteSchedule(${s.id})">✕</button>
+          </div>
+        </div>`).join('');
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-function applyCronPreset(val) {
-    if (val) document.getElementById('sched-cron').value = val;
-}
+function applyCronPreset(val) { if (val) document.getElementById('sched-cron').value = val; }
 
 async function createSchedule() {
     const scraper_id = document.getElementById('sched-scraper').value;
-    const cron = document.getElementById('sched-cron').value.trim();
-
+    const cron       = document.getElementById('sched-cron').value.trim();
     if (!scraper_id) { toast('Please select a scraper.', 'error'); return; }
-    if (!cron) { toast('Please enter a cron expression.', 'error'); return; }
-
+    if (!cron)       { toast('Please enter a cron expression.', 'error'); return; }
     try {
         const res = await apiFetch(API.schedules, {
             method: 'POST',
@@ -340,9 +527,7 @@ async function createSchedule() {
         document.getElementById('sched-cron').value = '';
         document.getElementById('sched-preset').value = '';
         loadSchedules();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
 async function toggleSchedule(id) {
@@ -350,9 +535,7 @@ async function toggleSchedule(id) {
         const res = await apiFetch(`${API.schedules}/${id}/toggle`, { method: 'PATCH' });
         toast(`Schedule ${res.enabled ? 'resumed' : 'paused'}.`, 'info');
         loadSchedules();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteSchedule(id) {
@@ -361,138 +544,302 @@ async function deleteSchedule(id) {
         await apiFetch(`${API.schedules}/${id}`, { method: 'DELETE' });
         toast('Schedule removed.', 'info');
         loadSchedules();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ── Logs ───────────────────────────────────── */
+/* ════════════════════════════════════════════════
+   LOGS — collapsible card view
+════════════════════════════════════════════════ */
 async function loadLogs(page = null) {
     if (page !== null) state.currentLogsPage = page;
     const scraperFilter = document.getElementById('log-filter-scraper').value;
-    const statusFilter = document.getElementById('log-filter-status').value;
+    const statusFilter  = document.getElementById('log-filter-status').value;
     const offset = state.currentLogsPage * state.logsPageSize;
 
     let url = `${API.logs}?limit=${state.logsPageSize}&offset=${offset}`;
     if (scraperFilter) url += `&scraper_id=${scraperFilter}`;
-    if (statusFilter) url += `&status=${statusFilter}`;
+    if (statusFilter)  url += `&status=${statusFilter}`;
 
     try {
         const data = await apiFetch(url);
-        const tbody = document.getElementById('logs-body');
+        const container = document.getElementById('logs-list');
 
         if (!data.items.length) {
-            tbody.innerHTML = '<tr><td colspan="8" class="empty-td">No logs found.</td></tr>';
+            container.innerHTML = '<div class="empty-state">No logs found.</div>';
             document.getElementById('logs-pagination').innerHTML = '';
             return;
         }
 
-        tbody.innerHTML = data.items.map(log => `
-      <tr>
-        <td><strong>${log.scraper_name || 'N/A'}</strong></td>
-        <td>${statusBadge(log.status)}</td>
-        <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${log.title || ''}">
-          ${log.title || '<span style="color:var(--text-muted)">—</span>'}
-        </td>
-        <td>${log.release_date || '<span style="color:var(--text-muted)">—</span>'}</td>
-        <td class="url-cell">
-          ${log.website_url ? `<a href="${log.website_url}" target="_blank" rel="noopener">${log.website_url}</a>` : '—'}
-        </td>
-        <td style="text-align:center">${log.episode_count ?? '—'}</td>
-        <td>${statusBadge(log.triggered_by)}</td>
-        <td style="white-space:nowrap;color:var(--text-secondary)">${fmt(log.run_at)}</td>
-      </tr>
-    `).join('');
+        container.innerHTML = data.items.map((log, idx) => {
+            const detailsId = `log-details-${log.id}`;
+            const hasDetails = log.payload || log.error_msg;
+            return `
+            <div class="log-card" data-status="${log.status}">
+                <div class="log-card-header" ${hasDetails ? `onclick="toggleLogDetails('${detailsId}')"` : ''} style="${hasDetails ? 'cursor:pointer' : ''}">
+                    <div class="log-card-left">
+                        ${statusBadge(log.status)}
+                        <strong>${log.scraper_name || 'N/A'}</strong>
+                        <span class="log-epcount">${log.episode_count ? `${log.episode_count} found` : ''}</span>
+                    </div>
+                    <div class="log-card-right">
+                        ${statusBadge(log.triggered_by)}
+                        <span class="log-time">${fmt(log.run_at)}</span>
+                        ${hasDetails ? `<span class="log-expand-icon" id="icon-${detailsId}">▶</span>` : ''}
+                    </div>
+                </div>
+                ${hasDetails ? `
+                <div class="log-details" id="${detailsId}" style="display:none">
+                    ${log.error_msg ? `<div class="log-error">❌ ${log.error_msg}</div>` : ''}
+                    ${log.payload ? renderPayload(log.payload) : ''}
+                </div>` : ''}
+            </div>`;
+        }).join('');
 
         // Pagination
         const totalPages = Math.ceil(data.total / state.logsPageSize);
         const pag = document.getElementById('logs-pagination');
         if (totalPages <= 1) { pag.innerHTML = ''; return; }
-
         let pHTML = '';
         for (let i = 0; i < totalPages; i++) {
             pHTML += `<button class="${i === state.currentLogsPage ? 'active' : ''}" onclick="loadLogs(${i})">${i + 1}</button>`;
         }
         pag.innerHTML = pHTML;
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ── Queue ──────────────────────────────────── */
+function toggleLogDetails(id) {
+    const el   = document.getElementById(id);
+    const icon = document.getElementById(`icon-${id}`);
+    const open = el.style.display === 'block';
+    el.style.display = open ? 'none' : 'block';
+    if (icon) icon.textContent = open ? '▶' : '▼';
+}
+
+function renderPayload(payload) {
+    if (!payload || typeof payload !== 'object') return '';
+    const rows = Object.entries(payload)
+        .filter(([, v]) => v !== null && v !== undefined && v !== '')
+        .map(([k, v]) => {
+            const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            let val = String(v);
+            // Auto-link URLs
+            if (val.startsWith('http')) val = `<a href="${val}" target="_blank" rel="noopener">${val}</a>`;
+            return `<div class="payload-row"><span class="payload-key">${label}</span><span class="payload-val">${val}</span></div>`;
+        });
+    return `<div class="payload-grid">${rows.join('')}</div>`;
+}
+
+/* ════════════════════════════════════════════════
+   QUEUE
+════════════════════════════════════════════════ */
 async function loadQueue() {
     try {
         const tasks = await apiFetch(API.queue);
         const pending = tasks.filter(t => t.status === 'pending' || t.status === 'running').length;
-
-        // Update badge
         const badge = document.getElementById('queue-badge');
-        if (pending > 0) {
-            badge.textContent = pending;
-            badge.style.display = 'inline-block';
-        } else {
-            badge.style.display = 'none';
-        }
+        badge.textContent = pending;
+        badge.style.display = pending ? 'inline-block' : 'none';
 
         const tbody = document.getElementById('queue-body');
         if (!tasks.length) {
             tbody.innerHTML = '<tr><td colspan="5" class="empty-td">Queue is empty.</td></tr>';
             return;
         }
-
         tbody.innerHTML = tasks.map(t => `
-      <tr>
-        <td><strong>${t.scraper_name || 'N/A'}</strong></td>
-        <td style="white-space:nowrap">${fmt(t.scheduled_for)}</td>
-        <td>${statusBadge(t.status)}</td>
-        <td style="color:var(--text-secondary)">${fmt(t.created_at)}</td>
-        <td style="color:var(--text-secondary)">${t.processed_at ? fmt(t.processed_at) : '—'}</td>
-      </tr>
-    `).join('');
-    } catch (e) {
-        toast(e.message, 'error');
+        <tr>
+            <td><strong>${t.scraper_name || 'N/A'}</strong></td>
+            <td style="white-space:nowrap">${fmt(t.scheduled_for)}</td>
+            <td>${statusBadge(t.status)}</td>
+            <td style="color:var(--text-secondary)">${fmt(t.created_at)}</td>
+            <td style="color:var(--text-secondary)">${t.processed_at ? fmt(t.processed_at) : '—'}</td>
+        </tr>`).join('');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ════════════════════════════════════════════════
+   INTEGRATIONS
+════════════════════════════════════════════════ */
+function onIntegTypeChange(type) {
+    document.getElementById('integ-discord-fields').style.display = type === 'discord_webhook' ? 'flex' : 'none';
+}
+
+async function loadIntegrations() {
+    try {
+        const integs = await apiFetch(API.integrations);
+        state.integrations = integs;
+        document.getElementById('integ-count').textContent = integs.length;
+        const list = document.getElementById('integrations-list');
+        if (!integs.length) {
+            list.innerHTML = '<div class="empty-state">No integrations yet.</div>';
+            return;
+        }
+        list.innerHTML = integs.map(i => `
+        <div class="item-card">
+          <div class="item-info">
+            <div class="item-name">${integIcon(i.type)} ${i.name}</div>
+            <div class="item-meta" style="font-size:12px;color:var(--text-muted)">${i.type} &nbsp;•&nbsp; Created ${fmt(i.created_at)}</div>
+            ${i.type === 'discord_webhook' ? `<div class="item-meta" style="font-size:11px;margin-top:2px;word-break:break-all;color:var(--text-muted)">${(i.config.webhook_url || '').replace(/\/[^/]+$/, '/***')}</div>` : ''}
+          </div>
+          <div class="item-actions">
+            <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="testIntegration(${i.id}, this)">🧪 Test</button>
+            <button class="btn btn-danger" onclick="deleteIntegration(${i.id})">✕</button>
+          </div>
+        </div>`).join('');
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function createIntegration() {
+    const name = document.getElementById('integ-name').value.trim();
+    const type = document.getElementById('integ-type').value;
+    if (!name) { toast('Name is required.', 'error'); return; }
+
+    let config = {};
+    if (type === 'discord_webhook') {
+        const webhook = document.getElementById('integ-webhook-url').value.trim();
+        if (!webhook) { toast('Webhook URL is required.', 'error'); return; }
+        config = { webhook_url: webhook };
     }
+
+    try {
+        await apiFetch(API.integrations, { method: 'POST', body: JSON.stringify({ name, type, config }) });
+        toast('Integration created!', 'success');
+        document.getElementById('integ-name').value = '';
+        document.getElementById('integ-webhook-url').value = '';
+        loadIntegrations();
+    } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ── Refresh ────────────────────────────────── */
-function refreshAll() {
-    const activeTab = document.querySelector('.tab-panel.active')?.id.replace('tab-', '');
-    if (activeTab) loadTab(activeTab);
-    // Always keep queue badge up to date
-    apiFetch(API.queue).then(tasks => {
-        const pending = tasks.filter(t => t.status === 'pending' || t.status === 'running').length;
-        const badge = document.getElementById('queue-badge');
-        badge.textContent = pending;
-        badge.style.display = pending ? 'inline-block' : 'none';
-    }).catch(() => { });
+async function testIntegration(id, btn) {
+    btn.disabled = true; btn.textContent = '⏳ Testing…';
+    try {
+        const res = await apiFetch(API.verifyInteg(id), { method: 'POST' });
+        toast(res.detail, 'success');
+    } catch (e) { toast(e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '🧪 Test'; }
 }
 
-/* ── Auto-refresh every 30 seconds ─────────── */
-setInterval(refreshAll, 30_000);
+async function deleteIntegration(id) {
+    if (!confirm('Delete this integration? It will be removed from all scrapers.')) return;
+    try {
+        await apiFetch(`${API.integrations}/${id}`, { method: 'DELETE' });
+        toast('Integration deleted.', 'info');
+        loadIntegrations();
+    } catch (e) { toast(e.message, 'error'); }
+}
 
-/* ── Initial load ───────────────────────────── */
-window.addEventListener('DOMContentLoaded', () => {
-    loadScrapers();
-    loadQueue(); // keep badge updated
-});
+/* ── Assign Integrations Modal ────────────────────────── */
+function openAssignModal(scraperId) {
+    document.getElementById('assign-scraper-id').value = scraperId;
+    const scraper = state.scrapers.find(s => s.id === scraperId);
+    const assignedIds = new Set((scraper?.integrations || []).map(i => i.id));
+    const container = document.getElementById('assign-integ-list');
 
-/* ── Edit Modal ──────────────────────────── */
+    if (!state.integrations.length) {
+        container.innerHTML = '<span style="color:var(--text-muted)">No integrations yet. Create one in the Integrations tab.</span>';
+    } else {
+        container.innerHTML = state.integrations.map(i => {
+            const on = assignedIds.has(i.id);
+            return `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border-light)">
+                <div>
+                    <span style="font-weight:500">${integIcon(i.type)} ${i.name}</span>
+                    <span style="font-size:11px;color:var(--text-muted);margin-left:8px">${i.type}</span>
+                </div>
+                <button class="btn ${on ? 'btn-danger' : 'btn-primary'}" style="font-size:12px;padding:4px 12px"
+                    onclick="toggleIntegAssignment(${scraperId}, ${i.id}, ${on}, this)">
+                    ${on ? 'Remove' : 'Assign'}
+                </button>
+            </div>`;
+        }).join('');
+    }
+    document.getElementById('assign-integ-modal').style.display = 'flex';
+}
+
+async function toggleIntegAssignment(scraperId, integId, isAssigned, btn) {
+    try {
+        if (isAssigned) {
+            await apiFetch(API.scraperInteg(scraperId, integId), { method: 'DELETE' });
+            btn.textContent = 'Assign'; btn.className = 'btn btn-primary';
+            btn.setAttribute('onclick', `toggleIntegAssignment(${scraperId}, ${integId}, false, this)`);
+        } else {
+            await apiFetch(API.scraperInteg(scraperId, integId), { method: 'POST' });
+            btn.textContent = 'Remove'; btn.className = 'btn btn-danger';
+            btn.setAttribute('onclick', `toggleIntegAssignment(${scraperId}, ${integId}, true, this)`);
+        }
+        const scrapers = await apiFetch(API.scrapers);
+        state.scrapers = scrapers;
+        renderScrapersList(scrapers);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function closeAssignModal(e) {
+    if (e && e.target !== document.getElementById('assign-integ-modal')) return;
+    document.getElementById('assign-integ-modal').style.display = 'none';
+}
+
+/* ════════════════════════════════════════════════
+   SETTINGS
+════════════════════════════════════════════════ */
+let _allTimezones = [];
+
+async function loadSettings() {
+    try {
+        const [settings, timezones] = await Promise.all([
+            apiFetch(API.settings),
+            _allTimezones.length ? Promise.resolve(_allTimezones) : apiFetch(API.timezones),
+        ]);
+        if (!_allTimezones.length) _allTimezones = timezones;
+
+        const current = settings.timezone || 'UTC';
+        document.getElementById('tz-current').textContent = `Current timezone: ${current}`;
+        renderTzOptions(_allTimezones, current);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderTzOptions(zones, selected) {
+    const sel = document.getElementById('tz-select');
+    const search = document.getElementById('tz-search').value.toLowerCase();
+    const filtered = search ? zones.filter(z => z.toLowerCase().includes(search)) : zones;
+    sel.innerHTML = filtered.map(z => `<option value="${z}" ${z === selected ? 'selected' : ''}>${z}</option>`).join('');
+}
+
+function filterTzOptions(val) {
+    const current = document.getElementById('tz-current').textContent.replace('Current timezone: ', '');
+    renderTzOptions(_allTimezones, current);
+}
+
+async function saveTimezone() {
+    const sel = document.getElementById('tz-select');
+    const tz  = sel.value;
+    if (!tz) { toast('Please select a timezone.', 'error'); return; }
+    try {
+        await apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: tz }) });
+        toast(`Timezone set to ${tz}`, 'success');
+        document.getElementById('tz-current').textContent = `Current timezone: ${tz}`;
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+/* ════════════════════════════════════════════════
+   EDIT MODAL
+════════════════════════════════════════════════ */
 function openEditModal(id) {
     const s = state.scrapers.find(x => x.id === id);
     if (!s) return;
     document.getElementById('edit-id').value = id;
     document.getElementById('edit-name').value = s.name;
-    const docHomepage = document.getElementById('edit-homepage');
-    if (docHomepage) docHomepage.value = s.homepage_url || '';
+    document.getElementById('edit-homepage').value = s.homepage_url || '';
     document.getElementById('edit-desc').value = s.description || '';
     document.getElementById('edit-thumb').value = s.thumbnail_url || '';
+    document.getElementById('edit-thumb-filename').textContent = '';
+    // Reset code zone
+    document.getElementById('edit-code-text').textContent = 'Drag & Drop a new .py file here';
+    document.getElementById('edit-code-zone').style.borderColor = '';
+    document.getElementById('edit-code-zone').style.background = '';
+    document.getElementById('edit-code-file').value = '';
     const img = document.getElementById('edit-thumb-img');
-    const ph = document.getElementById('edit-thumb-placeholder');
-    if (s.thumbnail_url) {
-        img.src = s.thumbnail_url; img.style.display = 'block'; ph.style.display = 'none';
-    } else {
-        img.style.display = 'none'; img.src = ''; ph.style.display = 'inline'; ph.textContent = '🎌';
-    }
+    const ph  = document.getElementById('edit-thumb-placeholder');
+    if (s.thumbnail_url) { img.src = s.thumbnail_url; img.style.display = 'block'; ph.style.display = 'none'; }
+    else { img.style.display = 'none'; img.src = ''; ph.style.display = 'inline'; ph.textContent = '🎌'; }
     document.getElementById('edit-modal').style.display = 'flex';
 }
 
@@ -501,29 +848,174 @@ function closeEditModal(e) {
     document.getElementById('edit-modal').style.display = 'none';
 }
 
-async function saveEdit() {
-    const id = parseInt(document.getElementById('edit-id').value);
-    const name = document.getElementById('edit-name').value.trim();
-    const desc = document.getElementById('edit-desc').value.trim();
-    const docHomepage = document.getElementById('edit-homepage');
-    const homepage = docHomepage ? docHomepage.value.trim() : "";
-    const thumb = document.getElementById('edit-thumb').value.trim();
+function handleEditCodeFile(input) {
+    const file = input.files[0];
+    if (file) {
+        document.getElementById('edit-code-text').textContent = `📄 ${file.name}`;
+        document.getElementById('edit-code-zone').style.borderColor = 'var(--success)';
+        document.getElementById('edit-code-zone').style.background = 'rgba(34, 197, 94, 0.05)';
+    }
+}
 
+function handleEditThumbFile(input) {
+    const file = input.files[0];
+    if (file) {
+        document.getElementById('edit-thumb-filename').textContent = file.name;
+        document.getElementById('edit-thumb').value = '';
+        const reader = new FileReader();
+        reader.onload = e => previewEditThumb(e.target.result);
+        reader.readAsDataURL(file);
+    }
+}
+
+async function saveEdit() {
+    const id   = parseInt(document.getElementById('edit-id').value);
+    const name = document.getElementById('edit-name').value.trim();
     if (!name) { toast('Name cannot be empty.', 'error'); return; }
+
+    const btn = document.getElementById('edit-submit-btn');
+    btn.disabled = true; btn.textContent = '⏳ Saving…';
+
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', document.getElementById('edit-desc').value.trim());
+    formData.append('homepage_url', ensureHttps(document.getElementById('edit-homepage').value));
+    formData.append('thumbnail_url', document.getElementById('edit-thumb').value.trim());
+
+    const thumbFile = document.getElementById('edit-thumb-file').files[0];
+    if (thumbFile) formData.append('thumbnail_file', thumbFile);
+
+    const codeFile = document.getElementById('edit-code-file').files[0];
+    if (codeFile) formData.append('scraper_file', codeFile);
+
     try {
         await apiFetch(`${API.scrapers}/${id}`, {
             method: 'PATCH',
-            body: JSON.stringify({
-                name,
-                description: desc,
-                homepage_url: homepage || '',
-                thumbnail_url: thumb || ''
-            }),
+            body: formData,
         });
         toast('Scraper updated!', 'success');
         document.getElementById('edit-modal').style.display = 'none';
         loadScrapers();
-    } catch (e) {
-        toast(e.message, 'error');
-    }
+    } catch (e) { toast(e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '💾 Save Changes'; }
 }
+
+/* ════════════════════════════════════════════════
+   VERSION HISTORY MODAL
+════════════════════════════════════════════════ */
+async function openVersionsModal(scraperId) {
+    document.getElementById('versions-scraper-id').value = scraperId;
+    document.getElementById('ver-code-area').style.display = 'none';
+    document.getElementById('ver-code-view').textContent = '';
+    const list = document.getElementById('versions-list');
+    list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading\u2026</div>';
+    document.getElementById('versions-modal').style.display = 'flex';
+    try {
+        const versions = await apiFetch(API.versions(scraperId));
+        if (!versions.length) {
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No versions recorded yet.</div>';
+            return;
+        }
+        list.innerHTML = versions.map(v => `
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-light);background:var(--bg-card)">
+            <div style="flex:1;min-width:0">
+                <span style="font-weight:600;color:var(--accent)">v${v.version_label || '?'}</span>
+                <span style="font-size:12px;color:var(--text-muted);margin-left:10px">${fmt(v.created_at)}</span>
+                ${v.commit_message ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">💬 ${v.commit_message}</div>` : ''}
+            </div>
+            <div style="display:flex;gap:6px;margin-left:12px">
+                <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px" onclick="viewVersion(${scraperId}, ${v.id}, '${v.version_label || '?'}')">👁 View</button>
+                <button class="btn btn-primary" style="font-size:12px;padding:4px 10px" onclick="revertVersion(${scraperId}, ${v.id}, '${v.version_label || '?'}', this)">↩ Revert</button>
+            </div>
+        </div>`).join('');
+    } catch (e) { list.innerHTML = `<div style="color:var(--failure)">${e.message}</div>`; }
+}
+
+async function viewVersion(scraperId, versionId, versionLabel) {
+    const area  = document.getElementById('ver-code-area');
+    const pre   = document.getElementById('ver-code-view');
+    const label = document.getElementById('ver-code-label');
+    pre.textContent = 'Loading\u2026';
+    area.style.display = 'block';
+    label.textContent = `v${versionLabel} \u2014 CODE`;
+    try {
+        const data = await apiFetch(API.versionCode(scraperId, versionId));
+        pre.textContent = data.code;
+    } catch (e) { pre.textContent = `Error: ${e.message}`; }
+}
+
+async function revertVersion(scraperId, versionId, versionLabel, btn) {
+    if (!confirm(`Revert to v${versionLabel}? The current code will be snapshotted first.`)) return;
+    btn.disabled = true; btn.textContent = '\u23f3';
+    try {
+        await apiFetch(API.revert(scraperId, versionId), { method: 'POST' });
+        toast(`Reverted to v${versionLabel} successfully!`, 'success');
+        document.getElementById('versions-modal').style.display = 'none';
+        loadScrapers();
+    } catch (e) { toast(e.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '\u21a9 Revert'; }
+}
+
+function closeVersionsModal(e) {
+    if (e && e.target !== document.getElementById('versions-modal')) return;
+    document.getElementById('versions-modal').style.display = 'none';
+}
+
+/* ════════════════════════════════════════════════
+   REFRESH + INIT
+════════════════════════════════════════════════ */
+function refreshAll() {
+    const activeTab = document.querySelector('.tab-panel.active')?.id.replace('tab-', '');
+    if (activeTab) loadTab(activeTab);
+    apiFetch(API.queue).then(tasks => {
+        const pending = tasks.filter(t => t.status === 'pending' || t.status === 'running').length;
+        const badge = document.getElementById('queue-badge');
+        badge.textContent = pending;
+        badge.style.display = pending ? 'inline-block' : 'none';
+    }).catch(() => {});
+}
+
+setInterval(refreshAll, 30_000);
+
+/* ── Drag-and-drop for code zones ───────────────────── */
+function _setupCodeDropZone(zoneId, inputId, textId) {
+    const zone = document.getElementById(zoneId);
+    if (!zone) return;
+    zone.addEventListener('dragover', e => {
+        e.preventDefault();
+        zone.style.borderColor = 'var(--accent)';
+        zone.style.background  = 'rgba(99,102,241,0.06)';
+    });
+    zone.addEventListener('dragleave', () => {
+        zone.style.borderColor = '';
+        zone.style.background  = '';
+    });
+    zone.addEventListener('drop', e => {
+        e.preventDefault();
+        zone.style.borderColor = '';
+        zone.style.background  = '';
+        const file = e.dataTransfer.files[0];
+        if (!file) return;
+        if (!file.name.endsWith('.py')) { toast('Only .py files allowed.', 'error'); return; }
+        // Assign the dropped file to the hidden input via DataTransfer
+        const dt = new DataTransfer();
+        dt.items.add(file);
+        const input = document.getElementById(inputId);
+        input.files = dt.files;
+        // Update the text label
+        const textEl = document.getElementById(textId);
+        if (textEl) textEl.textContent = `📄 ${file.name}`;
+        zone.style.borderColor = 'var(--success)';
+        zone.style.background  = 'rgba(34,197,94,0.05)';
+    });
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+    loadScrapers();
+    loadQueue();
+    // Pre-load integrations state so assign modal works from the start
+    apiFetch(API.integrations).then(i => { state.integrations = i; }).catch(() => {});
+    // Wire up drag-and-drop for both code upload zones
+    _setupCodeDropZone('wiz-code-zone',  'wiz-code-file',  'wiz-code-text');
+    _setupCodeDropZone('edit-code-zone', 'edit-code-file', 'edit-code-text');
+});

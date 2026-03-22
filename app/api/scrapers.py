@@ -1,37 +1,37 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 import os
+import re
 import requests
 import uuid
-from pydantic import BaseModel
+import importlib
+import inspect
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Scraper
+from app.models import Scraper, ScraperVersion
 from app.scrapers import load_scraper_class, list_available_scraper_modules
+from app.scrapers.base import BaseScraper
 
 router = APIRouter(prefix="/api/scrapers", tags=["scrapers"])
 
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "thumbnails")
+SCRAPERS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scrapers")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
-class ScraperCreate(BaseModel):
-    name: str
-    module_path: str
-    description: str = ""
-    homepage_url: Optional[str] = None
-    thumbnail_url: Optional[str] = None
+# ── Helpers ───────────────────────────────────────────────────────────────────
 
-
-class ScraperUpdate(BaseModel):
-    name: Optional[str] = None
-    description: Optional[str] = None
-    homepage_url: Optional[str] = None
-    thumbnail_url: Optional[str] = None
+def _normalize_url(url: str) -> Optional[str]:
+    """Ensure a URL has a scheme. Returns None if empty."""
+    if not url or not url.strip():
+        return None
+    url = url.strip()
+    if url and not url.startswith("http://") and not url.startswith("https://"):
+        url = "https://" + url
+    return url
 
 
 def _download_thumbnail(url: str, scraper_id: int) -> Optional[str]:
-    """Download the thumbnail and return the local filename. Returns None if failed or no URL."""
     if not url or not url.strip():
         return None
     try:
@@ -58,12 +58,63 @@ def _scraper_dict(s: Scraper):
         "module_path": s.module_path,
         "description": s.description,
         "homepage_url": s.homepage_url,
-        # Serve the local copy if we have one, otherwise fallback to original URL
         "thumbnail_url": f"/thumbnails/{s.local_thumbnail_path}" if s.local_thumbnail_path else s.thumbnail_url,
         "enabled": s.enabled,
+        "health": s.health or "untested",
         "created_at": s.created_at.isoformat() if s.created_at else None,
+        "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in s.tags],
+        "integrations": [{"id": i.id, "name": i.name, "type": i.type} for i in s.integrations],
+        "version_count": len(s.versions) if s.versions else 0,
     }
 
+
+def _snapshot_version(db: Session, scraper: Scraper, version_label: str = None, commit_message: str = None) -> None:
+    """Read the live .py file and store it as a new ScraperVersion."""
+    module_name = scraper.module_path.split(".")[-1]
+    file_path = os.path.join(SCRAPERS_DIR, f"{module_name}.py")
+    if not os.path.exists(file_path):
+        return
+    with open(file_path, "r", encoding="utf-8") as f:
+        code = f.read()
+    db.add(ScraperVersion(
+        scraper_id=scraper.id,
+        version_label=version_label,
+        commit_message=commit_message,
+        code=code,
+    ))
+    db.commit()
+
+
+def _validate_and_write_py(text: str, dest_path: str, module_path: str) -> None:
+    """Validate scraper code and write to disk. Raises HTTPException on failure."""
+    if "BaseScraper" not in text:
+        raise HTTPException(status_code=400, detail="File must inherit BaseScraper.")
+    if "def scrape(self" not in text:
+        raise HTTPException(status_code=400, detail="File must implement def scrape(self).")
+
+    with open(dest_path, "w", encoding="utf-8") as f:
+        f.write(text)
+
+    # Validate import
+    try:
+        # Force reimport in case module was already loaded
+        if module_path in __import__("sys").modules:
+            del __import__("sys").modules[module_path]
+        mod = importlib.import_module(module_path)
+        found = None
+        for _, obj in inspect.getmembers(mod, inspect.isclass):
+            if issubclass(obj, BaseScraper) and obj is not BaseScraper:
+                found = obj
+                break
+        if not found:
+            raise ValueError("No BaseScraper subclass found inside module.")
+    except Exception as e:
+        if os.path.exists(dest_path):
+            os.remove(dest_path)
+        raise HTTPException(status_code=400, detail=f"Could not load your code: {e}")
+
+
+# ── Routes ────────────────────────────────────────────────────────────────────
 
 @router.get("")
 def list_scrapers(db: Session = Depends(get_db)):
@@ -73,61 +124,136 @@ def list_scrapers(db: Session = Depends(get_db)):
 
 @router.get("/available")
 def list_available():
-    """Scan the scrapers/ dir and return unregistered scraper modules."""
     return list_available_scraper_modules()
 
 
-@router.post("")
-def create_scraper(payload: ScraperCreate, db: Session = Depends(get_db)):
-    # Validate the module path resolves to a real scraper
+@router.post("/wizard")
+async def register_scraper_wizard(
+    name: str = Form(...),
+    description: str = Form(""),
+    homepage_url: str = Form(""),
+    thumbnail_url: str = Form(""),
+    version_label: str = Form("1.0.0"),
+    commit_message: str = Form(""),
+    scraper_file: UploadFile = File(...),
+    thumbnail_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    """
+    All-in-one wizard endpoint: uploads a .py file, generates the filename from Name,
+    handles thumbnail (upload or URL), and inserts into database.
+    """
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="Name is required.")
+
+    if not scraper_file.filename.endswith(".py"):
+        raise HTTPException(status_code=400, detail="Scraper code must be a .py file.")
+
+    contents = await scraper_file.read()
     try:
-        cls = load_scraper_class(payload.module_path)
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid module_path: {exc}")
+        text = contents.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="File must be UTF-8 encoded.")
 
-    existing = db.query(Scraper).filter(Scraper.module_path == payload.module_path).first()
-    if existing:
-        raise HTTPException(status_code=409, detail="Scraper with this module_path already registered.")
+    # Generate module name safely from Title
+    slug = re.sub(r"[^a-z0-9]", "_", name.lower().strip())
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    if not slug:
+        slug = "custom_scraper"
 
-    name = payload.name or cls.name
-    desc = payload.description or cls.description
+    safe_name = f"{slug}.py"
+    dest_path = os.path.join(SCRAPERS_DIR, safe_name)
+    module_path = f"app.scrapers.{slug}"
 
+    # Handle duplicates by appending uuid
+    if os.path.exists(dest_path) or db.query(Scraper).filter(Scraper.module_path == module_path).first():
+        short_id = uuid.uuid4().hex[:4]
+        safe_name = f"{slug}_{short_id}.py"
+        dest_path = os.path.join(SCRAPERS_DIR, safe_name)
+        module_path = f"app.scrapers.{slug}_{short_id}"
+
+    _validate_and_write_py(text, dest_path, module_path)
+
+    # Process image upload if provided
+    local_thumb_path = None
+    if thumbnail_file and thumbnail_file.filename:
+        ext = thumbnail_file.filename.split(".")[-1].lower()
+        if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
+            ext = "jpg"
+        thumb_name = f"scraper_wizard_{uuid.uuid4().hex[:6]}.{ext}"
+        t_path = os.path.join(DATA_DIR, thumb_name)
+        t_contents = await thumbnail_file.read()
+        with open(t_path, "wb") as f:
+            f.write(t_contents)
+        local_thumb_path = thumb_name
+        thumbnail_url = ""  # Clear URL if file uploaded directly
+
+    # Normalize URLs
+    homepage_url = _normalize_url(homepage_url)
+    thumb_url = _normalize_url(thumbnail_url) if not local_thumb_path else None
+
+    # Create Scraper
     scraper = Scraper(
-        name=name,
-        module_path=payload.module_path,
-        description=desc,
-        homepage_url=payload.homepage_url.strip() if payload.homepage_url else None,
-        thumbnail_url=payload.thumbnail_url.strip() if payload.thumbnail_url else None,
+        name=name.strip(),
+        module_path=module_path,
+        description=description.strip() or "",
+        homepage_url=homepage_url,
+        thumbnail_url=thumb_url,
+        local_thumbnail_path=local_thumb_path
     )
     db.add(scraper)
     db.commit()
     db.refresh(scraper)
 
-    # Download thumb after we have an ID
-    if scraper.thumbnail_url:
-        local_filename = _download_thumbnail(scraper.thumbnail_url, scraper.id)
-        if local_filename:
-            scraper.local_thumbnail_path = local_filename
+    # Snapshot initial version
+    _snapshot_version(db, scraper, version_label=version_label or "1.0.0", commit_message=commit_message or "Initial commit")
+    db.refresh(scraper)
+
+    # If they provided a URL instead of a file
+    if scraper.thumbnail_url and not local_thumb_path:
+        dl_name = _download_thumbnail(scraper.thumbnail_url, scraper.id)
+        if dl_name:
+            scraper.local_thumbnail_path = dl_name
             db.commit()
 
     return _scraper_dict(scraper)
 
 
 @router.patch("/{scraper_id}")
-def update_scraper(scraper_id: int, payload: ScraperUpdate, db: Session = Depends(get_db)):
+async def update_scraper(
+    scraper_id: int,
+    name: str = Form(...),
+    description: str = Form(""),
+    homepage_url: str = Form(""),
+    thumbnail_url: str = Form(""),
+    version_label: str = Form(""),
+    commit_message: str = Form(""),
+    scraper_file: Optional[UploadFile] = File(None),
+    thumbnail_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
     scraper = db.get(Scraper, scraper_id)
     if not scraper:
         raise HTTPException(status_code=404, detail="Scraper not found.")
-    if payload.name is not None:
-        scraper.name = payload.name
-    if payload.description is not None:
-        scraper.description = payload.description
-    if payload.homepage_url is not None:
-        scraper.homepage_url = payload.homepage_url.strip() if payload.homepage_url.strip() else None
 
-    if payload.thumbnail_url is not None:
-        new_thumb_url = payload.thumbnail_url.strip() if payload.thumbnail_url.strip() else None
-        # Only download if the URL actually changed
+    scraper.name = name.strip() or scraper.name
+    scraper.description = description.strip()
+    scraper.homepage_url = _normalize_url(homepage_url)
+
+    # Handle thumbnail file upload
+    if thumbnail_file and thumbnail_file.filename:
+        ext = thumbnail_file.filename.split(".")[-1].lower()
+        if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
+            ext = "jpg"
+        thumb_name = f"scraper_{scraper_id}_{uuid.uuid4().hex[:6]}.{ext}"
+        t_path = os.path.join(DATA_DIR, thumb_name)
+        t_contents = await thumbnail_file.read()
+        with open(t_path, "wb") as f:
+            f.write(t_contents)
+        scraper.local_thumbnail_path = thumb_name
+        scraper.thumbnail_url = None
+    elif thumbnail_url is not None:
+        new_thumb_url = _normalize_url(thumbnail_url)
         if new_thumb_url != scraper.thumbnail_url:
             scraper.thumbnail_url = new_thumb_url
             if new_thumb_url:
@@ -136,7 +262,28 @@ def update_scraper(scraper_id: int, payload: ScraperUpdate, db: Session = Depend
             else:
                 scraper.local_thumbnail_path = None
 
+    # Handle scraper code update
+    if scraper_file and scraper_file.filename:
+        if not scraper_file.filename.endswith(".py"):
+            raise HTTPException(status_code=400, detail="Scraper code must be a .py file.")
+        contents = await scraper_file.read()
+        try:
+            text = contents.decode("utf-8")
+        except UnicodeDecodeError:
+            raise HTTPException(status_code=400, detail="File must be UTF-8 encoded.")
+
+        # Snapshot old code before overwriting
+        _snapshot_version(db, scraper, version_label=None, commit_message="(pre-edit backup)")
+
+        module_name = scraper.module_path.split(".")[-1]
+        dest_path = os.path.join(SCRAPERS_DIR, f"{module_name}.py")
+        _validate_and_write_py(text, dest_path, scraper.module_path)
+
+        # Snapshot new code
+        _snapshot_version(db, scraper, version_label=version_label or None, commit_message=commit_message or None)
+
     db.commit()
+    db.refresh(scraper)
     return _scraper_dict(scraper)
 
 
@@ -158,3 +305,53 @@ def delete_scraper(scraper_id: int, db: Session = Depends(get_db)):
     db.delete(scraper)
     db.commit()
     return {"detail": "Deleted."}
+
+
+# ── Version History ───────────────────────────────────────────────────────────
+
+@router.get("/{scraper_id}/versions")
+def list_versions(scraper_id: int, db: Session = Depends(get_db)):
+    scraper = db.get(Scraper, scraper_id)
+    if not scraper:
+        raise HTTPException(status_code=404, detail="Scraper not found.")
+    return [
+        {
+            "id": v.id,
+            "version_label": v.version_label or "—",
+            "commit_message": v.commit_message or "",
+            "created_at": v.created_at.isoformat()
+        }
+        for v in reversed(scraper.versions)
+    ]
+
+
+@router.get("/{scraper_id}/versions/{version_id}")
+def get_version_code(scraper_id: int, version_id: int, db: Session = Depends(get_db)):
+    version = db.get(ScraperVersion, version_id)
+    if not version or version.scraper_id != scraper_id:
+        raise HTTPException(status_code=404, detail="Version not found.")
+    return {"version_label": version.version_label, "code": version.code, "created_at": version.created_at.isoformat()}
+
+
+@router.post("/{scraper_id}/revert/{version_id}")
+def revert_version(scraper_id: int, version_id: int, db: Session = Depends(get_db)):
+    scraper = db.get(Scraper, scraper_id)
+    if not scraper:
+        raise HTTPException(status_code=404, detail="Scraper not found.")
+    version = db.get(ScraperVersion, version_id)
+    if not version or version.scraper_id != scraper_id:
+        raise HTTPException(status_code=404, detail="Version not found.")
+
+    # Snapshot current code before reverting
+    _snapshot_version(db, scraper)
+
+    # Write the old version's code back to disk
+    module_name = scraper.module_path.split(".")[-1]
+    dest_path = os.path.join(SCRAPERS_DIR, f"{module_name}.py")
+    _validate_and_write_py(version.code, dest_path, scraper.module_path)
+
+    # Snapshot the reverted code as a new version
+    _snapshot_version(db, scraper)
+
+    db.refresh(scraper)
+    return {"detail": f"Reverted to version {version.version_label}.", "scraper": _scraper_dict(scraper)}

@@ -889,3 +889,231 @@ select option {
     transform: translateY(0);
   }
 }
+
+/* ── Border light (for modal lists) ─────────── */
+:root {
+  --border-light: rgba(255, 255, 255, 0.05);
+}
+
+/* ── File Upload Zone ────────────────────────── */
+.upload-zone {
+  border: 2px dashed var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 12px 20px;
+  cursor: pointer;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-secondary);
+  transition: all var(--transition);
+  background: var(--bg-input);
+  user-select: none;
+}
+
+.upload-zone:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+  background: rgba(124, 106, 247, 0.05);
+}
+
+/* ── Tag Pills ───────────────────────────────── */
+.tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+.tag-pill-sm {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+  white-space: nowrap;
+}
+
+/* ── Tag Filter Chips ────────────────────────── */
+.tag-chip {
+  padding: 4px 12px;
+  border-radius: 99px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-secondary);
+  transition: all var(--transition);
+}
+
+.tag-chip:hover {
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.tag-chip--active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+  box-shadow: 0 2px 10px var(--accent-glow);
+}
+
+/* ── Integration Badge ───────────────────────── */
+.integ-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 500;
+  background: rgba(124, 106, 247, 0.1);
+  border: 1px solid rgba(124, 106, 247, 0.2);
+  color: #c4b5fd;
+  white-space: nowrap;
+}
+
+/* ── Log Card (replaces table rows) ─────────── */
+.logs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.log-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--bg-input);
+  transition: border-color var(--transition);
+}
+
+.log-card:hover {
+  border-color: var(--border-strong);
+}
+
+.log-card[data-status="failure"] {
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.log-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  gap: 12px;
+  flex-wrap: wrap;
+  transition: background var(--transition);
+}
+
+.log-card-header:hover {
+  background: var(--bg-card-hover);
+}
+
+.log-card-left,
+.log-card-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.log-time {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.log-epcount {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.log-expand-icon {
+  font-size: 11px;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+
+.log-details {
+  padding: 14px 16px;
+  border-top: 1px solid var(--border-light);
+  animation: fadeIn 0.2s ease;
+}
+
+.log-error {
+  color: var(--failure);
+  font-size: 13px;
+  background: var(--failure-bg);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  word-break: break-word;
+}
+
+/* ── Payload Grid ────────────────────────────── */
+.payload-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.payload-row {
+  display: flex;
+  gap: 12px;
+  font-size: 13px;
+  align-items: baseline;
+}
+
+.payload-key {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  white-space: nowrap;
+  min-width: 120px;
+  flex-shrink: 0;
+}
+
+.payload-val {
+  color: var(--text-primary);
+  word-break: break-word;
+}
+
+.payload-val a {
+  color: var(--accent);
+  text-decoration: none;
+  font-size: 12px;
+}
+
+.payload-val a:hover {
+  text-decoration: underline;
+}
+
+/* ── Wizard Upload Zones ────────────────────────────── */
+.wizard-upload-zone {
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  padding: 24px;
+}
+.wizard-upload-zone:hover {
+  border-color: var(--accent);
+  background: rgba(99, 102, 241, 0.05);
+}

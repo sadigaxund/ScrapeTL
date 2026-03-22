@@ -1,5 +1,7 @@
 """
 APScheduler integration — manages cron-based scraper schedules and the catch-up queue.
+Timezone is read dynamically from the DB (AppSetting key="timezone"), falling back to
+the APP_TIMEZONE env var or UTC.
 """
 import os
 from datetime import datetime, timedelta
@@ -8,12 +10,35 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from croniter import croniter
 
-TIMEZONE_STR = os.getenv("APP_TIMEZONE", "UTC")
-APP_TZ = pytz.timezone(TIMEZONE_STR)
 
-_scheduler = BackgroundScheduler(timezone=APP_TZ)
+def get_app_timezone() -> pytz.BaseTzInfo:
+    """Read the active timezone from DB, fall back to env / UTC."""
+    try:
+        from app.database import SessionLocal
+        from app.models import AppSetting
+        db = SessionLocal()
+        row = db.get(AppSetting, "timezone")
+        db.close()
+        if row and row.value:
+            return pytz.timezone(row.value)
+    except Exception:
+        pass
+    return pytz.timezone(os.getenv("APP_TIMEZONE", "UTC"))
 
-CATCHUP_MAX_RUNS = 3   # Maximum missed runs to catch up per scraper
+
+_scheduler = BackgroundScheduler(timezone=get_app_timezone())
+
+CATCHUP_MAX_RUNS = 3
+
+
+def reload_timezone(tz_str: str):
+    """Hot-swap the scheduler's default timezone (called when settings change)."""
+    try:
+        new_tz = pytz.timezone(tz_str)
+        _scheduler.configure(timezone=new_tz)
+        print(f"[Scheduler] Timezone updated to: {tz_str}")
+    except Exception as e:
+        print(f"[Scheduler] Failed to update timezone: {e}")
 
 
 def get_scheduler() -> BackgroundScheduler:
@@ -42,8 +67,9 @@ def _execute_scheduled_scraper(scraper_id: int, schedule_id: int):
 
 
 def add_schedule_job(schedule_id: int, scraper_id: int, cron_expression: str):
-    """Register a cron job with APScheduler."""
-    trigger = CronTrigger.from_crontab(cron_expression, timezone=APP_TZ)
+    """Register a cron job with APScheduler using the current app timezone."""
+    tz = get_app_timezone()
+    trigger = CronTrigger.from_crontab(cron_expression, timezone=tz)
     _scheduler.add_job(
         _execute_scheduled_scraper,
         trigger=trigger,
@@ -55,17 +81,12 @@ def add_schedule_job(schedule_id: int, scraper_id: int, cron_expression: str):
 
 
 def remove_schedule_job(schedule_id: int):
-    """Remove a cron job if it exists."""
     job_id = _make_job_id(schedule_id)
     if _scheduler.get_job(job_id):
         _scheduler.remove_job(job_id)
 
 
 def process_catchup_queue():
-    """
-    Immediately process all pending items in the task_queue.
-    Runs in a background thread.
-    """
     from app.database import SessionLocal
     from app.models import TaskQueue
     from app.runner import run_scraper
@@ -87,10 +108,6 @@ def process_catchup_queue():
 
 
 def enqueue_missed_runs(db, schedule, scraper_id: int):
-    """
-    Given a schedule, find missed run times since the last successful scrape
-    and enqueue up to CATCHUP_MAX_RUNS tasks.
-    """
     from app.models import ScrapeLog, TaskQueue
 
     last_success = (
@@ -100,12 +117,12 @@ def enqueue_missed_runs(db, schedule, scraper_id: int):
         .first()
     )
 
+    app_tz = get_app_timezone()
     now_utc = datetime.utcnow()
     since_utc = last_success.run_at if last_success else (now_utc - timedelta(days=7))
 
-    # Convert naive UTC to aware Local for croniter
-    since_local = pytz.utc.localize(since_utc).astimezone(APP_TZ)
-    now_local = pytz.utc.localize(now_utc).astimezone(APP_TZ)
+    since_local = pytz.utc.localize(since_utc).astimezone(app_tz)
+    now_local   = pytz.utc.localize(now_utc).astimezone(app_tz)
 
     cron = croniter(schedule.cron_expression, since_local)
     missed = []
@@ -113,35 +130,21 @@ def enqueue_missed_runs(db, schedule, scraper_id: int):
         next_time_local = cron.get_next(datetime)
         if next_time_local >= now_local:
             break
-        # Convert back to naive UTC for DB storage
         missed_utc = next_time_local.astimezone(pytz.utc).replace(tzinfo=None)
         missed.append(missed_utc)
 
-    # Limit to most recent CATCHUP_MAX_RUNS
     for missed_time in missed[-CATCHUP_MAX_RUNS:]:
-        # Avoid duplicates
         existing = (
             db.query(TaskQueue)
-            .filter(
-                TaskQueue.scraper_id == scraper_id,
-                TaskQueue.scheduled_for == missed_time,
-            )
+            .filter(TaskQueue.scraper_id == scraper_id, TaskQueue.scheduled_for == missed_time)
             .first()
         )
         if not existing:
-            task = TaskQueue(
-                scraper_id=scraper_id,
-                scheduled_for=missed_time,
-                status="pending",
-            )
-            db.add(task)
+            db.add(TaskQueue(scraper_id=scraper_id, scheduled_for=missed_time, status="pending"))
     db.commit()
 
 
 def load_schedules_from_db():
-    """
-    On startup, reload all enabled schedules and detect missed runs.
-    """
     from app.database import SessionLocal
     from app.models import Schedule
 
@@ -152,11 +155,9 @@ def load_schedules_from_db():
             add_schedule_job(schedule.id, schedule.scraper_id, schedule.cron_expression)
             enqueue_missed_runs(db, schedule, schedule.scraper_id)
 
-        # Update next_run times
         for schedule in schedules:
             job = _scheduler.get_job(_make_job_id(schedule.id))
             if job and job.next_run_time:
-                # job.next_run_time is aware Local. Convert to naive UTC.
                 schedule.next_run = job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)
         db.commit()
     finally:
@@ -166,4 +167,5 @@ def load_schedules_from_db():
 def start():
     if not _scheduler.running:
         _scheduler.start()
-        print(f"[Scheduler] Started. Timezone: {TIMEZONE_STR}")
+        tz = get_app_timezone()
+        print(f"[Scheduler] Started. Timezone: {tz}")

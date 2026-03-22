@@ -28,7 +28,7 @@ class BaseScraper:
         if homepage_url:
             self.website_url = homepage_url
 
-    def scrape_episodes_list(self) -> List[dict]:
+    def scrape(self) -> List[dict]:
         """
         Return a list of episode dictionaries, newest first.
 
@@ -43,5 +43,5 @@ class BaseScraper:
             - description (str)
         """
         raise NotImplementedError(
-            f"{self.__class__.__name__} must implement scrape_episodes_list()"
+            f"{self.__class__.__name__} must implement scrape()"
         )
