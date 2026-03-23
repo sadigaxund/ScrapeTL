@@ -12,7 +12,7 @@ class ExampleScraper(BaseScraper):
     website_url = "https://example-anime-site.com"
     description = "Demo scraper — returns mock episode data. Replace with real scraping logic."
 
-    def scrape_episodes_list(self):
+    def scrape(self):
         # ------------------------------------------------------------------ #
         # REAL SCRAPER EXAMPLE (commented out):
         #
@@ -36,11 +36,25 @@ class ExampleScraper(BaseScraper):
         from datetime import datetime, timedelta
         today = datetime.utcnow()
         return [
-            {
-                "title": f"Episode {i} — The Journey Begins Part {i}",
-                "release_date": (today - timedelta(weeks=12 - i)).strftime("%Y-%m-%d"),
-                "website_url": f"{self.website_url}/episodes/{i}",
-                "episode_number": i,
-            }
-            for i in range(1, 13)
+           {
+            "title": "One Piece",
+            "episode_number": "1098",
+            "release_date": "2024-03-23",
+            "website_url": "https://example.com/one-piece-1098",
+            "thumbnail": "https://example.com/one-piece-1098.jpg"
+           },
+           {
+            "title": "One Piece",
+            "episode_number": "1098",
+            "release_date": "2024-03-23",
+            "website_url": "https://example.com/one-piece-1098",
+            "thumbnail": "https://example.com/one-piece-1098.jpg"
+           },
+           {
+            "title": "One Piece",
+            "episode_number": "1098",
+            "release_date": "2024-03-23",
+            "website_url": "https://example.com/one-piece-1098",
+            "thumbnail": "https://example.com/one-piece-1098.jpg"
+           }
         ]

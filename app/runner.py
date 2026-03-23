@@ -25,6 +25,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
     status        = "failure"
     payload_dict  = None
+    payload_list  = None
     episode_count = 0
     error_msg     = None
     latest        = None
@@ -44,6 +45,11 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             if "website_url" not in payload_dict:
                 payload_dict["website_url"] = scraper_instance.website_url
 
+            payload_list = [dict(ep) for ep in episodes[:50]]
+            for ep_item in payload_list:
+                if "website_url" not in ep_item:
+                    ep_item["website_url"] = scraper_instance.website_url
+
         status = "success"
         print(f"[Runner] ✅ {scraper_record.name} — {episode_count} episodes found.")
 
@@ -57,7 +63,8 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             )
             if last_log and last_log.payload:
                 try:
-                    last_payload = json.loads(last_log.payload)
+                    loaded_payload = json.loads(last_log.payload)
+                    last_payload = loaded_payload[0] if isinstance(loaded_payload, list) and len(loaded_payload) > 0 else loaded_payload
                     cur_url   = payload_dict.get("website_url")
                     cur_title = payload_dict.get("title")
                     if last_payload.get("website_url") == cur_url:
@@ -80,7 +87,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
     log = ScrapeLog(
         scraper_id=scraper_id,
         status=status,
-        payload=json.dumps(payload_dict) if payload_dict else None,
+        payload=json.dumps(payload_list) if payload_list else (json.dumps([payload_dict]) if payload_dict else None),
         episode_count=episode_count,
         error_msg=error_msg,
         run_at=datetime.utcnow(),
@@ -130,7 +137,7 @@ def _fire_integrations(scraper_record, status, payload_dict, error_msg, triggere
                     latest_episode=payload_dict if status == "success" else None,
                     error_msg=error_msg,
                     triggered_by=triggered_by,
-                    webhook_url=config.get("webhook_url"),
+                    config=config,
                 )
         except Exception as e:
             print(f"[Runner] Integration '{integ.name}' failed: {e}")

@@ -108,14 +108,13 @@ class Scraper(BaseScraper):
 
         # Optional per-episode thumbnail
         img = li.find("img")
-        thumbnail = img.get("src") or img.get("data-src") if img else None
 
         return {
             "title": title,
             "release_date": release_date,
             "website_url": url,
             "episode_number": episode_number,
-            "thumbnail": thumbnail,
+            "thumbnail": "https://erascans.com/wp-content/uploads/2026/02/Revenge-of-the-Iron-Blooded-Sword-Hound.webp",
         }
 
     # ── public API ────────────────────────────────────────────────────────────

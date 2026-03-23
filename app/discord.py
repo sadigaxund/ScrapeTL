@@ -5,6 +5,7 @@ Falls back to DISCORD_WEBHOOK_URL env var if no webhook_url is passed,
 for backwards-compat with the legacy fallback path in runner.py.
 """
 import os
+import json
 import requests
 from datetime import datetime
 from dotenv import load_dotenv
@@ -33,16 +34,31 @@ def send_notification(
     latest_episode: dict = None,
     error_msg: str = "",
     triggered_by: str = "scheduler",
-    webhook_url: str = None,
+    config: dict = None,
 ):
-    url = webhook_url or _ENV_WEBHOOK
+    if config is None:
+        config = {}
+
+    url = config.get("webhook_url") or _ENV_WEBHOOK
     if not url:
         print("[Discord] No webhook URL configured — skipping notification.")
         return
 
+    format_output = config.get("format_output", True)
+    tag_all = config.get("tag_all", False)
+    thumb_path = config.get("thumbnail_path", "")
+    static_thumb = config.get("thumbnail_url", "")
+
     payload = {}
 
-    if status == "success" and latest_episode:
+    # Feature: dump raw JSON output directly
+    if not format_output and latest_episode and status == "success":
+        raw_json = json.dumps(latest_episode, indent=2)
+        content = "@everyone\n" if tag_all else ""
+        content += f"```json\n{raw_json}\n```"
+        payload = {"content": content}
+
+    elif status == "success" and latest_episode:
         title  = latest_episode.get("title", "Unknown")
         ep_num = latest_episode.get("episode_number")
         date   = latest_episode.get("release_date")
@@ -71,11 +87,28 @@ def send_notification(
         if url_ep:
             embed["url"] = url_ep
 
-        thumb_url = latest_episode.get("thumbnail") or scraper_thumbnail
+        # Thumbnail extraction logic
+        thumb_url = static_thumb
+        if not thumb_url and thumb_path:
+            keys = thumb_path.split(".")
+            val = latest_episode
+            for k in keys:
+                if isinstance(val, dict): val = val.get(k)
+                else: val = None
+            if isinstance(val, str) and val.startswith("http"):
+                thumb_url = val
+                
+        # Fallback to scraped thumbnail or generic scraper icon
+        thumb_url = thumb_url or latest_episode.get("thumbnail") or scraper_thumbnail
+
         if thumb_url and thumb_url.startswith("http"):
             embed["thumbnail"] = {"url": thumb_url}
+        elif thumb_url and thumb_url.startswith("/thumbnails/"):
+            # absolute path resolving if using internal media
+            pass
 
-        payload = {"content": "@everyone", "embeds": [embed]}
+        content = "@everyone" if tag_all else ""
+        payload = {"content": content, "embeds": [embed]}
 
     else:
         emoji = STATUS_EMOJI.get(status, "ℹ️")

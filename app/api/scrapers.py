@@ -263,7 +263,7 @@ async def update_scraper(
             else:
                 scraper.local_thumbnail_path = None
 
-    # Handle scraper code update
+    # Handle scraper code update if uploaded via UI
     if scraper_file and scraper_file.filename:
         if not scraper_file.filename.endswith(".py"):
             raise HTTPException(status_code=400, detail="Scraper code must be a .py file.")
@@ -277,8 +277,11 @@ async def update_scraper(
         dest_path = os.path.join(SCRAPERS_DIR, f"{module_name}.py")
         _validate_and_write_py(text, dest_path, scraper.module_path)
 
-        # Snapshot new code
-        _snapshot_version(db, scraper, version_label=version_label or None, commit_message=commit_message or None)
+    # Snapshot new code if version label changed or explicit commit uploaded
+    if version_label:
+        current_version = scraper.versions[0].version_label if scraper.versions else None
+        if version_label != current_version or commit_message:
+            _snapshot_version(db, scraper, version_label, commit_message)
 
     db.commit()
     db.refresh(scraper)

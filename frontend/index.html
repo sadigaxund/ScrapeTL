@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ScraperHub</title>
+  <title>ScrapeTL</title>
   <meta name="description" content="Manage, schedule, and monitor scrapers with integrations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
@@ -16,7 +16,7 @@
   <aside class="sidebar">
     <div class="logo">
       <span class="logo-icon">🎌</span>
-      <span class="logo-text">ScraperHub</span>
+      <span class="logo-text">ScrapeTL</span>
     </div>
     <nav class="nav">
       <button class="nav-item active" data-tab="scrapers" id="nav-scrapers">
@@ -57,8 +57,8 @@
         <p class="page-subtitle" id="page-subtitle">Manage your scraper plugins</p>
       </div>
       <div class="topbar-right">
-        <button class="btn btn-primary" onclick="openWizardModal()" id="main-add-btn" style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Scraper</button>
-        <button class="btn btn-ghost" onclick="refreshAll()" title="Refresh">⟳ Refresh</button>
+        <button class="btn btn-primary" onclick="openWizardModal()" id="main-add-btn"
+          style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Scraper</button>
       </div>
     </header>
 
@@ -70,13 +70,14 @@
 
       <!-- Main Scrapers Card -->
       <div class="card" style="padding:0; overflow:hidden;">
-        
+
         <!-- Header & Filter bar + compact tag manager -->
         <div style="padding:16px 24px; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02);">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
             <!-- Filter chips -->
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-              <span style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-right:4px">TAG:</span>
+              <span
+                style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-right:4px">TAG:</span>
               <div id="tag-filter-chips" style="display:flex;gap:6px;flex-wrap:wrap">
                 <button class="tag-chip tag-chip--active" data-tag-id="" onclick="filterByTag(this, '')">All</button>
               </div>
@@ -100,39 +101,50 @@
 
     <!-- ── Schedules Tab ─────────────────────────── -->
     <section class="tab-panel" id="tab-schedules">
-      <div class="card">
+      <div class="card" style="position: relative; z-index: 15;">
         <div class="card-header">
           <h2 class="card-title">New Schedule</h2>
         </div>
-        <div class="form-row">
-          <div class="form-group">
+        <div class="form-row" style="align-items: flex-end;">
+          <div class="form-group" style="position: relative; flex: 1;">
             <label>Scraper</label>
-            <select id="sched-scraper">
-              <option value="">— Select —</option>
-            </select>
+            <input type="hidden" id="sched-scraper" value="" />
+            <div class="custom-dropdown" id="dd-sched-scraper" onclick="toggleDropdown(event, 'dd-sched-scraper')" style="width: 100%;">
+              <button class="tag-chip" id="summary-sched-scraper" style="width: 100%; justify-content: space-between; height: 36px; border-radius: 6px; border: 1px solid var(--border-light); background: var(--surface-hover);">
+                <span>— Select —</span> <span style="font-size:10px;opacity:0.5">▼</span>
+              </button>
+              <div class="custom-dropdown-menu" id="sched-menu-scrapers" onclick="event.stopPropagation()" style="width: 100%;"></div>
+            </div>
           </div>
-          <div class="form-group">
+          <div class="form-group" style="flex: 1;">
             <label>Cron Expression</label>
-            <input type="text" id="sched-cron" placeholder="0 12 * * *" />
+            <input type="text" id="sched-cron" placeholder="0 12 * * *" style="height: 36px;" />
           </div>
-          <div class="form-group">
+          <div class="form-group" style="position: relative; flex: 1;">
             <label>Preset</label>
-            <select id="sched-preset" onchange="applyCronPreset(this.value)">
-              <option value="">Custom</option>
-              <option value="0 12 * * *">Daily at noon</option>
-              <option value="0 0 * * *">Daily at midnight</option>
-              <option value="0 9 * * 1">Weekly Monday 9am</option>
-              <option value="0 */6 * * *">Every 6 hours</option>
-              <option value="0 */12 * * *">Every 12 hours</option>
-              <option value="*/30 * * * *">Every 30 minutes</option>
-            </select>
+            <div class="custom-dropdown" id="dd-sched-preset" onclick="toggleDropdown(event, 'dd-sched-preset')" style="width: 100%;">
+              <button class="tag-chip" id="summary-sched-preset" style="width: 100%; justify-content: space-between; height: 36px; border-radius: 6px; border: 1px solid var(--border-light); background: var(--surface-hover);">
+                <span>Custom</span> <span style="font-size:10px;opacity:0.5">▼</span>
+              </button>
+              <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width: 100%; right: 0;">
+                <div class="dropdown-scroll-area">
+                  <button class="dropdown-item" onclick="applyCronPreset('', 'Custom'); toggleDropdown(event, 'dd-sched-preset')">Custom</button>
+                  <button class="dropdown-item" onclick="applyCronPreset('0 12 * * *', 'Daily at noon'); toggleDropdown(event, 'dd-sched-preset')">Daily at noon</button>
+                  <button class="dropdown-item" onclick="applyCronPreset('0 0 * * *', 'Daily at midnight'); toggleDropdown(event, 'dd-sched-preset')">Daily at midnight</button>
+                  <button class="dropdown-item" onclick="applyCronPreset('0 9 * * 1', 'Weekly Monday 9am'); toggleDropdown(event, 'dd-sched-preset')">Weekly Monday 9am</button>
+                  <button class="dropdown-item" onclick="applyCronPreset('0 */6 * * *', 'Every 6 hours'); toggleDropdown(event, 'dd-sched-preset')">Every 6 hours</button>
+                  <button class="dropdown-item" onclick="applyCronPreset('0 */12 * * *', 'Every 12 hours'); toggleDropdown(event, 'dd-sched-preset')">Every 12 hours</button>
+                  <button class="dropdown-item" onclick="applyCronPreset('*/30 * * * *', 'Every 30 minutes'); toggleDropdown(event, 'dd-sched-preset')">Every 30 minutes</button>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="form-group form-group--action">
-            <label>&nbsp;</label>
-            <button class="btn btn-primary" onclick="createSchedule()">+ Schedule</button>
+            <button class="btn btn-primary" style="height: 36px;" onclick="createSchedule()">+ Schedule</button>
           </div>
         </div>
-        <p class="cron-hint">Format: <code>minute hour day month weekday</code> — times are in the <strong>configured timezone</strong> (see Settings).</p>
+        <p class="cron-hint">Format: <code>minute hour day month weekday</code> — times are in the <strong>configured
+            timezone</strong> (see Settings).</p>
       </div>
 
       <div class="card">
@@ -149,25 +161,29 @@
     <!-- ── Logs Tab ──────────────────────────────── -->
     <section class="tab-panel" id="tab-logs">
       <div class="card">
-        <div class="card-header" style="border-bottom:none; padding-bottom:12px;">
+        <div class="card-header" style="border-bottom:none; padding-bottom:0;">
           <h2 class="card-title">Scrape History</h2>
         </div>
-        
+
         <!-- Modern Filters -->
-        <div class="logs-filter-panel" style="padding:12px 20px; border-bottom:1px solid var(--border-light); display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          
+        <div class="logs-filter-panel"
+          style="padding:0 24px 16px 24px; border-bottom:1px solid var(--border-light); display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+
           <div class="custom-dropdown" id="dd-scraper" onclick="toggleDropdown(event, 'dd-scraper')">
-            <button class="tag-chip" id="summary-scraper">Scraper: <b style="margin-left:4px">All</b> <span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
+            <button class="tag-chip" id="summary-scraper">Scraper: <b style="margin-left:4px">All</b> <span
+                style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-scrapers" onclick="event.stopPropagation()"></div>
           </div>
 
           <div class="custom-dropdown" id="dd-tag" onclick="toggleDropdown(event, 'dd-tag')">
-            <button class="tag-chip" id="summary-tag">Tag: <b style="margin-left:4px">All</b> <span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
+            <button class="tag-chip" id="summary-tag">Tag: <b style="margin-left:4px">All</b> <span
+                style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-tags" onclick="event.stopPropagation()"></div>
           </div>
 
           <div class="custom-dropdown" id="dd-status" onclick="toggleDropdown(event, 'dd-status')">
-            <button class="tag-chip" id="summary-status">Status: <b style="margin-left:4px">All</b> <span style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
+            <button class="tag-chip" id="summary-status">Status: <b style="margin-left:4px">All</b> <span
+                style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-statuses" onclick="event.stopPropagation()"></div>
           </div>
 
@@ -209,29 +225,20 @@
     <section class="tab-panel" id="tab-integrations">
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">New Integration</h2>
+          <h2 class="card-title">Add Connector</h2>
         </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>Name</label>
-            <input type="text" id="integ-name" placeholder="My Discord Channel" />
-          </div>
-          <div class="form-group">
-            <label>Type</label>
-            <select id="integ-type" onchange="onIntegTypeChange(this.value)">
-              <option value="discord_webhook">Discord Webhook</option>
-            </select>
-          </div>
-        </div>
-        <!-- Discord webhook fields -->
-        <div id="integ-discord-fields" class="form-row" style="margin-top:12px">
-          <div class="form-group flex-2">
-            <label>Webhook URL</label>
-            <input type="text" id="integ-webhook-url" placeholder="https://discord.com/api/webhooks/…" />
-          </div>
-          <div class="form-group form-group--action">
-            <label>&nbsp;</label>
-            <button class="btn btn-primary" onclick="createIntegration()">+ Create</button>
+        <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px;">
+          Set up automated notifications and data piping.
+        </p>
+        <div class="app-connector-grid">
+          <div class="connector-card discord" onclick="openConnectorModal('discord_webhook')" style="user-select:none;">
+            <span class="connector-icon" style="background:#5865F2; color:white;">
+              <img src="/static/discord.svg" style="width:28px;height:28px" alt="Discord" />
+            </span>
+            <div class="connector-info">
+              <h3>Discord Webhook</h3>
+              <p>Send scrape results to Discord.</p>
+            </div>
           </div>
         </div>
       </div>
@@ -266,7 +273,6 @@
             <button class="btn btn-primary" onclick="saveTimezone()">💾 Save Timezone</button>
           </div>
         </div>
-        <p id="tz-current" style="margin-top:12px;font-size:13px;color:var(--text-muted)">Current: loading…</p>
       </div>
     </section>
 
@@ -279,7 +285,7 @@
         <h2 class="card-title">🤖 Scraper Setup Wizard</h2>
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeWizardModal()">✕</button>
       </div>
-      
+
       <form id="wizard-form" onsubmit="submitWizard(event)">
         <div class="form-row" style="margin-bottom:14px">
           <div class="form-group flex-2">
@@ -302,17 +308,22 @@
           </div>
         </div>
 
-        <div style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+        <div
+          style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
           <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
             <div class="form-group flex-2">
-              <label>Thumbnail Image <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-              <input type="text" id="wiz-thumb-url" placeholder="Paste URL here..." oninput="previewWizThumb(this.value)" style="margin-bottom:8px;" />
-              
+              <label>Thumbnail Image <span
+                  style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+              <input type="text" id="wiz-thumb-url" placeholder="Paste URL here..."
+                oninput="previewWizThumb(this.value)" style="margin-bottom:8px;" />
+
               <div style="display:flex; align-items:center; gap:8px;">
-                <label for="wiz-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px;">
+                <label for="wiz-thumb-file" class="btn btn-ghost"
+                  style="cursor:pointer; font-size:12px; padding:4px 10px;">
                   📁 Upload Photo...
                 </label>
-                <input type="file" id="wiz-thumb-file" accept="image/*" style="display:none" onchange="handleWizThumbFile(this)" />
+                <input type="file" id="wiz-thumb-file" accept="image/*" style="display:none"
+                  onchange="handleWizThumbFile(this)" />
                 <span id="wiz-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
               </div>
             </div>
@@ -325,12 +336,16 @@
         </div>
 
         <div class="form-group" style="margin-bottom:24px">
-          <label>Scraper Script (.py) * <span style="font-weight:400;color:var(--text-muted);text-transform:none">— must define <code>class YourScraper(BaseScraper)</code> with <code>def scrape(self)</code></span></label>
-          <div class="upload-zone wizard-upload-zone" id="wiz-code-zone" onclick="document.getElementById('wiz-code-file').click()">
+          <label>Scraper Script (.py) * <span style="font-weight:400;color:var(--text-muted);text-transform:none">— must
+              define <code>class YourScraper(BaseScraper)</code> with <code>def scrape(self)</code></span></label>
+          <div class="upload-zone wizard-upload-zone" id="wiz-code-zone"
+            onclick="document.getElementById('wiz-code-file').click()">
             <div style="font-size:24px; margin-bottom:8px;">📄</div>
-            <div id="wiz-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag & Drop your .py file here</div>
+            <div id="wiz-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag & Drop your
+              .py file here</div>
             <div style="font-size:12px; margin-top:4px;">or click to browse</div>
-            <input type="file" id="wiz-code-file" accept=".py" style="display:none" onchange="handleWizCodeFile(this)" required />
+            <input type="file" id="wiz-code-file" accept=".py" style="display:none" onchange="handleWizCodeFile(this)"
+              required />
           </div>
         </div>
 
@@ -341,17 +356,20 @@
         <div class="form-row" style="margin-bottom:20px;gap:12px">
           <div class="form-group" style="flex:0 0 auto">
             <label>Initial Version</label>
-            <div style="display:flex;gap:4px;align-items:center;padding:9px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);font-size:14px;user-select:none;cursor:not-allowed">
+            <div
+              style="display:flex;gap:4px;align-items:center;padding:9px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);font-size:14px;user-select:none;cursor:not-allowed">
               v0.0.0
             </div>
           </div>
           <div class="form-group flex-2">
-            <label>Release Notes <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+            <label>Release Notes <span
+                style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
             <input type="text" id="wiz-commit" placeholder="Initial release" />
           </div>
         </div>
 
-        <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
+        <div
+          style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
           <button type="button" class="btn btn-ghost" onclick="closeWizardModal()">Cancel</button>
           <button type="submit" class="btn btn-primary" id="wiz-submit-btn">✨ Build Scraper</button>
         </div>
@@ -384,21 +402,27 @@
 
       <div class="form-row" style="margin-bottom:14px">
         <div class="form-group flex-2">
-          <label>Homepage URL <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+          <label>Homepage URL <span
+              style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
           <input type="text" id="edit-homepage" placeholder="youtube.com or https://example.com" />
         </div>
       </div>
 
-      <div style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+      <div
+        style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
         <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
           <div class="form-group flex-2">
-            <label>Thumbnail Image <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-            <input type="text" id="edit-thumb" placeholder="Paste URL here..." oninput="previewEditThumb(this.value)" style="margin-bottom:8px;" />
+            <label>Thumbnail Image <span
+                style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+            <input type="text" id="edit-thumb" placeholder="Paste URL here..." oninput="previewEditThumb(this.value)"
+              style="margin-bottom:8px;" />
             <div style="display:flex; align-items:center; gap:8px;">
-              <label for="edit-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px;">
+              <label for="edit-thumb-file" class="btn btn-ghost"
+                style="cursor:pointer; font-size:12px; padding:4px 10px;">
                 📁 Upload Photo...
               </label>
-              <input type="file" id="edit-thumb-file" accept="image/*" style="display:none" onchange="handleEditThumbFile(this)" />
+              <input type="file" id="edit-thumb-file" accept="image/*" style="display:none"
+                onchange="handleEditThumbFile(this)" />
               <span id="edit-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
             </div>
           </div>
@@ -410,45 +434,55 @@
       </div>
 
       <div class="form-group" style="margin-bottom:24px">
-        <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional — drag &amp; drop or click to upload a new .py)</span></label>
-        <div class="upload-zone wizard-upload-zone" id="edit-code-zone" onclick="document.getElementById('edit-code-file').click()">
+        <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional — drag
+            &amp; drop or click to upload a new .py)</span></label>
+        <div class="upload-zone wizard-upload-zone" id="edit-code-zone"
+          onclick="document.getElementById('edit-code-file').click()">
           <div style="font-size:24px; margin-bottom:8px;">📄</div>
-          <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop a new .py file here</div>
+          <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop a
+            new .py file here</div>
           <div style="font-size:12px; margin-top:4px;">or click to browse — leave empty to keep existing code</div>
-          <input type="file" id="edit-code-file" accept=".py" style="display:none" onchange="handleEditCodeFile(this)" />
+          <input type="file" id="edit-code-file" accept=".py" style="display:none"
+            onchange="handleEditCodeFile(this)" />
         </div>
       </div>
 
       <div class="form-group" style="margin-bottom:24px">
-        <label>Release Notes & Version <span style="font-weight:400;color:var(--text-muted);text-transform:none">(requires new script)</span></label>
-        
-        <div id="edit-version-container" style="opacity:0.4; pointer-events:none; transition:opacity 0.2s">
-          <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content; margin-bottom:12px;">
-            <span style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
-            
+        <label>Release Notes & Version</label>
+
+        <div id="edit-version-container" style="display:flex; align-items:flex-end; gap:12px;">
+          <div
+            style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
+            <span
+              style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
+
             <div class="semver-part">
               <button type="button" class="semver-up" onclick="bumpVersion('major')" title="Bump Major">▲</button>
-              <input type="text" id="edit-ver-major" value="1" class="semver-input" readonly />
+              <input type="text" id="edit-ver-major" value="1" class="semver-input" readonly
+                style="width:36px; padding:4px; text-align:center;" />
             </div>
             <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
-            
+
             <div class="semver-part">
               <button type="button" class="semver-up" onclick="bumpVersion('minor')" title="Bump Minor">▲</button>
-              <input type="text" id="edit-ver-minor" value="0" class="semver-input" readonly />
+              <input type="text" id="edit-ver-minor" value="0" class="semver-input" readonly
+                style="width:36px; padding:4px; text-align:center;" />
             </div>
             <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
-            
+
             <div class="semver-part">
               <button type="button" class="semver-up" onclick="bumpVersion('patch')" title="Bump Patch">▲</button>
-              <input type="text" id="edit-ver-patch" value="0" class="semver-input" readonly />
+              <input type="text" id="edit-ver-patch" value="0" class="semver-input" readonly
+                style="width:36px; padding:4px; text-align:center;" />
             </div>
           </div>
-          
-          <input type="text" id="edit-commit" placeholder="What changed? e.g. Fixed regex matching" style="width:100%" />
+
+          <input type="text" id="edit-commit" placeholder="What changed? e.g. Fixed regex matching" style="flex:1" />
         </div>
       </div>
 
-      <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
+      <div
+        style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
         <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
         <button class="btn btn-primary" id="edit-submit-btn" onclick="saveEdit()">💾 Save Changes</button>
       </div>
@@ -463,10 +497,13 @@
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeVersionsModal()">✕</button>
       </div>
       <input type="hidden" id="versions-scraper-id" />
-      <div id="versions-list" style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
+      <div id="versions-list"
+        style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
       <div id="ver-code-area" style="display:none">
-        <div style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-bottom:8px" id="ver-code-label">VERSION CODE</div>
-        <pre id="ver-code-view" style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;line-height:1.6;overflow:auto;max-height:320px;white-space:pre-wrap;word-break:break-all"></pre>
+        <div style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-bottom:8px"
+          id="ver-code-label">VERSION CODE</div>
+        <pre id="ver-code-view"
+          style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;line-height:1.6;overflow:auto;max-height:320px;white-space:pre-wrap;word-break:break-all"></pre>
       </div>
       <div style="display:flex;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-ghost" onclick="closeVersionsModal()">Close</button>
@@ -482,8 +519,10 @@
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeAssignModal()">✕</button>
       </div>
       <input type="hidden" id="assign-scraper-id" />
-      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Toggle integrations for this scraper. Changes apply immediately.</p>
-      <div id="assign-integ-list" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto"></div>
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Toggle integrations for this scraper.
+        Changes apply immediately.</p>
+      <div id="assign-integ-list" style="display:flex;flex-direction:column;gap:8px;max-height:320px;overflow-y:auto">
+      </div>
       <div style="display:flex;justify-content:flex-end;margin-top:16px">
         <button class="btn btn-ghost" onclick="closeAssignModal()">Done</button>
       </div>
@@ -498,35 +537,135 @@
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeAssignTagsModal()">✕</button>
       </div>
       <input type="hidden" id="assign-tags-scraper-id" />
-      
+
       <!-- Create New Tag Section -->
-      <div style="padding:14px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:16px;">
+      <div
+        style="padding:14px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); margin-bottom:16px;">
         <h3 style="font-size:13px; color:var(--text-secondary); margin-bottom:10px;">Create New Tag</h3>
         <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="new-tag-name" placeholder="Tag name" style="width:140px; padding:8px 12px; font-size:13px;" />
+          <input type="text" id="new-tag-name" placeholder="Tag name"
+            style="width:140px; padding:8px 12px; font-size:13px;" />
           <input type="hidden" id="new-tag-color" value="#ef4444" />
           <div class="color-swatches" id="color-swatches">
-            <div class="swatch selected" style="background:#ef4444" data-color="#ef4444" onclick="selectSwatch(this)"></div>
+            <div class="swatch selected" style="background:#ef4444" data-color="#ef4444" onclick="selectSwatch(this)">
+            </div>
             <div class="swatch" style="background:#f97316" data-color="#f97316" onclick="selectSwatch(this)"></div>
             <div class="swatch" style="background:#f59e0b" data-color="#f59e0b" onclick="selectSwatch(this)"></div>
             <div class="swatch" style="background:#84cc16" data-color="#84cc16" onclick="selectSwatch(this)"></div>
             <div class="swatch" style="background:#22c55e" data-color="#22c55e" onclick="selectSwatch(this)"></div>
             <div class="swatch" style="background:#06b6d4" data-color="#06b6d4" onclick="selectSwatch(this)"></div>
             <div class="swatch" style="background:#3b82f6" data-color="#3b82f6" onclick="selectSwatch(this)"></div>
-            <div class="swatch" style="background:#6366f1" data-color="#6366f1" onclick="selectSwatch(this)"></div>
-            <div class="swatch" style="background:#a855f7" data-color="#a855f7" onclick="selectSwatch(this)"></div>
-            <div class="swatch" style="background:#ec4899" data-color="#ec4899" onclick="selectSwatch(this)"></div>
-            <input type="color" id="new-tag-color-custom" style="width:24px;height:24px;padding:0;border:none;border-radius:50%;cursor:pointer;background:transparent;" title="Custom Color" onchange="selectCustomColor(this.value)" />
+            <div class="swatch" style="background:#8b5cf6" data-color="#8b5cf6" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#d946ef" data-color="#d946ef" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#f43f5e" data-color="#f43f5e" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#64748b" data-color="#64748b" onclick="selectSwatch(this)"></div>
+            <div class="swatch" style="background:#78716c" data-color="#78716c" onclick="selectSwatch(this)"></div>
+            <div style="display: flex; align-items: center; gap: 6px; margin-left: 4px;">
+              <input type="text" id="new-tag-color-hex" placeholder="#HEX" oninput="handleHexInput(this.value)"
+                style="width:70px; padding:4px 8px; font-size:12px;" />
+              <div id="hex-preview"
+                style="width:16px; height:16px; border-radius:50%; flex-shrink:0; background:transparent; transition:0.2s; border:1px solid var(--border);">
+              </div>
+            </div>
           </div>
-          <button class="btn btn-primary" style="padding:7px 14px; font-size:12px;" onclick="createTag()">+ Add Tag</button>
+          <button class="btn btn-primary" style="padding:7px 14px; font-size:12px;" onclick="createTag()">+ Add
+            Tag</button>
         </div>
       </div>
 
-      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Click a tag below to toggle its assignment for this scraper.</p>
-      <div id="assign-tags-list" style="display:flex;flex-wrap:wrap;gap:8px;max-height:300px;overflow-y:auto;padding:4px;"></div>
-      
-      <div style="display:flex;justify-content:flex-end;border-top:1px solid var(--border-light);padding-top:16px;margin-top:16px;">
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px">Click a tag below to toggle its
+        assignment for this scraper.</p>
+      <div id="assign-tags-list"
+        style="display:flex;flex-wrap:wrap;gap:8px;max-height:300px;overflow-y:auto;padding:4px;"></div>
+
+      <div
+        style="display:flex;justify-content:flex-end;border-top:1px solid var(--border-light);padding-top:16px;margin-top:16px;">
         <button class="btn btn-primary" onclick="closeAssignTagsModal()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CONNECTOR MODAL ─────────────────────────────── -->
+  <div class="modal-overlay" id="connector-modal" style="display:none" onclick="closeConnectorModal(event)">
+    <div class="modal-box" style="max-width: 520px;">
+      <div class="modal-header">
+        <h2 class="card-title" id="connector-title">Configure Webhook</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeConnectorModal()">✕</button>
+      </div>
+
+      <input type="hidden" id="conn-type" value="" />
+
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group flex-2">
+          <label>Integration Name <span style="color:var(--failure)">*</span></label>
+          <input type="text" id="conn-name" placeholder="Channel Name" />
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="form-group flex-2">
+          <label>Description (Optional)</label>
+          <input type="text" id="conn-desc" placeholder="What is this connection used for?" />
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:16px" id="conn-webhook-row">
+        <div class="form-group flex-2">
+          <label>Webhook URL <span style="color:var(--failure)">*</span></label>
+          <input type="text" id="conn-webhook" placeholder="https://discord.com/api/webhooks/..." />
+        </div>
+      </div>
+
+      <div class="toggle-row">
+        <div>
+          <strong>Format Output</strong>
+          <p>Sends beautifully formatted stylized Discord Embeds. If off, sends the raw scrape JSON payload natively.
+          </p>
+        </div>
+        <label class="switch">
+          <input type="checkbox" id="conn-format" checked onchange="toggleConnectorFormat()">
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div id="conn-format-settings" style="display:block">
+        <div class="toggle-row">
+          <div>
+            <strong>Tag Everyone (@everyone)</strong>
+            <p>Includes an @everyone ping when successfully triggered.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="conn-tag">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="form-row" style="margin-bottom:14px; border-top:1px solid var(--border-light); padding-top:16px;">
+          <div class="form-group flex-2">
+            <label>Thumbnail JSON Path (Optional)</label>
+            <input type="text" id="conn-thumb-path" placeholder="e.g. data.cover_url" />
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Extracts a thumbnail dynamically from
+              nested payload dictionaries during runs.</p>
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group flex-2">
+            <label>Static Fallback Thumbnail (Optional)</label>
+            <div style="display:flex;gap:12px;align-items:center;">
+              <input type="file" id="conn-thumb-file" accept="image/*" style="display:none"
+                onchange="handleConnThumb(this)" />
+              <button class="btn btn-secondary" onclick="document.getElementById('conn-thumb-file').click()">Upload
+                Image</button>
+              <span id="conn-thumb-filename" style="font-size:13px;color:var(--text-secondary)">No file selected</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer" style="margin-top:24px; display:flex; justify-content:flex-end;">
+        <button class="btn btn-ghost" style="margin-right:8px;" onclick="closeConnectorModal()">Cancel</button>
+        <button class="btn btn-primary" id="conn-submit-btn" onclick="saveConnector()">Save Integration</button>
       </div>
     </div>
   </div>

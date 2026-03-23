@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Schedule, Scraper
 from app import scheduler as sched
+import pytz
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
@@ -59,7 +60,7 @@ def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db)):
     sched.add_schedule_job(schedule.id, scraper.id, payload.cron_expression)
     job = sched.get_scheduler().get_job(f"schedule_{schedule.id}")
     if job and job.next_run_time:
-        schedule.next_run = job.next_run_time.replace(tzinfo=None)
+        schedule.next_run = job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)
         db.commit()
 
     return {"id": schedule.id, "next_run": schedule.next_run.isoformat() if schedule.next_run else None}

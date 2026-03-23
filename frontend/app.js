@@ -1,41 +1,43 @@
 /* ════════════════════════════════════════════════
-   ScraperHub — Frontend Logic  v2
+   ScrapeTL — Frontend Logic  v2
    Vanilla JS, no dependencies
 ════════════════════════════════════════════════ */
 
 const API = {
-    scrapers:     '/api/scrapers',
-    schedules:    '/api/schedules',
-    logs:         '/api/logs',
-    queue:        '/api/queue',
-    run:          (id) => `/api/run/${id}`,
-    available:    '/api/scrapers/available',
-    upload:       '/api/scrapers/upload',
-    tags:         '/api/tags',
-    scraperTags:  (sid, tid) => `/api/scrapers/${sid}/tags/${tid}`,
+    scrapers: '/api/scrapers',
+    schedules: '/api/schedules',
+    logs: '/api/logs',
+    queue: '/api/queue',
+    run: (id) => `/api/run/${id}`,
+    available: '/api/scrapers/available',
+    upload: '/api/scrapers/upload',
+    tags: '/api/tags',
+    scraperTags: (sid, tid) => `/api/scrapers/${sid}/tags/${tid}`,
     integrations: '/api/integrations',
     scraperInteg: (sid, iid) => `/api/scrapers/${sid}/integrations/${iid}`,
-    verifyInteg:  (id) => `/api/integrations/${id}/verify`,
-    settings:     '/api/settings',
-    timezones:    '/api/settings/timezones',
-    versions:     (sid) => `/api/scrapers/${sid}/versions`,
-    versionCode:  (sid, vid) => `/api/scrapers/${sid}/versions/${vid}`,
-    revert:       (sid, vid) => `/api/scrapers/${sid}/revert/${vid}`,
+    verifyInteg: (id) => `/api/integrations/${id}/verify`,
+    settings: '/api/settings',
+    timezones: '/api/settings/timezones',
+    versions: (sid) => `/api/scrapers/${sid}/versions`,
+    versionCode: (sid, vid) => `/api/scrapers/${sid}/versions/${vid}`,
+    revert: (sid, vid) => `/api/scrapers/${sid}/revert/${vid}`,
 };
 
 /* ── State ──────────────────────────────────────────── */
+let responseCache = {};
 let state = {
-    scrapers:        [],
-    tags:            [],
-    integrations:    [],
+    scrapers: [],
+    tags: [],
+    integrations: [],
     currentLogsPage: 0,
-    logsPageSize:    50,
+    logsPageSize: 50,
     activeTagFilter: '',   // '' = all
     logFilters: {
         scraperId: '',
         tagId: '',
         status: ''
-    }
+    },
+    expandedLogs: new Set()
 };
 
 /* ── Utilities ──────────────────────────────────────── */
@@ -72,14 +74,14 @@ function fmt(isoStr) {
 
 function statusBadge(status) {
     const map = {
-        success:   ['✅', 'success'],
-        failure:   ['❌', 'failure'],
-        pending:   ['⏳', 'pending'],
-        running:   ['⚡', 'running'],
-        done:      ['✅', 'done'],
-        failed:    ['❌', 'failed'],
-        manual:    ['🖱️', 'manual'],
-        catchup:   ['⚠️', 'catchup'],
+        success: ['✅', 'success'],
+        failure: ['❌', 'failure'],
+        pending: ['⏳', 'pending'],
+        running: ['⚡', 'running'],
+        done: ['✅', 'done'],
+        failed: ['❌', 'failed'],
+        manual: ['🖱️', 'manual'],
+        catchup: ['⚠️', 'catchup'],
         scheduler: ['🕐', 'scheduler'],
     };
     const [icon, cls] = map[status] || ['•', 'pending'];
@@ -113,36 +115,36 @@ function filterDropdownConfig(inputEl) {
 /* ── Thumbnail helpers ──────────────────────────────── */
 function previewThumb(url) {
     const img = document.getElementById('thumb-preview-img');
-    const ph  = document.getElementById('thumb-preview-placeholder');
+    const ph = document.getElementById('thumb-preview-placeholder');
     const box = document.getElementById('thumb-preview');
     if (!url.trim()) {
         img.style.display = 'none'; img.src = '';
         ph.style.display = 'inline'; ph.textContent = '🎌';
         box.style.borderColor = ''; return;
     }
-    img.onload  = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
+    img.onload = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
     img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; box.style.borderColor = 'var(--failure)'; };
     ph.textContent = '🎌'; img.src = url;
 }
 
 function previewEditThumb(url) {
     const img = document.getElementById('edit-thumb-img');
-    const ph  = document.getElementById('edit-thumb-placeholder');
+    const ph = document.getElementById('edit-thumb-placeholder');
     const box = document.getElementById('edit-thumb-preview');
-    if (!url || !url.trim()) { img.style.display = 'none'; img.src = ''; ph.style.display = 'inline'; ph.textContent = '🎌'; if(box) box.style.borderColor = ''; return; }
-    img.onload  = () => { ph.style.display = 'none'; img.style.display = 'block'; if(box) box.style.borderColor = 'var(--success)'; };
-    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; if(box) box.style.borderColor = 'var(--failure)'; };
+    if (!url || !url.trim()) { img.style.display = 'none'; img.src = ''; ph.style.display = 'inline'; ph.textContent = '🎌'; if (box) box.style.borderColor = ''; return; }
+    img.onload = () => { ph.style.display = 'none'; img.style.display = 'block'; if (box) box.style.borderColor = 'var(--success)'; };
+    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; if (box) box.style.borderColor = 'var(--failure)'; };
     img.src = url;
 }
 
 /* ── Tab Navigation ─────────────────────────────────── */
 const TAB_META = {
-    scrapers:     { title: 'Scrapers',     subtitle: 'Manage your scraper plugins' },
-    schedules:    { title: 'Schedules',    subtitle: 'Configure cron-based scrape schedules' },
-    logs:         { title: 'Logs',         subtitle: 'Full history of all scrape runs' },
-    queue:        { title: 'Queue',        subtitle: 'Catch-up tasks for missed scheduled runs' },
+    scrapers: { title: 'Scrapers', subtitle: 'Manage your scraper plugins' },
+    schedules: { title: 'Schedules', subtitle: 'Configure cron-based scrape schedules' },
+    logs: { title: 'Logs', subtitle: 'Full history of all scrape runs' },
+    queue: { title: 'Queue', subtitle: 'Catch-up tasks for missed scheduled runs' },
     integrations: { title: 'Integrations', subtitle: 'Manage notification integrations' },
-    settings:     { title: 'Settings',     subtitle: 'App-wide configuration' },
+    settings: { title: 'Settings', subtitle: 'App-wide configuration' },
 };
 
 function switchTab(name) {
@@ -150,8 +152,12 @@ function switchTab(name) {
     document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
     document.querySelector(`[data-tab="${name}"]`).classList.add('active');
     document.getElementById(`tab-${name}`).classList.add('active');
-    document.getElementById('page-title').textContent    = TAB_META[name].title;
+    document.getElementById('page-title').textContent = TAB_META[name].title;
     document.getElementById('page-subtitle').textContent = TAB_META[name].subtitle;
+
+    const addBtn = document.getElementById('main-add-btn');
+    if (name === 'scrapers') { addBtn.style.display = 'inline-block'; }
+    else { addBtn.style.display = 'none'; }
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -163,12 +169,12 @@ document.querySelectorAll('.nav-item').forEach(btn => {
 });
 
 function loadTab(tab) {
-    if (tab === 'scrapers')     loadScrapers();
-    if (tab === 'schedules')    loadSchedules();
-    if (tab === 'logs')         loadLogs();
-    if (tab === 'queue')        loadQueue();
+    if (tab === 'scrapers') loadScrapers();
+    if (tab === 'schedules') loadSchedules();
+    if (tab === 'logs') loadLogs();
+    if (tab === 'queue') loadQueue();
     if (tab === 'integrations') loadIntegrations();
-    if (tab === 'settings')     loadSettings();
+    if (tab === 'settings') loadSettings();
 }
 
 /* ════════════════════════════════════════════════
@@ -180,8 +186,13 @@ async function loadScrapers() {
         apiFetch(API.tags).catch(() => []),
     ]);
 
+    const cacheKey = 'scrapers_' + state.activeTagFilter;
+    const dataHash = JSON.stringify({ scrapers, tags, activeFilter: state.activeTagFilter });
+    if (responseCache[cacheKey] === dataHash) return;
+    responseCache[cacheKey] = dataHash;
+
     state.scrapers = scrapers;
-    state.tags     = tags;
+    state.tags = tags;
     document.getElementById('scraper-count').textContent = scrapers.length;
 
     // Render tag filter chips
@@ -243,7 +254,7 @@ function renderScrapersList(scrapers) {
             : `<div class="item-thumb-placeholder">🎌</div>`;
 
         const tagsHtml = s.tags && s.tags.length
-            ? s.tags.map(t => `<span class="tag-pill-sm" style="background:${t.color}22;border-color:${t.color};color:${t.color}">${t.name}</span>`).join('')
+            ? s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')
             : '';
 
         const integBadges = s.integrations && s.integrations.length
@@ -251,8 +262,8 @@ function renderScrapersList(scrapers) {
             : '';
 
         const healthInfo = {
-            ok:       { icon: '\u2705', label: 'Healthy',  cls: 'badge-success' },
-            failing:  { icon: '\u274c', label: 'Failing',  cls: 'badge-failure' },
+            ok: { icon: '\u2705', label: 'Healthy', cls: 'badge-success' },
+            failing: { icon: '\u274c', label: 'Failing', cls: 'badge-failure' },
             untested: { icon: '\u2699\ufe0f', label: 'Untested', cls: 'badge-pending' },
         }[s.health || 'untested'];
 
@@ -264,16 +275,16 @@ function renderScrapersList(scrapers) {
               ${s.name} ${s.latest_version ? `<span style="font-size:12px;color:var(--accent);font-weight:500;margin-left:6px;background:var(--accent-glow);padding:2px 6px;border-radius:12px;">v${s.latest_version}</span>` : ''}
               ${s.homepage_url ? `<a href="${s.homepage_url}" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:12px;padding:2px 6px;margin-left:8px;text-decoration:none">🔗 Visit</a>` : ''}
             </div>
-            <div class="item-meta">${s.module_path}</div>
             ${s.description ? `<div class="item-meta" style="color:var(--text-secondary);margin-top:2px">${s.description}</div>` : ''}
-            ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${tagsHtml}</div>` : ''}
-            ${integBadges ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${integBadges}</div>` : ''}
-          </div>
-          <div class="item-actions">
-            <div style="display:flex; gap:6px;">
+            
+            <div class="item-meta-group">
               <span class="status-badge ${healthInfo.cls}" title="Health">${healthInfo.icon} ${healthInfo.label}</span>
               <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '\u25cf Active' : '\u25cb Disabled'}</span>
+              ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsHtml}</div>` : ''}
+              ${integBadges ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${integBadges}</div>` : ''}
             </div>
+          </div>
+          <div class="item-actions">
             <div class="action-btn-group">
               <button class="icon-btn" onclick="openAssignTagsModal(${s.id})" title="Manage Tags">🏷️</button>
               <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
@@ -289,22 +300,24 @@ function renderScrapersList(scrapers) {
 }
 
 function integIcon(type) {
-    return type === 'discord_webhook' ? '💬' : '🔗';
+    return type === 'discord_webhook' ? '<img src="/static/discord.svg" style="width:16px;height:16px;vertical-align:middle;margin-right:2px">' : '🔗';
 }
 
 function populateScraperSelects(scrapers) {
-    const selects = ['sched-scraper', 'log-filter-scraper'];
-    selects.forEach(id => {
-        const el = document.getElementById(id);
-        if (!el) return;
-        const val = el.value;
-        el.innerHTML = `<option value="">— All —</option>` + scrapers.map(s =>
-            `<option value="${s.id}">${s.name}</option>`
-        ).join('');
-        el.value = val;
+    let schedHtml = `<div class="dropdown-scroll-area">`;
+    scrapers.forEach(s => {
+        const escapedName = s.name.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+        schedHtml += `<button class="dropdown-item" onclick="selectSchedScraper('${s.id}', '${escapedName}')">${s.name}</button>`;
     });
-    const ss = document.getElementById('sched-scraper');
-    if (ss) ss.options[0].text = '— Select scraper —';
+    schedHtml += `</div>`;
+    const sm = document.getElementById('sched-menu-scrapers');
+    if (sm) sm.innerHTML = schedHtml;
+}
+
+function selectSchedScraper(id, name) {
+    document.getElementById('sched-scraper').value = id;
+    document.getElementById('summary-sched-scraper').innerHTML = `<span>${name}</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
+    document.querySelectorAll('.custom-dropdown').forEach(d => d.classList.remove('open'));
 }
 
 /* ── Wizard Modal ────────────────────────────────────── */
@@ -325,14 +338,14 @@ function closeWizardModal(e) {
 
 function previewWizThumb(url) {
     const img = document.getElementById('wiz-thumb-img');
-    const ph  = document.getElementById('wiz-thumb-placeholder');
+    const ph = document.getElementById('wiz-thumb-placeholder');
     const box = document.getElementById('wiz-thumb-preview');
     if (!url.trim()) {
         img.style.display = 'none'; img.src = '';
         ph.style.display = 'inline'; ph.textContent = '🎌';
         box.style.borderColor = ''; return;
     }
-    img.onload  = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
+    img.onload = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
     img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; box.style.borderColor = 'var(--failure)'; };
     ph.textContent = '🎌'; img.src = url;
 }
@@ -446,14 +459,15 @@ function renderAssignTagsList() {
     } else {
         container.innerHTML = state.tags.map(t => {
             const on = assignedIds.has(t.id);
-            const style = on 
-                ? `background:${t.color}22; border-color:${t.color}; color:${t.color};` 
-                : `background:transparent; border-color:var(--border-strong); color:var(--text-secondary); opacity:0.8;`;
+            const style = on
+                ? `background:var(--bg-card-hover); border-color:var(--border-strong); color:var(--text-primary);`
+                : `background:transparent; border-color:var(--border); color:var(--text-secondary); opacity:0.7;`;
             const check = on ? '✓' : '+';
             return `
             <div class="tag-pill tag-pill-hover" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:6px 14px; transition:all 0.2s; ${style}" 
                  onclick="toggleTagAssignment(${scraperId}, ${t.id}, ${on})" title="${on ? 'Click to unassign' : 'Click to assign'}">
-                <span style="font-weight:700; width:12px; text-align:center;">${check}</span>
+                <span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>
+                <span style="font-weight:700; width:12px; text-align:center; color:${on ? 'var(--success)' : 'var(--text-muted)'}">${check}</span>
                 <span style="font-weight:600;">${t.name}</span>
                 <span onclick="event.stopPropagation(); deleteTag(${t.id})" class="tag-del-btn" title="Permanently Delete Tag">✕</span>
             </div>`;
@@ -461,20 +475,31 @@ function renderAssignTagsList() {
     }
 }
 
-function selectCustomColor(hex) {
+function selectSwatch(el) {
     document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
-    document.getElementById('new-tag-color').value = hex;
+    el.classList.add('selected');
+    document.getElementById('new-tag-color').value = el.dataset.color;
+    document.getElementById('new-tag-color-hex').value = '';
+    document.getElementById('hex-preview').style.background = 'transparent';
+}
+
+function handleHexInput(val) {
+    document.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+    if (val.startsWith('#') && (val.length === 4 || val.length === 7)) {
+        document.getElementById('new-tag-color').value = val;
+        document.getElementById('hex-preview').style.background = val;
+    }
 }
 
 async function createTag() {
-    const name  = document.getElementById('new-tag-name').value.trim();
+    const name = document.getElementById('new-tag-name').value.trim();
     const color = document.getElementById('new-tag-color').value;
     if (!name) { toast('Tag name is required.', 'error'); return; }
     try {
         await apiFetch(API.tags, { method: 'POST', body: JSON.stringify({ name, color }) });
         document.getElementById('new-tag-name').value = '';
         toast('Tag created!', 'success');
-        
+
         // Refresh state
         const [scrapers, tags] = await Promise.all([apiFetch(API.scrapers), apiFetch(API.tags)]);
         state.scrapers = scrapers; state.tags = tags;
@@ -503,7 +528,7 @@ async function deleteTag(id) {
     try {
         await apiFetch(`${API.tags}/${id}`, { method: 'DELETE' });
         toast('Tag deleted.', 'info');
-        
+
         const [scrapers, tags] = await Promise.all([apiFetch(API.scrapers), apiFetch(API.tags)]);
         state.scrapers = scrapers; state.tags = tags;
         renderTagFilterChips(tags);
@@ -523,6 +548,11 @@ function closeAssignTagsModal(e) {
 async function loadSchedules() {
     try {
         const schedules = await apiFetch(API.schedules);
+        
+        const dataHash = JSON.stringify(schedules);
+        if (responseCache['schedules'] === dataHash) return;
+        responseCache['schedules'] = dataHash;
+        
         document.getElementById('schedule-count').textContent = schedules.length;
         const list = document.getElementById('schedules-list');
         if (!schedules.length) {
@@ -546,13 +576,16 @@ async function loadSchedules() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-function applyCronPreset(val) { if (val) document.getElementById('sched-cron').value = val; }
+function applyCronPreset(val, label = null) { 
+    if (val !== null) document.getElementById('sched-cron').value = val; 
+    if (label) document.getElementById('summary-sched-preset').innerHTML = `<span>${label}</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
+}
 
 async function createSchedule() {
     const scraper_id = document.getElementById('sched-scraper').value;
-    const cron       = document.getElementById('sched-cron').value.trim();
+    const cron = document.getElementById('sched-cron').value.trim();
     if (!scraper_id) { toast('Please select a scraper.', 'error'); return; }
-    if (!cron)       { toast('Please enter a cron expression.', 'error'); return; }
+    if (!cron) { toast('Please enter a cron expression.', 'error'); return; }
     try {
         const res = await apiFetch(API.schedules, {
             method: 'POST',
@@ -560,7 +593,7 @@ async function createSchedule() {
         });
         toast(`Schedule created! Next run: ${fmt(res.next_run)}`, 'success');
         document.getElementById('sched-cron').value = '';
-        document.getElementById('sched-preset').value = '';
+        applyCronPreset('', 'Custom');
         loadSchedules();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -589,10 +622,10 @@ function toggleDropdown(e, id) {
     e.stopPropagation();
     const dd = document.getElementById(id);
     const isOpen = dd.classList.contains('open');
-    
+
     // Close other dropdowns
     document.querySelectorAll('.custom-dropdown').forEach(d => d.classList.remove('open'));
-    
+
     // Toggle clicked
     if (!isOpen) {
         dd.classList.add('open');
@@ -632,7 +665,7 @@ function renderLogFilters() {
     document.getElementById('summary-scraper').className = aScrap ? 'tag-chip tag-chip--active' : 'tag-chip';
     document.getElementById('summary-tag').className = aTag ? 'tag-chip tag-chip--active' : 'tag-chip';
     document.getElementById('summary-status').className = state.logFilters.status ? 'tag-chip tag-chip--active' : 'tag-chip';
-    
+
     if (aTag) document.getElementById('summary-tag').style.setProperty('--chip-color', aTag.color);
     else document.getElementById('summary-tag').style.removeProperty('--chip-color');
 
@@ -676,10 +709,10 @@ function renderLogFilters() {
 function setLogFilter(type, val) {
     state.logFilters[type] = val;
     state.currentLogsPage = 0;
-    
+
     // Close dropdowns
     document.querySelectorAll('.custom-dropdown').forEach(d => d.classList.remove('open'));
-    
+
     renderLogFilters();
     loadLogs();
 }
@@ -691,11 +724,16 @@ async function loadLogs(page = null) {
 
     let url = `${API.logs}?limit=${state.logsPageSize}&offset=${offset}`;
     if (scraperId) url += `&scraper_id=${scraperId}`;
-    if (tagId)     url += `&tag_id=${tagId}`;
-    if (status)    url += `&status=${status}`;
+    if (tagId) url += `&tag_id=${tagId}`;
+    if (status) url += `&status=${status}`;
 
     try {
         const data = await apiFetch(url);
+
+        const dataHash = JSON.stringify({ data, filters: state.logFilters, page: state.currentLogsPage });
+        if (responseCache['logs'] === dataHash) return;
+        responseCache['logs'] = dataHash;
+
         const container = document.getElementById('logs-list');
 
         if (!data.items.length) {
@@ -707,6 +745,7 @@ async function loadLogs(page = null) {
         container.innerHTML = data.items.map((log, idx) => {
             const detailsId = `log-details-${log.id}`;
             const hasDetails = log.payload || log.error_msg;
+            const isExpanded = state.expandedLogs.has(detailsId);
             return `
             <div class="log-card" data-status="${log.status}">
                 <div class="log-card-header" ${hasDetails ? `onclick="toggleLogDetails('${detailsId}')"` : ''} style="${hasDetails ? 'cursor:pointer' : ''}">
@@ -718,11 +757,11 @@ async function loadLogs(page = null) {
                     <div class="log-card-right">
                         ${statusBadge(log.triggered_by)}
                         <span class="log-time">${fmt(log.run_at)}</span>
-                        ${hasDetails ? `<span class="log-expand-icon" id="icon-${detailsId}">▶</span>` : ''}
+                        ${hasDetails ? `<span class="log-expand-icon" id="icon-${detailsId}">${isExpanded ? '▼' : '▶'}</span>` : ''}
                     </div>
                 </div>
                 ${hasDetails ? `
-                <div class="log-details" id="${detailsId}" style="display:none">
+                <div class="log-details" id="${detailsId}" style="display:${isExpanded ? 'block' : 'none'}">
                     ${log.error_msg ? `<div class="log-error">❌ ${log.error_msg}</div>` : ''}
                     ${log.payload ? renderPayload(log.payload) : ''}
                 </div>` : ''}
@@ -742,15 +781,34 @@ async function loadLogs(page = null) {
 }
 
 function toggleLogDetails(id) {
-    const el   = document.getElementById(id);
+    const el = document.getElementById(id);
     const icon = document.getElementById(`icon-${id}`);
     const open = el.style.display === 'block';
     el.style.display = open ? 'none' : 'block';
     if (icon) icon.textContent = open ? '▶' : '▼';
+    if (open) {
+        state.expandedLogs.delete(id);
+    } else {
+        state.expandedLogs.add(id);
+    }
 }
 
 function renderPayload(payload) {
     if (!payload || typeof payload !== 'object') return '';
+
+    if (Array.isArray(payload) && payload.length > 0) {
+        const keys = Array.from(new Set(payload.map(p => Object.keys(p)).flat())).filter(k => k !== null && k !== undefined);
+        let thead = '<tr>' + keys.map(k => `<th>${k.replace(/_/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase())}</th>`).join('') + '</tr>';
+        let tbody = payload.map(obj => {
+            return '<tr>' + keys.map(k => {
+                let v = obj[k] !== null && obj[k] !== undefined ? String(obj[k]) : '—';
+                if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
+                return `<td>${v}</td>`;
+            }).join('') + '</tr>';
+        }).join('');
+        return `<div class="payload-table-wrapper"><table class="payload-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+    }
+
     const rows = Object.entries(payload)
         .filter(([, v]) => v !== null && v !== undefined && v !== '')
         .map(([k, v]) => {
@@ -769,6 +827,11 @@ function renderPayload(payload) {
 async function loadQueue() {
     try {
         const tasks = await apiFetch(API.queue);
+        
+        const dataHash = JSON.stringify(tasks);
+        if (responseCache['queue'] === dataHash) return;
+        responseCache['queue'] = dataHash;
+
         const pending = tasks.filter(t => t.status === 'pending' || t.status === 'running').length;
         const badge = document.getElementById('queue-badge');
         badge.textContent = pending;
@@ -793,13 +856,45 @@ async function loadQueue() {
 /* ════════════════════════════════════════════════
    INTEGRATIONS
 ════════════════════════════════════════════════ */
-function onIntegTypeChange(type) {
-    document.getElementById('integ-discord-fields').style.display = type === 'discord_webhook' ? 'flex' : 'none';
+function openConnectorModal(type) {
+    document.getElementById('conn-type').value = type;
+    document.getElementById('conn-name').value = '';
+    document.getElementById('conn-desc').value = '';
+    document.getElementById('conn-webhook').value = '';
+    document.getElementById('conn-format').checked = true;
+    document.getElementById('conn-tag').checked = false;
+    document.getElementById('conn-thumb-path').value = '';
+    document.getElementById('conn-thumb-file').value = '';
+    document.getElementById('conn-thumb-filename').textContent = 'No file selected';
+
+    toggleConnectorFormat();
+    document.getElementById('connector-modal').style.display = 'flex';
+}
+
+function closeConnectorModal(e) {
+    if (e && e.target !== document.getElementById('connector-modal')) return;
+    document.getElementById('connector-modal').style.display = 'none';
+}
+
+function toggleConnectorFormat() {
+    const isFormatted = document.getElementById('conn-format').checked;
+    document.getElementById('conn-format-settings').style.display = isFormatted ? 'block' : 'none';
+}
+
+function handleConnThumb(input) {
+    const file = input.files[0];
+    if (file) document.getElementById('conn-thumb-filename').textContent = file.name;
+    else document.getElementById('conn-thumb-filename').textContent = 'No file selected';
 }
 
 async function loadIntegrations() {
     try {
         const integs = await apiFetch(API.integrations);
+        
+        const dataHash = JSON.stringify(integs);
+        if (responseCache['integrations'] === dataHash) return;
+        responseCache['integrations'] = dataHash;
+
         state.integrations = integs;
         document.getElementById('integ-count').textContent = integs.length;
         const list = document.getElementById('integrations-list');
@@ -807,40 +902,85 @@ async function loadIntegrations() {
             list.innerHTML = '<div class="empty-state">No integrations yet.</div>';
             return;
         }
-        list.innerHTML = integs.map(i => `
-        <div class="item-card">
-          <div class="item-info">
-            <div class="item-name">${integIcon(i.type)} ${i.name}</div>
-            <div class="item-meta" style="font-size:12px;color:var(--text-muted)">${i.type} &nbsp;•&nbsp; Created ${fmt(i.created_at)}</div>
-            ${i.type === 'discord_webhook' ? `<div class="item-meta" style="font-size:11px;margin-top:2px;word-break:break-all;color:var(--text-muted)">${(i.config.webhook_url || '').replace(/\/[^/]+$/, '/***')}</div>` : ''}
-          </div>
-          <div class="item-actions">
-            <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="testIntegration(${i.id}, this)">🧪 Test</button>
-            <button class="btn btn-danger" onclick="deleteIntegration(${i.id})">✕</button>
-          </div>
-        </div>`).join('');
+
+        list.innerHTML = integs.map(i => {
+            let metaChips = '';
+            let descriptionHTML = '';
+
+            if (i.config && i.config.description) {
+                descriptionHTML = `<div style="font-size:13px;color:var(--text-secondary);margin-top:6px;">${i.config.description}</div>`;
+            }
+
+            if (i.type === 'discord_webhook' && i.config) {
+                const isFmt = i.config.format_output !== false; // defaults true
+                if (isFmt) metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 6px">Formatted</span>`;
+                else metaChips += ` <span class="tag-chip" style="font-size:10px;padding:2px 6px;color:var(--warning)">Raw JSON</span>`;
+
+                if (i.config.tag_all) metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 6px">@everyone</span>`;
+            }
+
+            const titleType = i.type === 'discord_webhook' ? 'Discord Webhook' : i.type;
+
+            return `
+            <div class="item-card">
+              <div class="item-info">
+                <div class="item-name" style="font-size:16px;">${integIcon(i.type)} ${i.name} ${metaChips}</div>
+                <div class="item-meta" style="font-size:12px;color:var(--text-muted)">${titleType} &nbsp;•&nbsp; Created on ${fmt(i.created_at)}</div>
+                ${descriptionHTML}
+              </div>
+              <div class="item-actions">
+                <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="testIntegration(${i.id}, this)">🧪 Test</button>
+                <button class="btn btn-danger" onclick="deleteIntegration(${i.id})">✕</button>
+              </div>
+            </div>`;
+        }).join('');
     } catch (e) { toast(e.message, 'error'); }
 }
 
-async function createIntegration() {
-    const name = document.getElementById('integ-name').value.trim();
-    const type = document.getElementById('integ-type').value;
-    if (!name) { toast('Name is required.', 'error'); return; }
+async function saveConnector() {
+    const name = document.getElementById('conn-name').value.trim();
+    const type = document.getElementById('conn-type').value;
+    if (!name) { toast('Integration name is required.', 'error'); return; }
 
     let config = {};
     if (type === 'discord_webhook') {
-        const webhook = document.getElementById('integ-webhook-url').value.trim();
+        const webhook = document.getElementById('conn-webhook').value.trim();
         if (!webhook) { toast('Webhook URL is required.', 'error'); return; }
-        config = { webhook_url: webhook };
+
+        config = {
+            webhook_url: webhook,
+            description: document.getElementById('conn-desc').value.trim(),
+            format_output: document.getElementById('conn-format').checked,
+            tag_all: document.getElementById('conn-tag').checked,
+            thumbnail_path: document.getElementById('conn-thumb-path').value.trim(),
+        };
     }
 
+    const btn = document.getElementById('conn-submit-btn');
+    btn.disabled = true; btn.textContent = '⏳ Saving…';
+
     try {
-        await apiFetch(API.integrations, { method: 'POST', body: JSON.stringify({ name, type, config }) });
-        toast('Integration created!', 'success');
-        document.getElementById('integ-name').value = '';
-        document.getElementById('integ-webhook-url').value = '';
+        const createdInteg = await apiFetch(API.integrations, { method: 'POST', body: JSON.stringify({ name, type, config }) });
+
+        // Handle optional thumbnail file upload chaining natively
+        const thumbFile = document.getElementById('conn-thumb-file').files[0];
+        if (thumbFile && config.format_output) {
+            const formData = new FormData();
+            formData.append('file', thumbFile);
+            const thumbRes = await fetch(`${API.integrations}/${createdInteg.id}/thumbnail`, { method: 'POST', body: formData });
+            if (!thumbRes.ok) {
+                const err = await thumbRes.json();
+                throw new Error(err.detail || 'Thumbnail upload failed');
+            }
+        }
+
+        toast('Integration created successfully!', 'success');
+        closeConnectorModal();
         loadIntegrations();
     } catch (e) { toast(e.message, 'error'); }
+    finally {
+        btn.disabled = false; btn.textContent = 'Save Integration';
+    }
 }
 
 async function testIntegration(id, btn) {
@@ -925,8 +1065,7 @@ async function loadSettings() {
         if (!_allTimezones.length) _allTimezones = timezones; // timezones is now array of objects {id, label}
 
         const current = settings.timezone || 'UTC';
-        document.getElementById('tz-current').textContent = `Current timezone: ${current}`;
-        
+
         const dl = document.getElementById('tz-list');
         if (dl) dl.innerHTML = _allTimezones.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
         document.getElementById('tz-input').value = current;
@@ -939,7 +1078,6 @@ async function saveTimezone() {
     try {
         await apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: val }) });
         toast(`Timezone set to ${val}`, 'success');
-        document.getElementById('tz-current').textContent = `Current timezone: ${val}`;
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -960,17 +1098,14 @@ function openEditModal(id) {
     document.getElementById('edit-code-zone').style.borderColor = '';
     document.getElementById('edit-code-zone').style.background = '';
     document.getElementById('edit-code-file').value = '';
-    
-    // Disable version container initially
-    document.getElementById('edit-version-container').style.opacity = '0.4';
-    document.getElementById('edit-version-container').style.pointerEvents = 'none';
-    
+
+    // Container is always active now.
     // Default version fields if we have a previous version, otherwise empty
     let nextPatch = 1;
-    let mj = '', mn = '', pt = '';
+    let mj = '1', mn = '0', pt = '0';
     if (s.latest_version) {
         let parts = s.latest_version.split('.');
-        if(parts.length === 3) {
+        if (parts.length === 3) {
             mj = parts[0]; mn = parts[1]; pt = parseInt(parts[2]) + 1;
         }
     }
@@ -980,7 +1115,7 @@ function openEditModal(id) {
     document.getElementById('edit-commit').value = '';
 
     const img = document.getElementById('edit-thumb-img');
-    const ph  = document.getElementById('edit-thumb-placeholder');
+    const ph = document.getElementById('edit-thumb-placeholder');
     if (s.thumbnail_url) { img.src = s.thumbnail_url; img.style.display = 'block'; ph.style.display = 'none'; }
     else { img.style.display = 'none'; img.src = ''; ph.style.display = 'inline'; ph.textContent = '🎌'; }
     document.getElementById('edit-modal').style.display = 'flex';
@@ -997,15 +1132,11 @@ function handleEditCodeFile(input) {
         document.getElementById('edit-code-text').textContent = `📄 ${file.name}`;
         document.getElementById('edit-code-zone').style.borderColor = 'var(--success)';
         document.getElementById('edit-code-zone').style.background = 'rgba(34, 197, 94, 0.05)';
-        
-        // Enable version container
-        document.getElementById('edit-version-container').style.opacity = '1';
-        document.getElementById('edit-version-container').style.pointerEvents = 'auto';
     } else {
         document.getElementById('edit-code-text').textContent = 'Drag & Drop a new .py file here';
         document.getElementById('edit-code-zone').style.borderColor = '';
         document.getElementById('edit-code-zone').style.background = '';
-        
+
         // Disable version container
         document.getElementById('edit-version-container').style.opacity = '0.4';
         document.getElementById('edit-version-container').style.pointerEvents = 'none';
@@ -1024,7 +1155,7 @@ function handleEditThumbFile(input) {
 }
 
 async function saveEdit() {
-    const id   = parseInt(document.getElementById('edit-id').value);
+    const id = parseInt(document.getElementById('edit-id').value);
     const name = document.getElementById('edit-name').value.trim();
     if (!name) { toast('Name cannot be empty.', 'error'); return; }
 
@@ -1043,14 +1174,14 @@ async function saveEdit() {
     const codeFile = document.getElementById('edit-code-file').files[0];
     if (codeFile) {
         formData.append('scraper_file', codeFile);
-        
-        // Append version info only if file uploaded
-        const major = document.getElementById('edit-ver-major').value || '0';
-        const minor = document.getElementById('edit-ver-minor').value || '0';
-        const patch = document.getElementById('edit-ver-patch').value || '0';
-        formData.append('version_label', `${major}.${minor}.${patch}`);
-        formData.append('commit_message', document.getElementById('edit-commit').value.trim() || 'Updated script via UI');
     }
+
+    // Always append version info so local IDE edits can be snapshotted
+    const major = document.getElementById('edit-ver-major').value || '0';
+    const minor = document.getElementById('edit-ver-minor').value || '0';
+    const patch = document.getElementById('edit-ver-patch').value || '0';
+    formData.append('version_label', `${major}.${minor}.${patch}`);
+    formData.append('commit_message', document.getElementById('edit-commit').value.trim() || 'Updated script manually');
 
     try {
         await apiFetch(`${API.scrapers}/${id}`, {
@@ -1068,11 +1199,11 @@ function bumpVersion(type) {
     const mj = document.getElementById('edit-ver-major');
     const mn = document.getElementById('edit-ver-minor');
     const pt = document.getElementById('edit-ver-patch');
-    
+
     let major = parseInt(mj.value) || 0;
     let minor = parseInt(mn.value) || 0;
     let patch = parseInt(pt.value) || 0;
-    
+
     if (type === 'major') {
         major++; minor = 0; patch = 0;
     } else if (type === 'minor') {
@@ -1115,8 +1246,8 @@ async function openVersionsModal(scraperId) {
 }
 
 async function viewVersion(scraperId, versionId, versionLabel) {
-    const area  = document.getElementById('ver-code-area');
-    const pre   = document.getElementById('ver-code-view');
+    const area = document.getElementById('ver-code-area');
+    const pre = document.getElementById('ver-code-view');
     const label = document.getElementById('ver-code-label');
     pre.textContent = 'Loading\u2026';
     area.style.display = 'block';
@@ -1155,10 +1286,10 @@ function refreshAll() {
         const badge = document.getElementById('queue-badge');
         badge.textContent = pending;
         badge.style.display = pending ? 'inline-block' : 'none';
-    }).catch(() => {});
+    }).catch(() => { });
 }
 
-setInterval(refreshAll, 30_000);
+setInterval(refreshAll, 5000);
 
 /* ── Drag-and-drop for code zones ───────────────────── */
 function _setupCodeDropZone(zoneId, inputId, textId) {
@@ -1167,16 +1298,16 @@ function _setupCodeDropZone(zoneId, inputId, textId) {
     zone.addEventListener('dragover', e => {
         e.preventDefault();
         zone.style.borderColor = 'var(--accent)';
-        zone.style.background  = 'rgba(99,102,241,0.06)';
+        zone.style.background = 'rgba(99,102,241,0.06)';
     });
     zone.addEventListener('dragleave', () => {
         zone.style.borderColor = '';
-        zone.style.background  = '';
+        zone.style.background = '';
     });
     zone.addEventListener('drop', e => {
         e.preventDefault();
         zone.style.borderColor = '';
-        zone.style.background  = '';
+        zone.style.background = '';
         const file = e.dataTransfer.files[0];
         if (!file) return;
         if (!file.name.endsWith('.py')) { toast('Only .py files allowed.', 'error'); return; }
@@ -1189,7 +1320,7 @@ function _setupCodeDropZone(zoneId, inputId, textId) {
         const textEl = document.getElementById(textId);
         if (textEl) textEl.textContent = `📄 ${file.name}`;
         zone.style.borderColor = 'var(--success)';
-        zone.style.background  = 'rgba(34,197,94,0.05)';
+        zone.style.background = 'rgba(34,197,94,0.05)';
     });
 }
 
@@ -1197,8 +1328,8 @@ window.addEventListener('DOMContentLoaded', () => {
     loadScrapers();
     loadQueue();
     // Pre-load integrations state so assign modal works from the start
-    apiFetch(API.integrations).then(i => { state.integrations = i; }).catch(() => {});
+    apiFetch(API.integrations).then(i => { state.integrations = i; }).catch(() => { });
     // Wire up drag-and-drop for both code upload zones
-    _setupCodeDropZone('wiz-code-zone',  'wiz-code-file',  'wiz-code-text');
+    _setupCodeDropZone('wiz-code-zone', 'wiz-code-file', 'wiz-code-text');
     _setupCodeDropZone('edit-code-zone', 'edit-code-file', 'edit-code-text');
 });
