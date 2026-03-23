@@ -93,12 +93,10 @@ def upload_integration_thumbnail(integ_id: int, file: UploadFile = File(...), db
         
     ext = file.filename.split(".")[-1].lower()
     thumb_name = f"integ_{integ_id}_{secrets.token_hex(3)}.{ext}"
-    thumb_path = os.path.join("data", "thumbnails", thumb_name)
     
-    os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
-    with open(thumb_path, "wb") as f:
-        f.write(file.file.read())
-        
+    t_contents = file.file.read()
+    integ.thumbnail_data = t_contents
+
     config = json.loads(integ.config)
     config["thumbnail_url"] = f"/thumbnails/{thumb_name}"
     integ.config = json.dumps(config)

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, LargeBinary
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -30,9 +30,12 @@ class Scraper(Base):
     homepage_url = Column(String, nullable=True)
     thumbnail_url = Column(String, nullable=True)
     local_thumbnail_path = Column(String, nullable=True)
+    thumbnail_data = Column(LargeBinary, nullable=True)
     enabled = Column(Boolean, default=True)
     health = Column(String, default="untested")  # "untested" | "ok" | "failing"
     created_at = Column(DateTime, default=datetime.utcnow)
+    scraper_type = Column(String, default="python")  # "python" | "recipe"
+    recipe = Column(Text, nullable=True)             # JSON recipe steps (recipe scrapers only)
 
     schedules     = relationship("Schedule",       back_populates="scraper", cascade="all, delete-orphan")
     logs          = relationship("ScrapeLog",      back_populates="scraper", cascade="all, delete-orphan")
@@ -67,6 +70,8 @@ class ScrapeLog(Base):
     error_msg     = Column(Text,   nullable=True)
     run_at        = Column(DateTime, default=datetime.utcnow)
     triggered_by  = Column(String, default="scheduler")  # "scheduler" | "manual" | "catchup"
+    retry_count   = Column(Integer, default=0)       # how many retries were attempted
+    integration_details = Column(Text, nullable=True) # JSON with integration results
 
     scraper = relationship("Scraper", back_populates="logs")
 
@@ -121,6 +126,7 @@ class Integration(Base):
     name       = Column(String, nullable=False)
     type       = Column(String, nullable=False)   # e.g. "discord_webhook"
     config     = Column(Text,   nullable=False)   # JSON config blob
+    thumbnail_data = Column(LargeBinary, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     scrapers = relationship("Scraper", secondary="scraper_integrations", back_populates="integrations")

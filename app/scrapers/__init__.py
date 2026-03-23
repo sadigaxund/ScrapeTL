@@ -41,6 +41,19 @@ def load_scraper_class(module_path: str) -> Type[BaseScraper]:
     raise ValueError(f"No BaseScraper subclass found in '{module_path}'")
 
 
+def load_scraper_class_from_code(code: str) -> Type[BaseScraper]:
+    """
+    Dynamically compile and execute the given scraper code string,
+    then return the underlying BaseScraper subclass.
+    """
+    namespace = {}
+    exec(code, namespace)
+    for _, obj in namespace.items():
+        if inspect.isclass(obj) and issubclass(obj, BaseScraper) and obj is not BaseScraper:
+            return obj
+    raise ValueError("No BaseScraper subclass found in the provided code.")
+
+
 def list_available_scraper_modules() -> Dict[str, str]:
     """
     Scan the scrapers/ directory and return a mapping of

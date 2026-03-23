@@ -21,6 +21,7 @@ const API = {
     versions: (sid) => `/api/scrapers/${sid}/versions`,
     versionCode: (sid, vid) => `/api/scrapers/${sid}/versions/${vid}`,
     revert: (sid, vid) => `/api/scrapers/${sid}/revert/${vid}`,
+    logDownload: (lid, fmt) => `/api/logs/${lid}/download?format=${fmt}`,
 };
 
 /* ── State ──────────────────────────────────────────── */
@@ -746,6 +747,9 @@ async function loadLogs(page = null) {
             const detailsId = `log-details-${log.id}`;
             const hasDetails = log.payload || log.error_msg;
             const isExpanded = state.expandedLogs.has(detailsId);
+            const retryBadge = (log.retry_count && log.retry_count > 0)
+                ? `<span class="status-badge badge-pending" title="Retried ${log.retry_count}x">🔄 ${log.retry_count} retr${log.retry_count === 1 ? 'y' : 'ies'}</span>`
+                : '';
             return `
             <div class="log-card" data-status="${log.status}">
                 <div class="log-card-header" ${hasDetails ? `onclick="toggleLogDetails('${detailsId}')"` : ''} style="${hasDetails ? 'cursor:pointer' : ''}">
@@ -753,6 +757,7 @@ async function loadLogs(page = null) {
                         ${statusBadge(log.status)}
                         <strong>${log.scraper_name || 'N/A'}</strong>
                         <span class="log-epcount">${log.episode_count ? `${log.episode_count} found` : ''}</span>
+                        ${retryBadge}
                     </div>
                     <div class="log-card-right">
                         ${statusBadge(log.triggered_by)}
@@ -763,7 +768,14 @@ async function loadLogs(page = null) {
                 ${hasDetails ? `
                 <div class="log-details" id="${detailsId}" style="display:${isExpanded ? 'block' : 'none'}">
                     ${log.error_msg ? `<div class="log-error">❌ ${log.error_msg}</div>` : ''}
-                    ${log.payload ? renderPayload(log.payload) : ''}
+                    ${log.payload ? `
+                    <div class="payload-download-bar">
+                        <span style="font-size:11px;color:var(--text-muted)">Download payload:</span>
+                        <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'json')" title="Download JSON">⬇ JSON</button>
+                        <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'csv')" title="Download CSV">⬇ CSV</button>
+                    </div>
+                    ${renderPayload(log.payload)}` : ''}
+                    ${log.integration_details ? renderIntegrationDetails(log.integration_details) : ''}
                 </div>` : ''}
             </div>`;
         }).join('');
@@ -821,6 +833,37 @@ function renderPayload(payload) {
     return `<div class="payload-grid">${rows.join('')}</div>`;
 }
 
+function renderIntegrationDetails(detailsStr) {
+    try {
+        const details = JSON.parse(detailsStr);
+        if (!details || !Array.isArray(details) || details.length === 0) return '';
+        const rows = details.map(d => {
+            let color = d.success ? 'var(--success)' : 'var(--failure)';
+            let icon = d.success ? '✅' : '❌';
+            return `
+            <div style="font-size:12px; margin-top:8px; padding:8px; background:rgba(255,255,255,0.03); border-radius:4px; border-left:3px solid ${color};">
+                <strong>${icon} ${d.name}</strong> • ${d.attempts} attempt(s)
+                ${d.error ? `<div style="color:var(--failure);margin-top:4px;">Error: ${d.error}</div>` : ''}
+            </div>`;
+        });
+        return `<div style="margin-top:16px;">
+            <div style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;">INTEGRATIONS</div>
+            ${rows.join('')}
+        </div>`;
+    } catch {
+        return '';
+    }
+}
+
+function downloadLogPayload(logId, format) {
+    const a = document.createElement('a');
+    a.href = API.logDownload(logId, format);
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
 /* ════════════════════════════════════════════════
    QUEUE
 ════════════════════════════════════════════════ */
@@ -856,18 +899,46 @@ async function loadQueue() {
 /* ════════════════════════════════════════════════
    INTEGRATIONS
 ════════════════════════════════════════════════ */
-function openConnectorModal(type) {
+function openConnectorModal(type, id = null) {
     document.getElementById('conn-type').value = type;
-    document.getElementById('conn-name').value = '';
-    document.getElementById('conn-desc').value = '';
-    document.getElementById('conn-webhook').value = '';
-    document.getElementById('conn-format').checked = true;
-    document.getElementById('conn-tag').checked = false;
-    document.getElementById('conn-thumb-path').value = '';
-    document.getElementById('conn-thumb-file').value = '';
-    document.getElementById('conn-thumb-filename').textContent = 'No file selected';
+    document.getElementById('conn-id').value = id || '';
+    if (!id) {
+        document.getElementById('connector-title').textContent = 'Configure Webhook';
+        document.getElementById('conn-name').value = '';
+        document.getElementById('conn-desc').value = '';
+        document.getElementById('conn-webhook').value = '';
+        selectConnDelivery('per_element_embed', 'Per Element (Embed)', document.getElementById('conn-opt-embed'));
+        document.getElementById('conn-retry-max').value = '3';
+        document.getElementById('conn-delay').value = '1';
+        document.getElementById('conn-tag').checked = false;
+        document.getElementById('conn-thumb-path').value = '';
+        document.getElementById('conn-thumb-file').value = '';
+        document.getElementById('conn-thumb-filename').textContent = 'No file selected';
+    } else {
+        const integ = state.integrations.find(i => i.id === id);
+        if (integ) {
+            document.getElementById('connector-title').textContent = 'Edit Webhook';
+            document.getElementById('conn-name').value = integ.name || '';
+            const cfg = integ.config || {};
+            document.getElementById('conn-desc').value = cfg.description || '';
+            document.getElementById('conn-webhook').value = cfg.webhook_url || '';
+            
+            const method = cfg.delivery_method || (cfg.format_output !== false ? 'per_element_embed' : 'per_element_text');
+            const btns = {
+                'per_element_embed': { label: 'Per Element (Embed)', id: 'conn-opt-embed' },
+                'per_element_text': { label: 'Per Element (Text)', id: 'conn-opt-text' },
+                'all_file': { label: 'All At Once (File)', id: 'conn-opt-all' }
+            };
+            const map = btns[method] || btns['per_element_embed'];
+            selectConnDelivery(method, map.label, document.getElementById(map.id));
+            
+            document.getElementById('conn-retry-max').value = cfg.retry_max !== undefined ? cfg.retry_max : '3';
+            document.getElementById('conn-delay').value = cfg.delay_sec !== undefined ? cfg.delay_sec : '1';
+            document.getElementById('conn-tag').checked = !!cfg.tag_all;
+            document.getElementById('conn-thumb-path').value = cfg.thumbnail_path || '';
+        }
+    }
 
-    toggleConnectorFormat();
     document.getElementById('connector-modal').style.display = 'flex';
 }
 
@@ -877,8 +948,19 @@ function closeConnectorModal(e) {
 }
 
 function toggleConnectorFormat() {
-    const isFormatted = document.getElementById('conn-format').checked;
+    const isFormatted = document.getElementById('conn-delivery').value === 'per_element_embed';
     document.getElementById('conn-format-settings').style.display = isFormatted ? 'block' : 'none';
+}
+
+function selectConnDelivery(val, label, btnElement) {
+    document.getElementById('conn-delivery').value = val;
+    document.getElementById('summary-conn-delivery').textContent = label;
+    
+    // Update active state class manually because this isn't rendered per iteration like other dropdowns
+    document.querySelectorAll('#dd-conn-delivery .dropdown-item').forEach(el => el.classList.remove('dropdown-item--active'));
+    if (btnElement) btnElement.classList.add('dropdown-item--active');
+    
+    toggleConnectorFormat();
 }
 
 function handleConnThumb(input) {
@@ -912,9 +994,10 @@ async function loadIntegrations() {
             }
 
             if (i.type === 'discord_webhook' && i.config) {
-                const isFmt = i.config.format_output !== false; // defaults true
-                if (isFmt) metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 6px">Formatted</span>`;
-                else metaChips += ` <span class="tag-chip" style="font-size:10px;padding:2px 6px;color:var(--warning)">Raw JSON</span>`;
+                const method = i.config.delivery_method || (i.config.format_output !== false ? 'per_element_embed' : 'per_element_text');
+                if (method === 'per_element_embed') metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 6px">Per Element (Embed)</span>`;
+                else if (method === 'per_element_text') metaChips += ` <span class="tag-chip" style="font-size:10px;padding:2px 6px;color:var(--warning)">Per Element (Raw JSON)</span>`;
+                else if (method === 'all_file') metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 6px;color:var(--success)">All At Once (File)</span>`;
 
                 if (i.config.tag_all) metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 6px">@everyone</span>`;
             }
@@ -929,6 +1012,7 @@ async function loadIntegrations() {
                 ${descriptionHTML}
               </div>
               <div class="item-actions">
+                <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="openConnectorModal('${i.type}', ${i.id})">✏️ Edit</button>
                 <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="testIntegration(${i.id}, this)">🧪 Test</button>
                 <button class="btn btn-danger" onclick="deleteIntegration(${i.id})">✕</button>
               </div>
@@ -950,7 +1034,9 @@ async function saveConnector() {
         config = {
             webhook_url: webhook,
             description: document.getElementById('conn-desc').value.trim(),
-            format_output: document.getElementById('conn-format').checked,
+            delivery_method: document.getElementById('conn-delivery').value,
+            retry_max: parseInt(document.getElementById('conn-retry-max').value, 10) || 0,
+            delay_sec: parseFloat(document.getElementById('conn-delay').value) || 0,
             tag_all: document.getElementById('conn-tag').checked,
             thumbnail_path: document.getElementById('conn-thumb-path').value.trim(),
         };
@@ -959,12 +1045,19 @@ async function saveConnector() {
     const btn = document.getElementById('conn-submit-btn');
     btn.disabled = true; btn.textContent = '⏳ Saving…';
 
+    const connId = document.getElementById('conn-id').value;
+
     try {
-        const createdInteg = await apiFetch(API.integrations, { method: 'POST', body: JSON.stringify({ name, type, config }) });
+        let createdInteg;
+        if (connId) {
+            createdInteg = await apiFetch(`${API.integrations}/${connId}`, { method: 'PATCH', body: JSON.stringify({ name, config }) });
+        } else {
+            createdInteg = await apiFetch(API.integrations, { method: 'POST', body: JSON.stringify({ name, type, config }) });
+        }
 
         // Handle optional thumbnail file upload chaining natively
         const thumbFile = document.getElementById('conn-thumb-file').files[0];
-        if (thumbFile && config.format_output) {
+        if (thumbFile && config.delivery_method === 'per_element_embed') {
             const formData = new FormData();
             formData.append('file', thumbFile);
             const thumbRes = await fetch(`${API.integrations}/${createdInteg.id}/thumbnail`, { method: 'POST', body: formData });

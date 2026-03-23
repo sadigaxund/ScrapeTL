@@ -1,6 +1,7 @@
 # Custom ignores
 *.db
-
+data/
+app/scrapers/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
