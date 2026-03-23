@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 import os
 import threading
 
@@ -23,15 +23,44 @@ app.include_router(integrations.router)
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-# Locally cached thumbnails
-THUMBNAILS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "thumbnails")
-os.makedirs(THUMBNAILS_DIR, exist_ok=True)
-app.mount("/thumbnails", StaticFiles(directory=THUMBNAILS_DIR), name="thumbnails")
+# Note: /thumbnails API is now dynamic, see router below. No static mount needed.
 
 
 @app.get("/", include_in_schema=False)
 def serve_index():
     return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+@app.get("/thumbnails/{filename}", tags=["thumbnails"])
+def get_thumbnail(filename: str):
+    from app.database import SessionLocal
+    from app.models import Scraper, Integration
+    import json
+    
+    db = SessionLocal()
+    try:
+        # Check Scrapers
+        scraper = db.query(Scraper).filter(Scraper.local_thumbnail_path == filename).first()
+        if scraper and scraper.thumbnail_data:
+            ext = filename.split('.')[-1].lower()
+            return Response(content=scraper.thumbnail_data, media_type=f"image/{ext}")
+        
+        # Check Integrations
+        # Integrations store filename in config["thumbnail_url"] which is "/thumbnails/filename"
+        search_path = f"/thumbnails/{filename}"
+        integrations = db.query(Integration).filter(Integration.thumbnail_data != None).all()
+        for integ in integrations:
+            try:
+                conf = json.loads(integ.config)
+                if conf.get("thumbnail_url") == search_path:
+                    ext = filename.split('.')[-1].lower()
+                    return Response(content=integ.thumbnail_data, media_type=f"image/{ext}")
+            except Exception:
+                pass
+                
+        # Return empty 404 or default fallback? 
+        return Response(status_code=404)
+    finally:
+        db.close()
 
 
 @app.on_event("startup")

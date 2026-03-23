@@ -1,9 +1,11 @@
-DO NOT READ THIS FILE. IT IS FOR MY REFERENCE ONLY.
-
-1. Add a versioning to the scraper, that is, when I edit the scraper (which btw, the edit menu should match the register menu) I should be able to see the previous versions and revert to them. So, now I dont know how will you save the scraper code, I can think of saving it as a file in the database, but I'm not sure if that's a good idea. If that would be the case, I wanna be able to see the code from UI and revert to it. Maybe add a git like versioning system? that can show the changes too, but this is a bit too far fetched/overkill
-3. A proxy support system
-4. change default text values of register scraper modal
-5. Change whatever heck this hint is: "Code Functionality * (Upload the .py template. Must subclass BaseScraper and implement def scrape(self))"
-6. cant drag and drop script
-7. When adding homepage it forces you to add https:// saying no scheme found, when i put just youtube.com, auto add https:// when missing
-
+0. move cache db to data folder maybe? or have an option to integrate something like external db
+1. Replace saving as file with git or blob database whatever
+2. more integrations
+3. no-code scraper builder, maybe also a notebook like interface for low code
+4. error handling, retry logic, also rework the queue system
+5. more complex workflows
+6. AI html scraping that detects schema
+7. schema registry
+8. an option to download the payloadas whatever
+9. might break most of the stuff but, a variable registry where one can define maybe tokens or commonly used strings, and then use them in the scraper code or input fields everywhere
+10. maybe a native storage system for the payloads to be stored and queried. DECIDE if it's worth/too much/ would be nice or makes chaotic
