@@ -4,7 +4,9 @@ Currently supports type: "discord_webhook".
 """
 import json
 import requests
-from fastapi import APIRouter, Depends, HTTPException
+import os
+import secrets
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -83,6 +85,27 @@ def delete_integration(integ_id: int, db: Session = Depends(get_db)):
     return {"detail": "Deleted."}
 
 
+@router.post("/api/integrations/{integ_id}/thumbnail")
+def upload_integration_thumbnail(integ_id: int, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    integ = db.get(Integration, integ_id)
+    if not integ:
+        raise HTTPException(status_code=404, detail="Integration not found.")
+        
+    ext = file.filename.split(".")[-1].lower()
+    thumb_name = f"integ_{integ_id}_{secrets.token_hex(3)}.{ext}"
+    thumb_path = os.path.join("data", "thumbnails", thumb_name)
+    
+    os.makedirs(os.path.dirname(thumb_path), exist_ok=True)
+    with open(thumb_path, "wb") as f:
+        f.write(file.file.read())
+        
+    config = json.loads(integ.config)
+    config["thumbnail_url"] = f"/thumbnails/{thumb_name}"
+    integ.config = json.dumps(config)
+    db.commit()
+    return _integ_dict(integ)
+
+
 @router.post("/api/integrations/{integ_id}/verify")
 def verify_integration(integ_id: int, db: Session = Depends(get_db)):
     """Send a test ping to verify the integration config works."""
@@ -99,7 +122,7 @@ def verify_integration(integ_id: int, db: Session = Depends(get_db)):
         try:
             resp = requests.post(
                 webhook_url,
-                json={"content": f"🔔 **ScraperHub** — Test ping from integration **{integ.name}**. It works!"},
+                json={"content": f"🔔 **ScrapeTL** — Test ping from integration **{integ.name}**. It works!"},
                 timeout=10,
             )
             resp.raise_for_status()
