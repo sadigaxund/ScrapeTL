@@ -16,7 +16,6 @@ Within each <li>:
   - Find span containing 'date' in its class → release date
   - Optionally find an <img> for an episode thumbnail
 """
-
 import re
 import requests
 from bs4 import BeautifulSoup, Tag
@@ -31,11 +30,34 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
 }
 
+import os
+import sqlite3
+
+# connect (creates file if it doesn't exist)
+TMP_DIR = './tmp/'
+CACHE_DIR = f"{TMP_DIR}/manhwas.db"
+os.makedirs(TMP_DIR, exist_ok=True)
+conn = sqlite3.connect(CACHE_DIR)
+cursor = conn.cursor()
+# create table with UNIQUE constraint on both columns
+cursor.execute("""
+CREATE TABLE IF NOT EXISTS manhwas (
+    manhwa TEXT NOT NULL,
+    scraped_episode INTEGER NOT NULL,
+    UNIQUE (manhwa, scraped_episode)
+)
+""")
+conn.commit()
+conn.close()
+
+
 
 class Scraper(BaseScraper):
     website_url = "https://erascans.com/manga/revenge-of-the-iron-blooded-sword-hound/"
-
+    manhwa_name = "Revenge of the Iron-Blooded Sword Hound"
     # ── helpers ───────────────────────────────────────────────────────────────
+    
+
     def _fetch_soup(self) -> BeautifulSoup:
         resp = requests.get(self.website_url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
@@ -117,6 +139,33 @@ class Scraper(BaseScraper):
             "thumbnail": "https://erascans.com/wp-content/uploads/2026/02/Revenge-of-the-Iron-Blooded-Sword-Hound.webp",
         }
 
+    def episode_insert(self, episode):
+        conn = sqlite3.connect(CACHE_DIR)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            INSERT OR IGNORE INTO manhwas (manhwa, scraped_episode)
+            VALUES (?, ?)
+        """, (self.manhwa_name, episode))
+
+        conn.commit()
+        conn.close()
+    
+    def episode_exists(self, episode):
+        conn = sqlite3.connect(CACHE_DIR)
+        cursor = conn.cursor()
+
+        cursor.execute("""
+            SELECT 1 FROM manhwas
+            WHERE manhwa = ? AND scraped_episode = ?
+            LIMIT 1
+        """, (self.manhwa_name, episode))
+
+        result = cursor.fetchone()
+        conn.close()
+
+        return result is not None
+
     # ── public API ────────────────────────────────────────────────────────────
 
     def scrape(self) -> list[dict]:
@@ -145,4 +194,14 @@ class Scraper(BaseScraper):
 
         # Return newest first (highest episode number)
         episodes.sort(key=lambda e: e.get("episode_number") or 0, reverse=True)
-        return episodes
+        latest_episode = episodes[0]
+        latest_episode_number = int(latest_episode['episode_number'])
+
+        if self.episode_exists(latest_episode_number):
+            raise Exception(f"No new episodes.")
+        else:
+            self.episode_insert(latest_episode_number)
+            return [episodes[0]]
+
+# if __name__ == '__main__':
+#     print("HEY")

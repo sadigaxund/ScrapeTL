@@ -134,7 +134,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
     log = ScrapeLog(
         scraper_id=scraper_id,
         status=status,
-        payload=json.dumps(payload_list) if payload_list else (json.dumps([payload_dict]) if payload_dict else None),
+        payload=json.dumps(payload_list[:10]) if payload_list else (json.dumps([payload_dict]) if payload_dict else None),
         episode_count=episode_count,
         error_msg=error_msg,
         run_at=datetime.utcnow(),
@@ -195,6 +195,23 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
                 if res:
                     res["name"] = integ.name
                     results.append(res)
+
+            elif integ.type == "http_request":
+                from app import http_sender
+                import json as _json
+                config = _json.loads(integ.config)
+                res = http_sender.send_http(
+                    scraper_name=scraper_record.name,
+                    status=status,
+                    episodes=episodes_list if status == "success" else None,
+                    error_msg=error_msg,
+                    triggered_by=triggered_by,
+                    config=config,
+                )
+                if res:
+                    res["name"] = integ.name
+                    results.append(res)
+
         except Exception as exc:
             print(f"[Runner] Integration {integ.name} failed: {exc}")
             results.append({"name": integ.name, "success": False, "attempts": 0, "error": str(exc)})
