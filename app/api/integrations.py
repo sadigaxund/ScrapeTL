@@ -46,11 +46,13 @@ def list_integrations(db: Session = Depends(get_db)):
 
 @router.post("/api/integrations")
 def create_integration(payload: IntegrationCreate, db: Session = Depends(get_db)):
-    supported = {"discord_webhook"}
+    supported = {"discord_webhook", "http_request"}
     if payload.type not in supported:
         raise HTTPException(status_code=400, detail=f"Unsupported integration type. Supported: {supported}")
     if payload.type == "discord_webhook" and not payload.config.get("webhook_url"):
         raise HTTPException(status_code=400, detail="discord_webhook requires 'webhook_url' in config.")
+    if payload.type == "http_request" and not payload.config.get("url"):
+        raise HTTPException(status_code=400, detail="http_request requires 'url' in config.")
     integ = Integration(
         name=payload.name.strip(),
         type=payload.type,
@@ -127,6 +129,21 @@ def verify_integration(integ_id: int, db: Session = Depends(get_db)):
             return {"detail": "Test message sent successfully."}
         except Exception as exc:
             raise HTTPException(status_code=502, detail=f"Webhook failed: {exc}")
+
+    if integ.type == "http_request":
+        url = config.get("url", "").strip()
+        if not url:
+            raise HTTPException(status_code=400, detail="No URL in config.")
+        method = config.get("method", "POST").upper()
+        extra_headers = config.get("headers", {}) or {}
+        headers = {"Content-Type": "application/json", **extra_headers}
+        body = {"meta": {"test": True, "source": "ScrapeTL"}, "data": []}
+        try:
+            resp = requests.request(method, url, headers=headers, json=body, timeout=10)
+            resp.raise_for_status()
+            return {"detail": f"Test {method} to {url} succeeded (HTTP {resp.status_code})."}
+        except Exception as exc:
+            raise HTTPException(status_code=502, detail=f"HTTP request failed: {exc}")
 
     raise HTTPException(status_code=400, detail="Verification not supported for this type.")
 

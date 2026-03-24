@@ -1,5 +1,5 @@
-0. move cache db to data folder maybe? or have an option to integrate something like external db
-1. Replace saving as file with git or blob database whatever
+
+
 2. more integrations
 3. no-code scraper builder, maybe also a notebook like interface for low code
 4. error handling, retry logic, also rework the queue system

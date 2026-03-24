@@ -1,35 +1,28 @@
-# ScrapeTL (Release 1.0.0) - AI Architect Context
+# Rolling Release Notes - March 24, 2026
 
-This document synthesizes all initial system patches (001-011) into a single, highly-optimized master record. Use this to rapidly understand the core architecture, data structures, and feature sets natively built into ScrapeTL.
+## Core Implementation - No-Code Scraper Builder (v2.0)
+We have pivoted the No-Code builder toward a "Component Collection" philosophy combined with a "Low-Code" escape hatch.
+- **Collection Step**: Instead of a complex list parser, the UI now has a `Collect HTML Components` action. It allows selecting `outerHTML`, `innerHTML`, or `textContent` for a given CSS selector. 
+- **Post-Processing Block**: Added a Python code editor in the wizard that accepts a `def process(components):` function. This allows the user to use BeautifulSoup, Regex, or native Python string manipulation on the raw collected strings.
+- **Recipe Runner**: The backend `recipe_runner.py` was updated to handle the new `action` types and safely execute the user's `post_process` code using `exec()`.
 
-## 1. System Architecture
-- **Language Stack**: Python 3.10+ (Backend), Vanilla JS / HTML5 / CSS3 (Frontend).
-- **Core Libraries**: `FastAPI` (REST Web Server), `SQLAlchemy` (SQLite DB ORM), `APScheduler` (Background Cron engine), `Uvicorn` (ASGI host).
-- **Control Loop**: The SPA Frontend dispatches async calls via an `apiFetch` wrapper to `/api/*` endpoints. All changes to the backend database state are reflected seamlessly on the next frontend background poll (`setInterval(refreshAll, 5000)`). Background APScheduler executors dispatch the dynamic `scraper.py` runtimes iteratively while correctly translating localized timezones to UTC internally.
+## Storage & Database Optimization
+To prevent long-term SQLite bloat from large HTML payloads, we implemented a strict truncation policy.
+- **Backend**: `runner.py` now slices `payload_list[:10]` strictly before stringifying and saving to the database.
+- **UI Grace**: The Logs menu now interprets `log.episode_count` vs `log.payload.length`. If data was truncated, it displays: *"✨ Displaying 10 out of X scraped items."*
 
-## 2. Master Directory Map
-- **`app/main.py`**: Initializes the FastAPI instance, mounts `/api/` routers and `/static/` frontend assets.
-- **`app/models.py`**: SQLAlchemy Declarative Models (Schema defined fully below).
-- **`app/api/*.py`**: The Modular REST API routers (`scrapers.py`, `settings.py`, `integrations.py`, `tags.py`, `logs.py`, `schedules.py`).
-- **`app/scheduler.py`**: Wraps APScheduler runtime logic, handles global IANA timezone dynamic reloading securely dynamically.
-- **`app/runner.py`**: High-availability execution pipeline. Loads arbitrary `.py` modules logically nested in `app/scrapers/` via `importlib` and captures stdout safely securely. Dispatches scraped JSON data cleanly to assigned Webhook Integrations sequentially.
-- **`app/discord.py`**: Extracts native Webhooks config logic to format beautiful outbound Discord stylized embedded messages based strictly on scraped JSON payload formats.
-- **`frontend/app.js`**: Pure Vanilla JS rendering logic. Rigidly relies on a globally exported `state` mapping object dynamically.
-- **`frontend/index.html`**: A tabbed Single-Page Application (SPA) structure styled around natively injected CSS DOM modal layers.
-- **`frontend/style.css`**: Highly customized Vanilla CSS relying on normalized CSS Variable tokens exclusively (`--bg-input`, `--accent`). (No Tailwind).
+## UI Refinement & Aesthetics
+A significant pass on the "Premium Look" of the dashboard:
+- **Consistent Badges**: Introduced `.log-epcount` (vibrant purple pill badge) for found counts in Logs and "Next Run" times in Schedules.
+- **Typography & Labels**: Standardized `.payload-download-label` and `.payload-truncation-notice` for cleaner data status reporting.
+- **Layout Fixes**: Fixed alignment of Log Filters; they are now perfectly aligned with the left edge of the logs cards.
+- **Schedules Beautification**: Applied the new badge and label styles to the Active Schedules list.
 
-## 3. Database Schema (`app.db`)
-- **`Scraper`**: Core scraping task entity. Features: `id`, `name`, `module_path` (.py file location), `description`, `homepage_url`, `thumbnail_url`.
-- **`Tag`**: UI visual categorization structure. Features: `id`, `name`, `color` (HEX formatting). Associated to scrapers natively via `scraper_tags` Many-to-Many logic.
-- **`Integration`**: Notification webhook targets (e.g. Discord). Features: `id`, `type`, `name`, `config` (JSON dict). Linked securely via `scraper_integrations`.
-- **`Schedule`**: APScheduler mapping configs. Features: `id`, `scraper_id`, `cron_expression`, `enabled`, `last_run`, `next_run`.
-- **`ScrapeLog`**: Final execution output results. Features: `id`, `scraper_id`, `status` (success/failure), `payload` (Raw JSON payload dictionary), `error_msg`, `run_at`.
-- **`TaskQueue`**: Missed cron-schedules catch-up queue system. Features: `id`, `scraper_id`, `scheduled_for`, `status`.
-- **`AppSetting`**: Arbitrary Global Config Key-value pairs (Significantly `timezone` = `Asia/Baku`).
+## Integration Maintenance
+- **Ghost Errors**: Fixed a bug where logs would report "No Webhook URL configured" as a failure even if no integration was actually assigned to the scraper. Now returns `None` and skips the integration layer silently if nothing is configured.
 
-## 4. Key AI Developer Constraints & System Notes
-1. **Frontend State Wipes**: When radically altering DOM mapping logic in `app.js`, explicitly ensure you log boolean parameters onto the global `state` object statically (e.g. tracking open log modals natively as `state.expandedLogs = new Set()`). The background 5-second `refreshAll()` timer will wipe out and override any ad-hoc browser DOM modifications implicitly otherwise.
-2. **Timezone UTC Enforcement**: While APScheduler operates smoothly on localized Timezones, you must ALWAYS convert internally computed datetimes into UTC prior to saving to the database (`job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)`). Otherwise, the frontend `new Date()` parses the local timestamps and erroneously applies the user's browser timezone offset a second time.
-3. **No External Frameworks**: Do not implement OS-native `<select>` form elements, as they break the styling format. Use the application's bespoke `<div class="custom-dropdown">` z-indexed popup hierarchy. Do not rewrite CSS using `TailwindCSS`; continue strictly adhering to vanilla CSS variables defined in `style.css`.
-4. **Scraper Versioning UX**: Code changes to existing scrapers can be tracked natively as new semantic versions (`v1.0.1`) straight from the UI Edit modal. You do not need to upload a fresh `.py` file to commit a bumped version if you are modifying variables.
-5. **Discord Integrations Settings**: Discord endpoint variables (such as explicit webhook URLs, `@everyone` triggers, and custom JSON payload path resolutions) are persistently stored inside isolated `Integration.config` embedded JSON objects. Do not hardcode endpoint variables inside `/app/discord.py`.
+---
+
+### Context for Next Session
+The No-Code builder is now feature-complete for a fundamental "Browser Automation + Python Cleaning" pipeline. The current focus is on maximizing the reliability of the "Recipe Mode" vs "Script Mode" toggle and ensuring that non-developers can still manipulate scraped data effectively via the new Python hook. 
+- **Next Potential Step**: Implement "Browser Preview" within the wizard so users can see which elements they are selecting in real-time.

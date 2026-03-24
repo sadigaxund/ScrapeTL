@@ -3,6 +3,18 @@ Discord notification sender using webhooks.
 Now accepts webhook_url as a parameter (no more reliance on .env only).
 Falls back to DISCORD_WEBHOOK_URL env var if no webhook_url is passed,
 for backwards-compat with the legacy fallback path in runner.py.
+
+New config shape:
+  dispatch_mode:  "all_at_once" | "per_element"
+  format_style:   "embed" | "text"          (per_element only)
+  send_as_file:   true | false              (overrides format, sends .json attachment)
+  tag_all:        true | false
+  retry_max:      int
+  delay_sec:      float
+  thumbnail_path: str (dotted path into element dict)
+  thumbnail_url:  str (static fallback)
+
+Backward-compat: old "delivery_method" key is still honoured if the new keys are absent.
 """
 import os
 import json
@@ -36,7 +48,6 @@ def _send_with_retry(req_kwargs, max_retries=3, delay_sec=1.0) -> dict:
                 wait_time = float(resp.headers.get("x-ratelimit-reset-after", delay_sec))
                 print(f"[Discord] 429 Too Many Requests. Backing off for {wait_time}s")
                 time.sleep(wait_time)
-                # Retry logic continues
                 if attempt == max_retries:
                     return {"success": False, "attempts": attempt, "error": "429 Rate Limit Exceeded"}
                 continue
@@ -50,28 +61,92 @@ def _send_with_retry(req_kwargs, max_retries=3, delay_sec=1.0) -> dict:
     return {"success": False, "attempts": max_retries, "error": "Max retries exceeded"}
 
 
+def _resolve_config(config: dict) -> tuple[str, str, bool]:
+    """
+    Returns (dispatch_mode, format_style, send_as_file) from either the
+    new config keys or the legacy delivery_method key.
+    """
+    # New-style keys take precedence
+    if "dispatch_mode" in config:
+        dm = config.get("dispatch_mode", "per_element")
+        fs = config.get("format_style", "embed")
+        sf = bool(config.get("send_as_file", False))
+        return dm, fs, sf
+
+    # Legacy delivery_method backward-compat
+    method = config.get("delivery_method", "per_element_embed")
+    if method == "all_file":
+        return "all_at_once", "embed", True
+    elif method == "per_element_text":
+        return "per_element", "text", False
+    else:  # per_element_embed (default)
+        return "per_element", "embed", False
+
+
+def _resolve_thumb(ep: dict, thumb_path: str, static_thumb: str, scraper_thumbnail) -> str | None:
+    thumb_url = static_thumb
+    if not thumb_url and thumb_path:
+        val = ep
+        for k in thumb_path.split("."):
+            if isinstance(val, dict):
+                val = val.get(k)
+            else:
+                val = None
+        if isinstance(val, str) and val.startswith("http"):
+            thumb_url = val
+    return thumb_url or ep.get("thumbnail") or scraper_thumbnail or None
+
+
+def _build_embed(ep: dict, scraper_name: str, thumb_url) -> dict:
+    title = ep.get("title", "Unknown")
+    ep_num = ep.get("episode_number")
+    date = ep.get("release_date")
+    url_ep = ep.get("website_url")
+
+    fields = [{"name": "📑 Episode Title", "value": title, "inline": False}]
+    if ep_num:
+        fields.append({"name": "🔢 Episode Number", "value": f"#{ep_num}", "inline": True})
+    if date:
+        fields.append({"name": "🗓️ Last Updated on", "value": date, "inline": True})
+    if url_ep:
+        fields.append({"name": "🔗 Episode URL", "value": f"[Read Chapter]({url_ep})", "inline": False})
+
+    known = {"title", "episode_number", "release_date", "website_url", "thumbnail"}
+    for key, val in ep.items():
+        if key not in known and val:
+            label = key.replace("_", " ").title()
+            fields.append({"name": label, "value": str(val)[:256], "inline": True})
+
+    embed: dict = {
+        "title": scraper_name,
+        "color": STATUS_COLOR["success"],
+        "fields": fields,
+    }
+    if url_ep:
+        embed["url"] = url_ep
+    if thumb_url and thumb_url.startswith("http"):
+        embed["thumbnail"] = {"url": thumb_url}
+    return embed
+
+
 def send_notification(
     scraper_name: str,
     status: str,
-    scraper_thumbnail: str = None,
-    episodes: list[dict] = None,
+    scraper_thumbnail=None,
+    episodes=None,
     error_msg: str = "",
     triggered_by: str = "scheduler",
-    config: dict = None,
-) -> dict:
+    config=None,
+):
     if config is None:
         config = {}
 
     url = config.get("webhook_url") or _ENV_WEBHOOK
     if not url:
         print("[Discord] No webhook URL configured — skipping notification.")
-        return {"name": "Discord", "success": False, "attempts": 0, "error": "No Webhook URL configured"}
+        return None
 
-    delivery_method = config.get("delivery_method")
-    if not delivery_method:
-        # Fallback for old configurations
-        delivery_method = "per_element_embed" if config.get("format_output", True) else "per_element_text"
-        
+    dispatch_mode, format_style, send_as_file = _resolve_config(config)
     tag_all = config.get("tag_all", False)
     thumb_path = config.get("thumbnail_path", "")
     static_thumb = config.get("thumbnail_url", "")
@@ -87,77 +162,48 @@ def send_notification(
             print(f"[Discord] Notification failed: {res['error']}")
         return res
 
-    # Success notifications
+    # ── Success path ──────────────────────────────────────────────────────────
     if status == "success" and episodes:
-        if delivery_method == "all_file":
-            content = "@everyone " if tag_all else ""
-            content += f"**{scraper_name}** completed successfully! Retrieved {len(episodes)} items."
-            file_data = json.dumps(episodes, indent=2).encode('utf-8')
-            files = {"file": ("data.json", file_data, "application/json")}
-            payload = {"content": content.strip()}
-            post({"url": url, "data": payload, "files": files})
+        mention = "@everyone " if tag_all else ""
 
-        elif delivery_method == "per_element_text":
+        if send_as_file:
+            if dispatch_mode == "per_element":
+                for ep in episodes:
+                    file_data = json.dumps(ep, indent=2).encode("utf-8")
+                    files = {"file": ("element.json", file_data, "application/json")}
+                    payload = {"content": (mention + f"**{scraper_name}** — element").strip()}
+                    post({"url": url, "data": payload, "files": files})
+                    time.sleep(delay_sec)
+            else:  # all_at_once
+                file_data = json.dumps(episodes, indent=2).encode("utf-8")
+                files = {"file": ("data.json", file_data, "application/json")}
+                payload = {"content": (mention + f"**{scraper_name}** completed! {len(episodes)} item(s).").strip()}
+                post({"url": url, "data": payload, "files": files})
+
+        elif dispatch_mode == "all_at_once":
+            preview = json.dumps(episodes[:5], indent=2)
+            suffix = f"\n… +{len(episodes)-5} more" if len(episodes) > 5 else ""
+            content = mention + f"**{scraper_name}** — {len(episodes)} item(s) found\n```json\n{preview}{suffix}\n```"
+            post({"url": url, "json": {"content": content.strip()}})
+
+        elif format_style == "text":
             for ep in episodes:
-                content = "@everyone\n" if tag_all else ""
-                content += f"```json\n{json.dumps(ep, indent=2)}\n```"
-                payload = {"content": content}
-                post({"url": url, "json": payload})
+                content = ("@everyone\n" if tag_all else "") + f"```json\n{json.dumps(ep, indent=2)}\n```"
+                post({"url": url, "json": {"content": content}})
                 time.sleep(delay_sec)
 
-        else: # per_element_embed
+        else:  # per_element embed (default)
             for ep in episodes:
-                title  = ep.get("title", "Unknown")
-                ep_num = ep.get("episode_number")
-                date   = ep.get("release_date")
-                url_ep = ep.get("website_url")
-
-                fields = [{"name": "📑 Episode Title", "value": title, "inline": False}]
-                if ep_num:
-                    fields.append({"name": "🔢 Episode Number", "value": f"#{ep_num}", "inline": True})
-                if date:
-                    fields.append({"name": "🗓️ Last Updated on", "value": date, "inline": True})
-                if url_ep:
-                    fields.append({"name": "🔗 Episode URL", "value": f"[Read Chapter]({url_ep})", "inline": False})
-
-                known = {"title", "episode_number", "release_date", "website_url", "thumbnail"}
-                for key, val in ep.items():
-                    if key not in known and val:
-                        label = key.replace("_", " ").title()
-                        fields.append({"name": label, "value": str(val)[:256], "inline": True})
-
-                embed = {
-                    "title": scraper_name,
-                    "color": STATUS_COLOR["success"],
-                    "fields": fields,
-                }
-                if url_ep:
-                    embed["url"] = url_ep
-
-                thumb_url = static_thumb
-                if not thumb_url and thumb_path:
-                    keys = thumb_path.split(".")
-                    val = ep
-                    for k in keys:
-                        if isinstance(val, dict): val = val.get(k)
-                        else: val = None
-                    if isinstance(val, str) and val.startswith("http"):
-                        thumb_url = val
-                        
-                thumb_url = thumb_url or ep.get("thumbnail") or scraper_thumbnail
-
-                if thumb_url and thumb_url.startswith("http"):
-                    embed["thumbnail"] = {"url": thumb_url}
-
+                thumb_url = _resolve_thumb(ep, thumb_path, static_thumb, scraper_thumbnail)
+                embed = _build_embed(ep, scraper_name, thumb_url)
                 content = "@everyone" if tag_all else ""
-                payload = {"content": content, "embeds": [embed]}
-                post({"url": url, "json": payload})
+                post({"url": url, "json": {"content": content, "embeds": [embed]}})
                 time.sleep(delay_sec)
 
+    # ── Non-success path ──────────────────────────────────────────────────────
     else:
         emoji = STATUS_EMOJI.get(status, "ℹ️")
         color = STATUS_COLOR.get(status, 0x99AAB5)
-        
         fields = [
             {"name": "Status",       "value": f"{emoji} {status.upper()}", "inline": True},
             {"name": "Triggered By", "value": triggered_by,                "inline": True},
@@ -178,10 +224,10 @@ def send_notification(
     failed_any = any(not r.get("success") for r in results)
     max_att = max([r.get("attempts", 0) for r in results]) if results else 0
     first_err = next((r.get("error") for r in results if r.get("error")), None)
-    
+
     return {
         "name": "Discord",
-        "success": not failed_any if results else True, # if nothing sent, assume true or false? True.
+        "success": not failed_any if results else True,
         "attempts": max_att,
-        "error": first_err
+        "error": first_err,
     }
