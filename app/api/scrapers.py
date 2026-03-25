@@ -49,6 +49,18 @@ def _download_thumbnail(url: str, scraper_id: int) -> tuple[Optional[str], Optio
 
 
 def _scraper_dict(s: Scraper):
+    # Attempt to extract the `inputs` schema from the stored code
+    scraper_inputs = []
+    try:
+        if s.versions:
+            from app.scrapers import load_scraper_class_from_code
+            cls = load_scraper_class_from_code(s.versions[0].code)
+            raw = getattr(cls, 'inputs', [])
+            if isinstance(raw, list):
+                scraper_inputs = raw
+    except Exception:
+        pass
+
     return {
         "id": s.id,
         "name": s.name,
@@ -63,6 +75,7 @@ def _scraper_dict(s: Scraper):
         "integrations": [{"id": i.id, "name": i.name, "type": i.type} for i in s.integrations],
         "version_count": len(s.versions) if s.versions else 0,
         "latest_version": s.versions[0].version_label if s.versions else None,
+        "inputs": scraper_inputs,
     }
 
 

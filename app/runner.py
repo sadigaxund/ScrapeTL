@@ -31,7 +31,7 @@ def _get_retry_settings(db: Session) -> tuple[int, float]:
     return max_retries, backoff_seconds
 
 
-def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None):
+def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None):
     scraper_record: Scraper = db.get(Scraper, scraper_id)
     if not scraper_record:
         print(f"[Runner] Scraper ID {scraper_id} not found.")
@@ -57,6 +57,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
     should_notify = True
     retry_count   = 0
     skip_message  = None
+    _input_values  = input_values or {}
 
     for attempt in range(max_retries + 1):
         try:
@@ -76,7 +77,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 from app.scrapers import load_scraper_class_from_code
                 scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
                 scraper_instance = scraper_cls(homepage_url=scraper_record.homepage_url)
-                episodes = scraper_instance.scrape()
+                episodes = scraper_instance.scrape(**_input_values)
 
             episode_count = len(episodes)
 

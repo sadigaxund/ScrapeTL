@@ -55,6 +55,7 @@ class Schedule(Base):
     last_run = Column(DateTime, nullable=True)
     next_run = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    input_values = Column(Text, nullable=True)         # JSON: runtime input params
 
     scraper = relationship("Scraper", back_populates="schedules")
 
