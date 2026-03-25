@@ -84,9 +84,10 @@ function statusBadge(status) {
         manual: ['🖱️', 'manual'],
         catchup: ['⚠️', 'catchup'],
         scheduler: ['🕐', 'scheduler'],
+        skipped: ['⏭', 'skipped'],
     };
     const [icon, cls] = map[status] || ['•', 'pending'];
-    return `<span class="status-badge badge-${cls}">${icon} ${status}</span>`;
+    return `<span class="status-badge badge-${cls}">${icon} ${status.toUpperCase()}</span>`;
 }
 
 /* ── URL helpers ────────────────────────────────────── */
@@ -698,7 +699,7 @@ function renderLogFilters() {
     // Get active item instances
     const aScrap = state.scrapers.find(s => String(s.id) === state.logFilters.scraperId);
     const aTag = state.tags.find(t => String(t.id) === state.logFilters.tagId);
-    const statuses = [{ id: '', label: 'All' }, { id: 'success', label: '✅ Success' }, { id: 'failure', label: '❌ Failure' }];
+    const statuses = [{ id: '', label: 'All' }, { id: 'success', label: '✅ Success' }, { id: 'failure', label: '❌ Failure' }, { id: 'skipped', label: '⏭ Skipped' }];
     const aStat = statuses.find(st => st.id === state.logFilters.status);
 
     // Render summaries WITH clear buttons
@@ -808,21 +809,17 @@ async function loadLogs(page = null) {
             return `
             <div class="log-card" data-status="${log.status}">
                 <div class="log-card-header" ${hasDetails ? `onclick="toggleLogDetails('${detailsId}')"` : ''} style="${hasDetails ? 'cursor:pointer' : ''}">
-                    <div class="log-card-left">
-                        ${statusBadge(log.status)}
-                        <strong>${log.scraper_name || 'N/A'}</strong>
-                        <span class="log-epcount" style="display: ${log.episode_count ? 'inline-flex' : 'none'}">${log.episode_count} found</span>
-                        ${retryBadge}
-                    </div>
-                    <div class="log-card-right">
-                        ${statusBadge(log.triggered_by)}
-                        <span class="log-time">${fmt(log.run_at)}</span>
-                        ${hasDetails ? `<span class="log-expand-icon" id="icon-${detailsId}">${isExpanded ? '▼' : '▶'}</span>` : ''}
-                    </div>
+                    <div class="log-col-status">${statusBadge(log.status)}</div>
+                    <div class="log-col-scraper"><strong>${log.scraper_name || 'N/A'}</strong></div>
+                    <div class="log-col-eps"><span class="log-epcount" style="display: ${log.episode_count ? 'inline-flex' : 'none'}">${log.episode_count} found</span></div>
+                    <div class="log-col-retry" style="display:flex; justify-content:center;">${retryBadge}</div>
+                    <div class="log-col-trigger">${statusBadge(log.triggered_by)}</div>
+                    <div class="log-col-time"><span class="log-time">${fmt(log.run_at)}</span></div>
+                    <div class="log-col-icon" style="text-align:right;">${hasDetails ? `<span class="log-expand-icon" id="icon-${detailsId}">${isExpanded ? '▼' : '▶'}</span>` : ''}</div>
                 </div>
                 ${hasDetails ? `
                 <div class="log-details" id="${detailsId}" style="display:${isExpanded ? 'block' : 'none'}">
-                    ${log.error_msg ? `<div class="log-error">❌ ${log.error_msg}</div>` : ''}
+                    ${log.error_msg ? (log.status === 'skipped' ? `<div class="log-skipped-msg">⏭ ${log.error_msg}</div>` : `<div class="log-error">❌ ${log.error_msg}</div>`) : ''}
                     ${log.payload ? `
                     <div class="payload-download-bar">
                         <span class="payload-download-label">Download payload:</span>
