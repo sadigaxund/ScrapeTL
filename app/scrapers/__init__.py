@@ -46,10 +46,22 @@ def load_scraper_class_from_code(code: str) -> Type[BaseScraper]:
     Dynamically compile and execute the given scraper code string,
     then return the underlying BaseScraper subclass.
     """
-    namespace = {}
-    exec(code, namespace)
+    # Seed the namespace with the canonical BaseScraper so that
+    # `from app.scrapers.base import BaseScraper` inside the code
+    # resolves to the same object used in the issubclass() check below.
+    namespace = {
+        "BaseScraper": BaseScraper,
+    }
+    exec(compile(code, "<scraper_code>", "exec"), namespace)
     for _, obj in namespace.items():
-        if inspect.isclass(obj) and issubclass(obj, BaseScraper) and obj is not BaseScraper:
+        if not inspect.isclass(obj) or obj is BaseScraper:
+            continue
+        # Primary check: real subclass relationship
+        if issubclass(obj, BaseScraper):
+            return obj
+        # Fallback: check by class name in MRO (handles the case where
+        # the code re-imported BaseScraper producing a parallel object)
+        if any(c.__name__ == "BaseScraper" for c in obj.__mro__):
             return obj
     raise ValueError("No BaseScraper subclass found in the provided code.")
 

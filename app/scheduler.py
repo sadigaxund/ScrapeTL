@@ -49,7 +49,7 @@ def _make_job_id(schedule_id: int) -> str:
     return f"schedule_{schedule_id}"
 
 
-def _execute_scheduled_scraper(scraper_id: int, schedule_id: int):
+def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: dict = None):
     """Called by APScheduler — runs inside a thread."""
     from app.database import SessionLocal
     from app.models import Schedule
@@ -61,12 +61,12 @@ def _execute_scheduled_scraper(scraper_id: int, schedule_id: int):
         if schedule:
             schedule.last_run = datetime.utcnow()
             db.commit()
-        run_scraper(db, scraper_id, triggered_by="scheduler")
+        run_scraper(db, scraper_id, triggered_by="scheduler", input_values=input_values)
     finally:
         db.close()
 
 
-def add_schedule_job(schedule_id: int, scraper_id: int, cron_expression: str):
+def add_schedule_job(schedule_id: int, scraper_id: int, cron_expression: str, input_values: dict = None):
     """Register a cron job with APScheduler using the current app timezone."""
     tz = get_app_timezone()
     trigger = CronTrigger.from_crontab(cron_expression, timezone=tz)
@@ -74,7 +74,7 @@ def add_schedule_job(schedule_id: int, scraper_id: int, cron_expression: str):
         _execute_scheduled_scraper,
         trigger=trigger,
         id=_make_job_id(schedule_id),
-        kwargs={"scraper_id": scraper_id, "schedule_id": schedule_id},
+        kwargs={"scraper_id": scraper_id, "schedule_id": schedule_id, "input_values": input_values or {}},
         replace_existing=True,
         misfire_grace_time=3600,
     )
@@ -152,7 +152,10 @@ def load_schedules_from_db():
     try:
         schedules = db.query(Schedule).filter(Schedule.enabled == True).all()  # noqa: E712
         for schedule in schedules:
-            add_schedule_job(schedule.id, schedule.scraper_id, schedule.cron_expression)
+            import json as _json
+            iv = _json.loads(schedule.input_values) if schedule.input_values else None
+            add_schedule_job(schedule.id, schedule.scraper_id, schedule.cron_expression,
+                             input_values=iv)
             enqueue_missed_runs(db, schedule, schedule.scraper_id)
 
         for schedule in schedules:

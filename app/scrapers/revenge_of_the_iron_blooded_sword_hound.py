@@ -54,13 +54,20 @@ conn.close()
 
 
 class Scraper(BaseScraper):
-    website_url = "https://erascans.com/manga/revenge-of-the-iron-blooded-sword-hound/"
-    manhwa_name = "Revenge of the Iron-Blooded Sword Hound"
+    # website_url = "https://erascans.com/manga/revenge-of-the-iron-blooded-sword-hound/"
+    # manhwa_name = "Revenge of the Iron-Blooded Sword Hound"
+    
+    inputs = [
+        {"name": "manhwa_name", "label": "Manhwa Name", "type": "text", "default": "Revenge of the Iron-Blooded Sword Hound"},
+        {"name": "website_url", "label": "Website URL", "type": "text", "default": "https://erascans.com/manga/revenge-of-the-iron-blooded-sword-hound/"}
+    ]
+
+    
     # ── helpers ───────────────────────────────────────────────────────────────
     
 
-    def _fetch_soup(self) -> BeautifulSoup:
-        resp = requests.get(self.website_url, headers=HEADERS, timeout=15)
+    def _fetch_soup(self, website_url) -> BeautifulSoup:
+        resp = requests.get(website_url, headers=HEADERS, timeout=15)
         resp.raise_for_status()
         return BeautifulSoup(resp.text, "html.parser")
 
@@ -140,19 +147,19 @@ class Scraper(BaseScraper):
             "thumbnail": "https://erascans.com/wp-content/uploads/2026/02/Revenge-of-the-Iron-Blooded-Sword-Hound.webp",
         }
 
-    def episode_insert(self, episode):
+    def episode_insert(self, manhwa_name, episode):
         conn = sqlite3.connect(CACHE_DIR)
         cursor = conn.cursor()
 
         cursor.execute("""
             INSERT OR IGNORE INTO manhwas (manhwa, scraped_episode)
             VALUES (?, ?)
-        """, (self.manhwa_name, episode))
+        """, (manhwa_name, episode))
 
         conn.commit()
         conn.close()
     
-    def episode_exists(self, episode):
+    def episode_exists(self, manhwa_name, episode):
         conn = sqlite3.connect(CACHE_DIR)
         cursor = conn.cursor()
 
@@ -160,7 +167,7 @@ class Scraper(BaseScraper):
             SELECT 1 FROM manhwas
             WHERE manhwa = ? AND scraped_episode = ?
             LIMIT 1
-        """, (self.manhwa_name, episode))
+        """, (manhwa_name, episode))
 
         result = cursor.fetchone()
         conn.close()
@@ -169,13 +176,17 @@ class Scraper(BaseScraper):
 
     # ── public API ────────────────────────────────────────────────────────────
 
-    def scrape(self) -> list[dict]:
-        if not self.website_url:
+    def scrape(self, **kwargs) -> list[dict]:
+        website_url = kwargs['website_url']
+        manhwa_name = kwargs['manhwa_name']
+
+
+        if not website_url:
             raise ValueError(
                 "No homepage URL configured. Set one in the scraper registry."
             )
 
-        soup = self._fetch_soup()
+        soup = self._fetch_soup(website_url)
         ul = self._find_chapter_ul(soup)
 
         if ul is None:
@@ -198,8 +209,8 @@ class Scraper(BaseScraper):
         retval = []
 
         for episode in episodes:
-            if not self.episode_exists(episode['episode_number']):  
-                self.episode_insert(episode['episode_number'])
+            if not self.episode_exists(manhwa_name, episode['episode_number']):  
+                self.episode_insert(manhwa_name, episode['episode_number'])
                 retval.append(episode)
 
         if len(retval) == 0:

@@ -13,14 +13,39 @@ class BaseScraper:
     1. Create a new file in app/scrapers/
     2. Subclass BaseScraper
     3. Set `name` and `website_url`
-    4. Implement `scrape_episodes_list()`
-    5. Register the scraper via the UI or API using the module path
+    4. Optionally define `inputs` to declare runtime parameters
+    5. Implement `scrape(**kwargs)` accepting the declared inputs
+    6. Register the scraper via the UI or API using the module path
        e.g. "app.scrapers.my_scraper"
+
+    --- Input Parameters ---
+    Override `inputs` with a list of parameter descriptor dicts. Each dict:
+      {
+        "name": "chapter",          # str — kwarg name passed to scrape()
+        "label": "Start Chapter",   # str — label shown in the UI form
+        "type": "number",           # "text" | "number" | "select" | "boolean"
+        "default": 1,               # default value (any JSON-serialisable type)
+        "options": [1, 2, 3],       # list of allowed values (only for "select")
+        "required": False,          # bool — if True, form enforces a value
+      }
+
+    Example:
+        inputs = [
+            {"name": "start_chapter", "label": "Start Chapter", "type": "number", "default": 1},
+            {"name": "lang", "label": "Language", "type": "select",
+             "options": ["en", "jp"], "default": "en"},
+        ]
+
+        def scrape(self, start_chapter=1, lang="en") -> List[dict]:
+            ...
     """
 
     name: str = "Base Scraper"
     website_url: str = ""
     description: str = ""
+
+    # Declare runtime input parameters (see class docstring for schema).
+    inputs: list = []
 
     def __init__(self, homepage_url: Optional[str] = None):
         """
@@ -32,9 +57,11 @@ class BaseScraper:
         if homepage_url:
             self.website_url = homepage_url
 
-    def scrape(self) -> List[dict]:
+    def scrape(self, **kwargs) -> List[dict]:
         """
         Return a list of episode dictionaries, newest first.
+
+        If `inputs` is declared, the collected values are passed as **kwargs.
 
         Each dict must contain:
             - title (str): Episode/chapter title

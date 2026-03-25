@@ -38,7 +38,8 @@ let state = {
         tagId: '',
         status: ''
     },
-    expandedLogs: new Set()
+    expandedLogs: new Set(),
+    timezone: 'UTC',       // kept in sync with /api/settings
 };
 
 /* ── Utilities ──────────────────────────────────────── */
@@ -70,7 +71,11 @@ function toast(msg, type = 'info') {
 function fmt(isoStr) {
     if (!isoStr) return '—';
     const d = new Date(isoStr + (isoStr.endsWith('Z') ? '' : 'Z'));
-    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleString(undefined, {
+        timeZone: state.timezone,
+        month: 'short', day: 'numeric',
+        hour: '2-digit', minute: '2-digit'
+    });
 }
 
 function statusBadge(status) {
@@ -471,13 +476,28 @@ async function submitWizard(e) {
 }
 
 async function runScraper(id, btn) {
-    btn.disabled = true; btn.textContent = '⚡ Running…';
+    const scraper = state.scrapers.find(s => s.id === id);
+    const inputs = (scraper && scraper.inputs) ? scraper.inputs : [];
+
+    if (inputs.length > 0) {
+        // Show inputs modal; it will call _doRunScraper on submit
+        openRunInputsModal(id, inputs, btn);
+    } else {
+        await _doRunScraper(id, {}, btn);
+    }
+}
+
+async function _doRunScraper(id, inputValues, btn) {
+    if (btn) { btn.disabled = true; btn.textContent = '⚡ Running…'; }
     try {
-        const res = await apiFetch(API.run(id), { method: 'POST' });
+        const res = await apiFetch(API.run(id), {
+            method: 'POST',
+            body: JSON.stringify({ input_values: inputValues }),
+        });
         toast(res.detail, 'success');
         setTimeout(() => loadTab('logs'), 2500);
     } catch (e) { toast(e.message, 'error'); }
-    finally { btn.disabled = false; btn.textContent = '▶ Run Now'; }
+    finally { if (btn) { btn.disabled = false; btn.textContent = '▶ Run Now'; } }
 }
 
 async function toggleScraper(id) {
@@ -643,16 +663,30 @@ async function createSchedule() {
     const cron = document.getElementById('sched-cron').value.trim();
     if (!scraper_id) { toast('Please select a scraper.', 'error'); return; }
     if (!cron) { toast('Please enter a cron expression.', 'error'); return; }
-    try {
-        const res = await apiFetch(API.schedules, {
-            method: 'POST',
-            body: JSON.stringify({ scraper_id: parseInt(scraper_id), cron_expression: cron }),
-        });
-        toast(`Schedule created! Next run: ${fmt(res.next_run)}`, 'success');
-        document.getElementById('sched-cron').value = '';
-        applyCronPreset('', 'Custom');
-        loadSchedules();
-    } catch (e) { toast(e.message, 'error'); }
+
+    const scraper = state.scrapers.find(s => String(s.id) === String(scraper_id));
+    const inputs = (scraper && scraper.inputs) ? scraper.inputs : [];
+
+    const doCreate = async (inputValues) => {
+        try {
+            const body = {
+                scraper_id: parseInt(scraper_id),
+                cron_expression: cron,
+                input_values: Object.keys(inputValues).length ? inputValues : null,
+            };
+            const res = await apiFetch(API.schedules, { method: 'POST', body: JSON.stringify(body) });
+            toast(`Schedule created! Next run: ${fmt(res.next_run)}`, 'success');
+            document.getElementById('sched-cron').value = '';
+            applyCronPreset('', 'Custom');
+            loadSchedules();
+        } catch (e) { toast(e.message, 'error'); }
+    };
+
+    if (inputs.length > 0) {
+        openRunInputsModal(null, inputs, null, doCreate);
+    } else {
+        await doCreate({});
+    }
 }
 
 async function toggleSchedule(id) {
@@ -1341,6 +1375,10 @@ async function saveTimezone() {
     if (!val) { toast('Please enter a timezone.', 'error'); return; }
     try {
         await apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: val }) });
+        state.timezone = val;
+        // Bust timestamp caches so all tabs re-render with new TZ
+        Object.keys(responseCache).forEach(k => { responseCache[k] = null; });
+        refreshAll();
         toast(`Timezone set to ${val}`, 'success');
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -1555,6 +1593,76 @@ function refreshAll() {
 
 setInterval(refreshAll, 5000);
 
+/* ════════════════════════════════════════════════
+   RUN INPUTS MODAL
+════════════════════════════════════════════════ */
+let _runInputsCallback = null;  // {type:'run', id, btn} or {type:'schedule', fn}
+
+function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
+    _runInputsCallback = scheduleCb
+        ? { type: 'schedule', fn: scheduleCb }
+        : { type: 'run', id: scraperId, btn };
+
+    const title = scheduleCb ? 'Set Schedule Inputs' : 'Run with Inputs';
+    document.getElementById('run-inputs-title').textContent = title;
+
+    const form = document.getElementById('run-inputs-form');
+    form.innerHTML = inputs.map(inp => {
+        const id = `ri-${inp.name}`;
+        const def = inp.default !== undefined ? inp.default : '';
+        let field = '';
+        if (inp.type === 'select' && inp.options) {
+            const opts = inp.options.map(o =>
+                `<option value="${o}" ${String(o) === String(def) ? 'selected' : ''}>${o}</option>`
+            ).join('');
+            field = `<select id="${id}" class="inp">${opts}</select>`;
+        } else if (inp.type === 'boolean') {
+            field = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="${id}" ${def ? 'checked' : ''} style="width:16px;height:16px">
+                <span>${inp.label || inp.name}</span>
+            </label>`;
+        } else {
+            const t = inp.type === 'number' ? 'number' : 'text';
+            field = `<input type="${t}" id="${id}" class="inp" value="${def}" placeholder="${inp.label || inp.name}">`;
+        }
+        const lbl = inp.type !== 'boolean'
+            ? `<label class="form-label" for="${id}">${inp.label || inp.name}</label>` : '';
+        return `<div class="form-group" style="margin-bottom:14px">${lbl}${field}</div>`;
+    }).join('');
+
+    document.getElementById('run-inputs-modal').style.display = 'flex';
+}
+
+function closeRunInputsModal(e) {
+    if (e && e.target !== document.getElementById('run-inputs-modal')) return;
+    document.getElementById('run-inputs-modal').style.display = 'none';
+    _runInputsCallback = null;
+}
+
+async function submitRunInputs() {
+    const cb = _runInputsCallback;
+    if (!cb) return;
+
+    // Collect values
+    const form = document.getElementById('run-inputs-form');
+    const inputValues = {};
+    form.querySelectorAll('[id^="ri-"]').forEach(el => {
+        const name = el.id.replace('ri-', '');
+        if (el.type === 'checkbox') inputValues[name] = el.checked;
+        else if (el.type === 'number') inputValues[name] = el.value !== '' ? Number(el.value) : null;
+        else inputValues[name] = el.value;
+    });
+
+    document.getElementById('run-inputs-modal').style.display = 'none';
+
+    if (cb.type === 'run') {
+        await _doRunScraper(cb.id, inputValues, cb.btn);
+    } else if (cb.type === 'schedule') {
+        await cb.fn(inputValues);
+    }
+    _runInputsCallback = null;
+}
+
 /* ── Drag-and-drop for code zones ───────────────────── */
 function _setupCodeDropZone(zoneId, inputId, textId) {
     const zone = document.getElementById(zoneId);
@@ -1589,6 +1697,11 @@ function _setupCodeDropZone(zoneId, inputId, textId) {
 }
 
 window.addEventListener('DOMContentLoaded', () => {
+    // Load initial settings to pick up saved timezone
+    apiFetch(API.settings).then(settings => {
+        if (settings.timezone) state.timezone = settings.timezone;
+    }).catch(() => {});
+
     loadScrapers();
     loadQueue();
     // Pre-load integrations state so assign modal works from the start
