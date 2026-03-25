@@ -1,11 +1,10 @@
 
-
+7. schema registry
+9. might break most of the stuff but, a variable registry where one can define maybe tokens or commonly used strings, and then use them in the scraper code or input fields everywhere
+1. rework the queue system, make is more user handable
+* a way to edit queue, like removing or one-time scheduling that adds to the queue, maybe when schedule is active, it displays in a queue the next execution of the schedule
 2. more integrations
-3. no-code scraper builder, maybe also a notebook like interface for low code
-4. error handling, retry logic, also rework the queue system
 5. more complex workflows
 6. AI html scraping that detects schema
-7. schema registry
-8. an option to download the payloadas whatever
-9. might break most of the stuff but, a variable registry where one can define maybe tokens or commonly used strings, and then use them in the scraper code or input fields everywhere
-10. maybe a native storage system for the payloads to be stored and queried. DECIDE if it's worth/too much/ would be nice or makes chaotic
+---
+1. Display which schedule in logs menu too

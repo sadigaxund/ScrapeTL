@@ -636,20 +636,42 @@ async function loadSchedules() {
             list.innerHTML = '<div class="empty-state">No schedules configured.</div>';
             return;
         }
-        list.innerHTML = schedules.map(s => `
-        <div class="item-card">
-          <div class="item-info">
-            <div class="item-name">${s.scraper_name || 'Unknown Scraper'}</div>
-            <div class="item-meta"><code style="color:#c4b5fd">${s.cron_expression}</code></div>
-          </div>
-          <div class="item-actions">
-            ${s.next_run ? `<span class="log-epcount" style="margin:0 12px 0 0">⏭ Next: ${fmt(s.next_run)}</span>` : ''}
-            ${s.last_run ? `<span class="payload-download-label" style="text-transform:none; letter-spacing:0.3px;">Last: ${fmt(s.last_run)}</span>` : ''}
-            <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '● On' : '○ Off'}</span>
-            <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
-            <button class="btn btn-danger" onclick="deleteSchedule(${s.id})">✕</button>
-          </div>
-        </div>`).join('');
+        list.innerHTML = schedules.map(s => {
+            const displayName = s.label || s.scraper_name || 'Unnamed Schedule';
+            const subtitle = s.label ? s.scraper_name : null;
+            const thumb = s.thumbnail_url
+                ? `<img src="${s.thumbnail_url}" class="sched-thumb" alt="">`
+                : `<div class="sched-thumb sched-thumb--placeholder">📡</div>`;
+            const inputs = s.input_values && Object.keys(s.input_values).length
+                ? Object.entries(s.input_values).map(([k,v]) =>
+                    `<span class="sched-param"><b>${k}</b>: ${v}</span>`
+                  ).join('')
+                : null;
+            return `
+            <div class="sched-card" onclick="toggleSchedExpand(event, ${s.id})">
+              <div class="sched-card__main">
+                ${thumb}
+                <div class="sched-card__info">
+                  <div class="sched-card__name">${displayName}</div>
+                  ${subtitle ? `<div class="sched-card__subtitle">${subtitle}</div>` : ''}
+                  <div class="sched-card__meta"><code style="color:#c4b5fd;font-size:11px">${s.cron_expression}</code></div>
+                </div>
+                <div class="sched-card__next">
+                  ${s.next_run ? `<span class="sched-next-badge">⏭ Next: ${fmt(s.next_run)}</span>` : '<span class="sched-next-badge sched-next-badge--none">Not scheduled</span>'}
+                  ${s.last_run ? `<span class="sched-last">Last: ${fmt(s.last_run)}</span>` : ''}
+                </div>
+                <div class="sched-card__actions" onclick="event.stopPropagation()">
+                  <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '● On' : '○ Off'}</span>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
+                  <button class="btn btn-danger" onclick="deleteSchedule(${s.id})">✕</button>
+                </div>
+              </div>
+              ${inputs ? `<div class="sched-card__expand" id="sched-expand-${s.id}">
+                <div class="sched-inputs-title">⚙ Scheduled Inputs</div>
+                <div class="sched-inputs-grid">${inputs}</div>
+              </div>` : ''}
+            </div>`;
+        }).join('');
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -661,6 +683,7 @@ function applyCronPreset(val, label = null) {
 async function createSchedule() {
     const scraper_id = document.getElementById('sched-scraper').value;
     const cron = document.getElementById('sched-cron').value.trim();
+    const label = document.getElementById('sched-label').value.trim();
     if (!scraper_id) { toast('Please select a scraper.', 'error'); return; }
     if (!cron) { toast('Please enter a cron expression.', 'error'); return; }
 
@@ -673,10 +696,12 @@ async function createSchedule() {
                 scraper_id: parseInt(scraper_id),
                 cron_expression: cron,
                 input_values: Object.keys(inputValues).length ? inputValues : null,
+                label: label || null,
             };
             const res = await apiFetch(API.schedules, { method: 'POST', body: JSON.stringify(body) });
             toast(`Schedule created! Next run: ${fmt(res.next_run)}`, 'success');
             document.getElementById('sched-cron').value = '';
+            document.getElementById('sched-label').value = '';
             applyCronPreset('', 'Custom');
             loadSchedules();
         } catch (e) { toast(e.message, 'error'); }
@@ -687,6 +712,14 @@ async function createSchedule() {
     } else {
         await doCreate({});
     }
+}
+
+function toggleSchedExpand(event, id) {
+    // Don't toggle if clicking on action buttons
+    if (event.target.closest('.sched-card__actions')) return;
+    const el = document.getElementById(`sched-expand-${id}`);
+    if (!el) return;
+    el.classList.toggle('open');
 }
 
 async function toggleSchedule(id) {

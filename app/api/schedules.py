@@ -16,6 +16,7 @@ class ScheduleCreate(BaseModel):
     scraper_id: int
     cron_expression: str        # standard 5-part cron, e.g. "0 12 * * *"
     input_values: Optional[dict] = None
+    label: Optional[str] = None
 
 
 @router.get("")
@@ -26,12 +27,17 @@ def list_schedules(db: Session = Depends(get_db)):
             "id": s.id,
             "scraper_id": s.scraper_id,
             "scraper_name": s.scraper.name if s.scraper else None,
+            "thumbnail_url": (
+                f"/thumbnails/{s.scraper.local_thumbnail_path}" if s.scraper and s.scraper.local_thumbnail_path
+                else (s.scraper.thumbnail_url if s.scraper else None)
+            ),
             "cron_expression": s.cron_expression,
             "enabled": s.enabled,
             "last_run": s.last_run.isoformat() if s.last_run else None,
             "next_run": s.next_run.isoformat() if s.next_run else None,
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "input_values": json.loads(s.input_values) if s.input_values else None,
+            "label": s.label or None,
         }
         for s in schedules
     ]
@@ -56,6 +62,7 @@ def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db)):
         cron_expression=payload.cron_expression,
         enabled=True,
         input_values=json.dumps(payload.input_values) if payload.input_values else None,
+        label=payload.label or None,
     )
     db.add(schedule)
     db.commit()

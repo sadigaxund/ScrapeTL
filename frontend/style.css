@@ -1917,4 +1917,149 @@ input:checked + .slider { background-color: var(--success); }
   color: var(--text-muted);
   font-family: monospace;
 }
+
+/* ══════════════════════════════════════════════════
+   SCHEDULE CARDS (new design)
+══════════════════════════════════════════════════ */
+.sched-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: border-color var(--transition), background var(--transition);
+  overflow: hidden;
+}
+.sched-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-card-hover);
+}
+
+.sched-card__main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+}
+
+/* Thumbnail */
+.sched-thumb {
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+.sched-thumb--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  background: var(--bg-input);
+  color: var(--text-muted);
+}
+
+/* Info block */
+.sched-card__info {
+  flex: 1;
+  min-width: 0;
+}
+.sched-card__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sched-card__subtitle {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+}
+.sched-card__meta {
+  margin-top: 4px;
+}
+
+/* Next / last run block */
+.sched-card__next {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.sched-next-badge {
+  background: linear-gradient(135deg, rgba(124,106,247,0.25), rgba(99,102,241,0.15));
+  border: 1px solid rgba(124,106,247,0.35);
+  color: #c4b5fd;
+  border-radius: 20px;
+  padding: 5px 13px;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.sched-next-badge--none {
+  background: none;
+  border-color: var(--border);
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.sched-last {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* Actions */
+.sched-card__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* Expand panel */
+.sched-card__expand {
+  display: none;
+  border-top: 1px solid var(--border);
+  padding: 12px 16px 14px;
+  animation: fadeSlideIn 0.18s ease;
+}
+.sched-card__expand.open {
+  display: block;
+}
+.sched-inputs-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+.sched-inputs-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.sched-param {
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 11px;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+}
+.sched-param b {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
 
