@@ -20,6 +20,7 @@ import re
 import requests
 from bs4 import BeautifulSoup, Tag
 from app.scrapers.base import BaseScraper
+from app.exceptions import ScrapeSkip
 
 HEADERS = {
     "User-Agent": (
@@ -192,16 +193,16 @@ class Scraper(BaseScraper):
         if not episodes:
             raise RuntimeError("Chapter list found but no episodes could be parsed.")
 
-        # Return newest first (highest episode number)
-        episodes.sort(key=lambda e: e.get("episode_number") or 0, reverse=True)
-        latest_episode = episodes[0]
-        latest_episode_number = int(latest_episode['episode_number'])
+        episodes.sort(key=lambda e: e.get("episode_number") or 0)
 
-        if self.episode_exists(latest_episode_number):
-            raise Exception(f"No new episodes.")
+        retval = []
+
+        for episode in episodes:
+            if not self.episode_exists(episode['episode_number']):  
+                self.episode_insert(episode['episode_number'])
+                retval.append(episode)
+
+        if len(retval) == 0:
+            raise ScrapeSkip(f"No new episodes.")
         else:
-            self.episode_insert(latest_episode_number)
-            return [episodes[0]]
-
-# if __name__ == '__main__':
-#     print("HEY")
+            return retval

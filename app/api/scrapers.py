@@ -236,16 +236,20 @@ async def update_scraper(
         scraper.thumbnail_data = t_contents
         scraper.thumbnail_url = None
     elif thumbnail_url is not None:
-        new_thumb_url = _normalize_url(thumbnail_url)
-        if new_thumb_url != scraper.thumbnail_url:
-            scraper.thumbnail_url = new_thumb_url
-            if new_thumb_url:
-                local_fname, local_bytes = _download_thumbnail(new_thumb_url, scraper.id)
-                scraper.local_thumbnail_path = local_fname
-                scraper.thumbnail_data = local_bytes
-            else:
-                scraper.local_thumbnail_path = None
-                scraper.thumbnail_data = None
+        if thumbnail_url.startswith("/thumbnails/"):
+            # Frontend relies on echoing the internal thumbnail path. Do not touch DB.
+            pass
+        else:
+            new_thumb_url = _normalize_url(thumbnail_url)
+            if new_thumb_url != scraper.thumbnail_url:
+                scraper.thumbnail_url = new_thumb_url
+                if new_thumb_url:
+                    local_fname, local_bytes = _download_thumbnail(new_thumb_url, scraper.id)
+                    scraper.local_thumbnail_path = local_fname
+                    scraper.thumbnail_data = local_bytes
+                else:
+                    scraper.local_thumbnail_path = None
+                    scraper.thumbnail_data = None
 
     # Handle scraper code update if uploaded via UI
     new_code = None

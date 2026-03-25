@@ -482,6 +482,12 @@ select option {
   border: 1px solid var(--border);
 }
 
+.badge-skipped {
+  background: rgba(148, 163, 184, 0.1);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+}
+
 /* ── Scraper / Schedule items ───────────────── */
 .item-list {
   display: flex;
@@ -1025,12 +1031,11 @@ select option {
 }
 
 .log-card-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: 110px minmax(140px, 1fr) 90px 110px 110px 110px 30px;
   align-items: center;
-  justify-content: space-between;
   padding: 10px 14px;
   gap: 12px;
-  flex-wrap: wrap;
   transition: background var(--transition);
 }
 
@@ -1038,12 +1043,16 @@ select option {
   background: var(--bg-card-hover);
 }
 
-.log-card-left,
-.log-card-right {
+.log-col-status,
+.log-col-scraper,
+.log-col-eps,
+.log-col-retry,
+.log-col-trigger,
+.log-col-time,
+.log-col-icon {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  overflow: hidden;
 }
 
 .log-time {
@@ -1074,6 +1083,17 @@ select option {
   font-size: 13px;
   background: var(--failure-bg);
   border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  word-break: break-word;
+}
+
+.log-skipped-msg {
+  color: var(--text-secondary);
+  font-size: 13px;
+  background: var(--bg-card);
+  border: 1px solid rgba(255, 255, 255, 0.05);
   border-radius: var(--radius-sm);
   padding: 8px 12px;
   margin-bottom: 10px;

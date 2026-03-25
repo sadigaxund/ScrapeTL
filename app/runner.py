@@ -9,6 +9,7 @@ import time
 from datetime import datetime
 from sqlalchemy.orm import Session
 from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting
+from app.exceptions import ScrapeSkip
 
 
 def _get_retry_settings(db: Session) -> tuple[int, float]:
@@ -52,8 +53,10 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
     episode_count = 0
     error_msg     = None
     latest        = None
+    episodes      = []
     should_notify = True
     retry_count   = 0
+    skip_message  = None
 
     for attempt in range(max_retries + 1):
         try:
@@ -94,6 +97,15 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             print(f"[Runner] ✅ {scraper_record.name} — {episode_count} episodes found (attempt {attempt + 1}).")
             break  # success — exit retry loop
 
+        except ScrapeSkip as skip:
+            # Clean skip — treat as success, no integrations, no retries
+            skip_message = str(skip) or "Skipped by scraper."
+            status = "skipped"
+            error_msg = skip_message
+            retry_count = attempt
+            print(f"[Runner] ⏭  {scraper_record.name} — skipped: {skip_message}")
+            break
+
         except Exception as exc:
             error_msg = str(exc)
             retry_count = attempt
@@ -128,7 +140,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 pass
 
     # Update scraper health based on run outcome
-    scraper_record.health = "ok" if status == "success" else "failing"
+    scraper_record.health = "ok" if status in ("success", "skipped") else "failing"
 
     # Persist log entry
     log = ScrapeLog(
@@ -149,7 +161,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
     db.commit()
 
-    # Fire all assigned integrations
+    # Fire all assigned integrations (never fire on skipped runs)
     if status == "failure" or (status == "success" and should_notify):
         results = _fire_integrations(scraper_record, status, episodes, error_msg, triggered_by)
         if results:

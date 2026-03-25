@@ -1,4 +1,8 @@
 from typing import List, Optional
+from app.exceptions import ScrapeSkip  # re-exported for scraper convenience
+
+__all__ = ["BaseScraper", "ScrapeSkip"]
+
 
 
 class BaseScraper:
