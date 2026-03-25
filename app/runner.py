@@ -162,12 +162,17 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
     db.commit()
 
-    # Fire all assigned integrations (never fire on skipped runs)
-    if status == "failure" or (status == "success" and should_notify):
-        results = _fire_integrations(scraper_record, status, episodes, error_msg, triggered_by)
-        if results:
-            log.integration_details = json.dumps(results)
-            db.commit()
+    # Fire all assigned integrations (skipped status now supported if trigger set)
+    if status in ("success", "failure", "skipped"):
+        # For success, we still respect should_notify to avoid spamming if no new episodes found,
+        # UNLESS it's a manual run or similar (already handled by should_notify logic above).
+        if status == "success" and not should_notify:
+            pass
+        else:
+            results = _fire_integrations(scraper_record, status, episodes, error_msg, triggered_by)
+            if results:
+                log.integration_details = json.dumps(results)
+                db.commit()
 
     return status
 
@@ -194,12 +199,18 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
 
     for integ in integrations:
         try:
-            if integ.type == "discord_webhook":
-                import json as _json
-                config = _json.loads(integ.config)
-                content_type = config.get("content_type", "full_data")
-                eps_to_send = episodes_list if status == "success" and content_type != "state_only" else None
+            import json as _json
+            config = _json.loads(integ.config)
+            
+            # Check triggers — default to [success, failure] if missing
+            triggers = config.get("triggers", ["success", "failure"])
+            if status not in triggers:
+                continue
 
+            content_type = config.get("content_type", "full_data")
+            eps_to_send = episodes_list if status == "success" and content_type != "state_only" else None
+
+            if integ.type == "discord_webhook":
                 res = discord_notifier.send_notification(
                     scraper_name=scraper_record.name,
                     scraper_thumbnail=scraper_record.thumbnail_url,
@@ -215,11 +226,6 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
 
             elif integ.type == "http_request":
                 from app import http_sender
-                import json as _json
-                config = _json.loads(integ.config)
-                content_type = config.get("content_type", "full_data")
-                eps_to_send = episodes_list if status == "success" and content_type != "state_only" else None
-
                 res = http_sender.send_http(
                     scraper_name=scraper_record.name,
                     status=status,

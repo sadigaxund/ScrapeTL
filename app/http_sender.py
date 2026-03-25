@@ -13,6 +13,7 @@ New config shape:
 """
 import json
 import time
+from datetime import datetime
 import requests
 from typing import Any
 
@@ -100,7 +101,21 @@ def send_http(
 
     results = []
 
-    if send_as_file:
+    if episodes is None:
+        # State-only summary
+        body = {
+            "type": "summary",
+            "scraper": scraper_name,
+            "status": status,
+            "triggered_by": triggered_by,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "error": error_msg if error_msg else None
+        }
+        r = _send_with_retry(method, url, headers, body=body,
+                             max_retries=max_retries, delay_sec=delay_sec)
+        results.append(r)
+
+    elif send_as_file:
         if dispatch_mode == "per_element":
             for item in payload:
                 file_data = json.dumps(item, indent=2).encode("utf-8")

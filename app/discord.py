@@ -209,7 +209,7 @@ def send_notification(
             {"name": "Triggered By", "value": triggered_by,                "inline": True},
         ]
         if error_msg:
-            fields.append({"name": "Error Details", "value": error_msg[:1024], "inline": False})
+            fields.append({"name": "Details", "value": error_msg[:1024], "inline": False})
 
         payload = {
             "embeds": [{
