@@ -74,6 +74,34 @@ The Active Schedules list received a significant UI overhaul:
 
 ---
 
+## Release v2.1 - Scheduler, Queue, and Integration Enhancements (March 25, 2026)
+
+### 1. Unified Task Queue & Manual Management
+The system now supports ad-hoc "One-Time Tasks" that integrate seamlessly with the existing Cron-based prediction engine.
+- **One-Time Task Modal**: Collects scraper-specific inputs and a scheduled execution time (local-time aware).
+- **Background Polling**: Added a 20-second active background processor (`app.scheduler.process_catchup_queue`) that executes pending tasks whose `scheduled_for` time has passed.
+- **Auto-Pruning**: To prevent UI clutter, `TaskQueue` entries are automatically deleted from the DB upon execution completion (whether they succeeded or failed). Historical records remain in the **Logs** tab.
+- **Queue Sorting**: Added client-side sorting to the Queue table headers (Scraper, Time, Label, Status).
+- **UI Aesthetic Consistency**: Standardized the "One-Time Task" button to match the primary `btn-primary` purple gradient and accent glow.
+
+### 2. Traceability: Log-to-Schedule Linking
+Logs now provide clear context on exactly which configuration triggered a run.
+- **Schema Update**: `ScrapeLog` now contains an optional `schedule_id` foreign key.
+- **Runner Update**: `run_scraper` accepts `schedule_id` and persists it.
+- **API Extension**: `GET /api/logs` now joins with the `Schedules` table to return the `schedule_name` (or falls back to the scraper name).
+
+### 3. Integration Granularity: "State Only" Mode
+Notifications can now be configured to be lightweight, sending only success/failure status without the full scraped data array.
+- **Content Type Toggle**: Added to Discord and HTTP integration modals.
+- **Selective Dispatch**: The runner respects the `state_only` vs `full_data` config to filter the payload sent to external webhooks.
+
+### 4. Robustness & Infrastructure
+- **Proactive Schema Migration**: `app/database.py` now includes a `_check_and_add_columns` helper that dynamically adds missing columns to an existing SQLite database on startup, eliminating the need for manual migration scripts during rolling updates.
+- **Timezone-Aware Ingestion**: Fixed a critical bug where manual task times were treated as UTC instead of the user's local timezone.
+- **Dockerization**: Full `Dockerfile` and `docker-compose.yml` support with persistent storage mounting for `/app/data`.
+
+---
+
 ### Context for Next Session
 **Current state of the codebase (March 25, 2026):**
 
@@ -81,19 +109,17 @@ The Active Schedules list received a significant UI overhaul:
 |---|---|
 | Script-mode scrapers | ✅ Fully working. `BaseScraper` → `scrape(**kwargs)`. Inputs → kwargs. |
 | Recipe-mode scrapers | ✅ Working but inputs system not integrated into Recipe builder UI yet. |
-| Timezone | ✅ Frontend-only. Loaded from `/api/settings` on init. Saved via `/api/settings/timezone`. |
+| Timezone | ✅ Full implementation: DB backend and Local-aware Frontend. |
 | Inputs system | ✅ Full stack: DB → API → scheduler → runner → modal UI. |
-| Schedule labels | ✅ Optional. Stored in `schedules.label`. Falls back to scraper name. |
-| Schedule thumbnails | ✅ Served from `/thumbnails/<path>` or external URL stored in `scrapers.thumbnail_url`. |
+| One-Time Tasks | ✅ Fully functional with background polling and auto-clean-up. |
+| Integrations | ✅ Content-type granularity (State Only vs Full Data) implemented. |
+| Docker | ✅ `Dockerfile` and `docker-compose.yml` ready for deployment. |
 
-**Pending migrations needed after each server restart if DB was not updated:**
-```bash
-python -c "from app.database import engine; from app.models import Base; Base.metadata.create_all(bind=engine)"
-```
-
-**Known non-issues (false positives):**
-- Pyre2 lint errors for `sqlalchemy`, `fastapi`, `app.*` imports — environment-related, do NOT affect runtime.
+**Current DB Schema Requirements:**
+- `ScrapeLog` needs `schedule_id` (INT, nullable).
+- `TaskQueue` needs `input_values` (TEXT/JSON) and `note` (TEXT).
 
 **Asset cache versions (bump when changing static files):**
-- `app.js?v=9`
+- `app.js?v=11` (Updated today)
 - `style.css?v=4`
+- `index.html` scripts updated to `v=11`.
