@@ -149,6 +149,20 @@ function previewEditThumb(url) {
     img.src = url;
 }
 
+function previewWizThumb(url) {
+    const img = document.getElementById('wiz-thumb-img');
+    const ph = document.getElementById('wiz-thumb-placeholder');
+    const box = document.getElementById('wiz-thumb-preview');
+    if (!url || !url.trim()) {
+        img.style.display = 'none'; img.src = '';
+        ph.style.display = 'inline'; ph.textContent = '🎌';
+        if (box) box.style.borderColor = ''; return;
+    }
+    img.onload = () => { ph.style.display = 'none'; img.style.display = 'block'; if (box) box.style.borderColor = 'var(--success)'; };
+    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; if (box) box.style.borderColor = 'var(--failure)'; };
+    img.src = url;
+}
+
 /* ── Tab Navigation ─────────────────────────────────── */
 const TAB_META = {
     scrapers: { title: 'Scrapers', subtitle: 'Manage your scraper plugins' },
@@ -336,60 +350,6 @@ function selectSchedScraper(id, name) {
 
 /* ── Wizard Modal ────────────────────────────────────── */
 function openWizardModal() {
-    document.getElementById('wizard-form').reset();
-    document.getElementById('wiz-thumb-filename').textContent = '';
-    previewWizThumb('');
-    const codeZone = document.getElementById('wiz-code-zone');
-    codeZone.style.borderColor = '';
-    document.getElementById('wiz-code-text').textContent = 'Drag & Drop your .py file here';
-    // Reset recipe state
-    recipeSteps = [];
-    document.getElementById('wiz-type-value').value = 'python';
-    setWizMode('python');
-
-    document.getElementById('wizard-modal').style.display = 'flex';
-}
-
-function closeWizardModal(e) {
-    if (e && e.target !== document.getElementById('wizard-modal')) return;
-    document.getElementById('wizard-modal').style.display = 'none';
-}
-
-function previewWizThumb(url) {
-    const img = document.getElementById('wiz-thumb-img');
-    const ph = document.getElementById('wiz-thumb-placeholder');
-    const box = document.getElementById('wiz-thumb-preview');
-    if (!url.trim()) {
-        img.style.display = 'none'; img.src = '';
-        ph.style.display = 'inline'; ph.textContent = '🎌';
-        box.style.borderColor = ''; return;
-    }
-    img.onload = () => { ph.style.display = 'none'; img.style.display = 'block'; box.style.borderColor = 'var(--success)'; };
-    img.onerror = () => { img.style.display = 'none'; ph.style.display = 'inline'; ph.textContent = '⚠️'; box.style.borderColor = 'var(--failure)'; };
-    ph.textContent = '🎌'; img.src = url;
-}
-
-function handleWizThumbFile(input) {
-    const file = input.files[0];
-    if (file) {
-        document.getElementById('wiz-thumb-filename').textContent = file.name;
-        document.getElementById('wiz-thumb-url').value = ''; // clear url if file picked
-        const reader = new FileReader();
-        reader.onload = e => previewWizThumb(e.target.result);
-        reader.readAsDataURL(file);
-    }
-}
-
-function handleWizCodeFile(input) {
-    const file = input.files[0];
-    if (file) {
-        document.getElementById('wiz-code-text').textContent = `📄 ${file.name}`;
-        document.getElementById('wiz-code-zone').style.borderColor = 'var(--success)';
-        document.getElementById('wiz-code-zone').style.background = 'rgba(34, 197, 94, 0.05)';
-    }
-}
-
-function openWizardModal() {
     try {
         const form = document.getElementById('wizard-form');
         if (form) form.reset();
@@ -477,6 +437,38 @@ async function submitWizard(e) {
     } finally {
         btn.disabled = false;
         btn.textContent = '\u2728 Build Scraper';
+    }
+}
+
+function handleWizCodeFile(input) {
+    const file = input.files[0];
+    const textEl = document.getElementById('wiz-code-text');
+    const zoneEl = document.getElementById('wiz-code-zone');
+    if (file) {
+        if (textEl) textEl.textContent = `📄 ${file.name}`;
+        if (zoneEl) {
+            zoneEl.style.borderColor = 'var(--success)';
+            zoneEl.style.background = 'rgba(34, 197, 94, 0.05)';
+        }
+    } else {
+        if (textEl) textEl.textContent = "Drag & Drop your .py file here";
+        if (zoneEl) {
+            zoneEl.style.borderColor = '';
+            zoneEl.style.background = '';
+        }
+    }
+}
+
+function handleWizThumbFile(input) {
+    const file = input.files[0];
+    const filenameEl = document.getElementById('wiz-thumb-filename');
+    const urlEl = document.getElementById('wiz-thumb-url');
+    if (file) {
+        if (filenameEl) filenameEl.textContent = file.name;
+        if (urlEl) urlEl.value = ''; // Direct file upload clears URL input
+        const reader = new FileReader();
+        reader.onload = e => previewWizThumb(e.target.result);
+        reader.readAsDataURL(file);
     }
 }
 
@@ -1100,8 +1092,14 @@ function openConnectorModal(type, id = null) {
             setVal('conn-desc', '');
             // Discord defaults
             setVal('conn-webhook', '');
-            setContentType('full_data');
-            setContentTypeHttp('full_data');
+            setChk('conn-include-data', true);
+            setChk('conn-http-include-data', true);
+            setChk('conn-trig-success', true);
+            setChk('conn-trig-failure', true);
+            setChk('conn-trig-skip', false);
+            setChk('conn-http-trig-success', true);
+            setChk('conn-http-trig-failure', true);
+            setChk('conn-http-trig-skip', false);
             setVal('conn-retry-max', '3');
             setVal('conn-delay', '1');
             setChk('conn-tag', false);
@@ -1123,13 +1121,17 @@ function openConnectorModal(type, id = null) {
                 const cfg = integ.config || {};
                 setVal('conn-desc', cfg.description || '');
 
+                const trigs = cfg.triggers || ['success', 'failure'];
                 if (integ.type === 'discord_webhook') {
                     setVal('conn-webhook', cfg.webhook_url || '');
                     const dm = cfg.dispatch_mode || (cfg.delivery_method === 'all_file' ? 'all_at_once' : 'per_element');
                     const fs = cfg.format_style || (cfg.delivery_method === 'per_element_text' ? 'text' : 'embed');
                     setDiscordDispatch(dm);
                     setDiscordStyle(fs);
-                    setContentType(cfg.content_type || 'full_data');
+                    setChk('conn-include-data', cfg.content_type !== 'state_only');
+                    setChk('conn-trig-success', trigs.includes('success'));
+                    setChk('conn-trig-failure', trigs.includes('failure'));
+                    setChk('conn-trig-skip', trigs.includes('skipped'));
                     setChk('conn-send-as-file', !!cfg.send_as_file || cfg.delivery_method === 'all_file');
                     onDiscordFileToggle();
                     setVal('conn-retry-max', cfg.retry_max !== undefined ? cfg.retry_max : '3');
@@ -1142,7 +1144,10 @@ function openConnectorModal(type, id = null) {
                     setHttpMethod(cfg.method || 'POST');
                     const hdm = cfg.dispatch_mode || (cfg.body_mode === 'per_element' ? 'per_element' : 'all_at_once');
                     setHttpDispatch(hdm);
-                    setContentTypeHttp(cfg.content_type || 'full_data');
+                    setChk('conn-http-include-data', cfg.content_type !== 'state_only');
+                    setChk('conn-http-trig-success', trigs.includes('success'));
+                    setChk('conn-http-trig-failure', trigs.includes('failure'));
+                    setChk('conn-http-trig-skip', trigs.includes('skipped'));
                     setChk('conn-http-send-as-file', !!cfg.send_as_file);
                     setVal('conn-http-headers', cfg.headers ? JSON.stringify(cfg.headers, null, 2) : '');
                     
@@ -1151,10 +1156,45 @@ function openConnectorModal(type, id = null) {
                 }
             }
         }
-
+        updateIntegrationFieldsUI();
         document.getElementById('connector-modal').style.display = 'flex';
     } catch(err) {
         console.error('openConnectorModal error:', err);
+    }
+}
+
+
+function updateIntegrationFieldsUI() {
+    try {
+        const typeEl = document.getElementById('conn-type');
+        if (!typeEl) return;
+        const type = typeEl.value;
+        
+        if (type === 'discord_webhook') {
+            const fullDataEl = document.getElementById('conn-include-data');
+            const fullData = fullDataEl ? fullDataEl.checked : true;
+            const panels = ['conn-discord-data-settings', 'conn-discord-thumb-settings'];
+            panels.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.style.opacity = fullData ? '1' : '0.4';
+                    el.style.pointerEvents = fullData ? 'auto' : 'none';
+                }
+            });
+        } else if (type === 'http_request') {
+            const fullDataEl = document.getElementById('conn-http-include-data');
+            const fullData = fullDataEl ? fullDataEl.checked : true;
+            const panels = ['conn-http-data-settings', 'conn-http-data-settings-inner'];
+            panels.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.style.opacity = fullData ? '1' : '0.4';
+                    el.style.pointerEvents = fullData ? 'auto' : 'none';
+                }
+            });
+        }
+    } catch (e) {
+        console.error('Error in updateIntegrationFieldsUI:', e);
     }
 }
 
@@ -1174,11 +1214,6 @@ function setDiscordDispatch(mode, display = null) {
     updateDiscordThumbnailVisibility();
 }
 
-function setContentType(type, display = null) {
-    document.getElementById('conn-content-type').value = type;
-    const text = display || (type === 'full_data' ? 'Full Scraped Data' : 'State Only');
-    document.getElementById('summary-conn-content-type').innerHTML = `<span>${text}</span> <span style="font-size:10px; opacity:0.5;">▼</span>`;
-}
 
 function setDiscordStyle(style, display = null) {
     document.getElementById('conn-format-style').value = style;
@@ -1214,27 +1249,29 @@ function stepNum(id, delta) {
 }
 
 function updateDiscordThumbnailVisibility() {
-    const fileOn = document.getElementById('conn-send-as-file').checked;
-    const style  = document.getElementById('conn-format-style').value;
+    const fileToggle = document.getElementById('conn-send-as-file');
+    const fileOn = fileToggle ? fileToggle.checked : false;
+    const styleEl = document.getElementById('conn-format-style');
+    const style = styleEl ? styleEl.value : 'embed';
     const show = !fileOn && style === 'embed';
-    document.getElementById('conn-format-settings').style.display = show ? 'block' : 'none';
+    const settings = document.getElementById('conn-format-settings');
+    if (settings) settings.style.display = show ? 'block' : 'none';
 }
 
 function setHttpDispatch(mode, display = null) {
-    document.getElementById('conn-http-dispatch-mode').value = mode;
+    const el = document.getElementById('conn-http-dispatch-mode');
+    if (el) el.value = mode;
     const text = display || (mode === 'per_element' ? 'One by One' : 'All at Once');
-    document.getElementById('summary-http-dispatch').innerHTML = `<span>${text}</span> <span style="font-size:10px; opacity:0.5;">▼</span>`;
+    const summary = document.getElementById('summary-http-dispatch');
+    if (summary) summary.innerHTML = `<span>${text}</span> <span style="font-size:10px; opacity:0.5;">▼</span>`;
 }
 
-function setContentTypeHttp(type, display = null) {
-    document.getElementById('conn-http-content-type').value = type;
-    const text = display || (type === 'full_data' ? 'Full Scraped Data' : 'State Only');
-    document.getElementById('summary-conn-content-type-http').innerHTML = `<span>${text}</span> <span style="font-size:10px; opacity:0.5;">▼</span>`;
-}
 
 function setHttpMethod(method) {
-    document.getElementById('conn-http-method').value = method;
-    document.getElementById('summary-http-method').innerHTML = `<span>${method}</span> <span style="font-size:10px; opacity:0.5;">▼</span>`;
+    const el = document.getElementById('conn-http-method');
+    if (el) el.value = method;
+    const summary = document.getElementById('summary-http-method');
+    if (summary) summary.innerHTML = `<span>${method}</span> <span style="font-size:10px; opacity:0.5;">▼</span>`;
 }
 
 function handleConnThumb(input) {
@@ -1313,12 +1350,19 @@ async function saveConnector() {
     if (type === 'discord_webhook') {
         const webhook = document.getElementById('conn-webhook').value.trim();
         if (!webhook) { toast('Webhook URL is required.', 'error'); return; }
+
+        const triggers = [];
+        if (document.getElementById('conn-trig-success').checked) triggers.push('success');
+        if (document.getElementById('conn-trig-failure').checked) triggers.push('failure');
+        if (document.getElementById('conn-trig-skip').checked) triggers.push('skipped');
+
         config = {
             webhook_url: webhook,
             description: document.getElementById('conn-desc').value.trim(),
             dispatch_mode: document.getElementById('conn-dispatch-mode').value,
             format_style: document.getElementById('conn-format-style').value,
-            content_type: document.getElementById('conn-content-type').value,
+            content_type: document.getElementById('conn-include-data').checked ? 'full_data' : 'state_only',
+            triggers: triggers,
             send_as_file: document.getElementById('conn-send-as-file').checked,
             retry_max: parseInt(document.getElementById('conn-retry-max').value, 10) || 0,
             delay_sec: parseFloat(document.getElementById('conn-delay').value) || 0,
@@ -1328,6 +1372,12 @@ async function saveConnector() {
     } else if (type === 'http_request') {
         const url = document.getElementById('conn-http-url').value.trim();
         if (!url) { toast('Endpoint URL is required.', 'error'); return; }
+        
+        const triggers = [];
+        if (document.getElementById('conn-http-trig-success').checked) triggers.push('success');
+        if (document.getElementById('conn-http-trig-failure').checked) triggers.push('failure');
+        if (document.getElementById('conn-http-trig-skip').checked) triggers.push('skipped');
+
         let headers = {};
         const rawHeaders = document.getElementById('conn-http-headers').value.trim();
         if (rawHeaders) {
@@ -1338,7 +1388,8 @@ async function saveConnector() {
             url,
             method: document.getElementById('conn-http-method').value,
             dispatch_mode: document.getElementById('conn-http-dispatch-mode').value,
-            content_type: document.getElementById('conn-http-content-type').value,
+            content_type: document.getElementById('conn-http-include-data').checked ? 'full_data' : 'state_only',
+            triggers: triggers,
             send_as_file: document.getElementById('conn-http-send-as-file').checked,
             headers,
             retry_max: parseInt(document.getElementById('conn-http-retry').value, 10) || 0,

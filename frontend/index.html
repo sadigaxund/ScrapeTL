@@ -669,37 +669,26 @@
         </div>
 
         <!-- Content Type: State vs Data -->
-        <div class="form-row" style="margin-bottom:16px">
-          <div class="form-group flex-2" style="position:relative;">
-            <label>Data to Send</label>
-            <input type="hidden" id="conn-content-type" value="full_data" />
-            <div class="custom-dropdown" id="dd-conn-content-type"
-              onclick="toggleDropdown(event, 'dd-content-type-disc')" style="width:100%;">
-              <button type="button" class="tag-chip" id="summary-conn-content-type"
-                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
-                <span>Full Scraped Data</span> <span style="font-size:10px; opacity:0.5;">▼</span>
-              </button>
-              <div class="custom-dropdown-menu" id="dd-content-type-disc" onclick="event.stopPropagation()"
-                style="width:100%;">
-                <button type="button" class="dropdown-item" style="padding:10px 14px;"
-                  onclick="setContentType('full_data', 'Full Scraped Data'); toggleDropdown(event, 'dd-content-type-disc')">
-                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">Full Scraped
-                    Data</strong>
-                  <span style="font-size:11px; color:var(--text-muted);">Include the list of found episodes/items in the
-                    message</span>
-                </button>
-                <button type="button" class="dropdown-item" style="padding:10px 14px;"
-                  onclick="setContentType('state_only', 'State Only'); toggleDropdown(event, 'dd-content-type-disc')">
-                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">State Only</strong>
-                  <span style="font-size:11px; color:var(--text-muted);">Only send status/success/failure without the
-                    actual data</span>
-                </button>
-              </div>
-            </div>
+        <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
+          <div>
+            <strong>Include Scraping Results</strong>
+            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">When disabled, only the status (Success/Failure) is sent without the full data payload.</p>
           </div>
+          <label class="switch">
+            <input type="checkbox" id="conn-include-data" checked onchange="updateIntegrationFieldsUI()">
+            <span class="slider"></span>
+          </label>
         </div>
 
-
+        <!-- Trigger Conditions -->
+        <div class="form-group" style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:10px; display:block;">Trigger On State</label>
+          <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-trig-success" checked> <span>Success</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-trig-failure" checked> <span>Failure</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-trig-skip"> <span>Skipped</span></label>
+          </div>
+        </div>
 
         <!-- ── Delivery Settings ─────────────────── -->
         <div
@@ -708,80 +697,82 @@
             style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:8px;">
             Delivery Settings</h3>
 
-          <!-- Mode -->
-          <div class="form-group" style="margin-bottom:16px; position:relative;">
-            <label>Mode</label>
-            <input type="hidden" id="conn-dispatch-mode" value="all_at_once" />
-            <div class="custom-dropdown" id="dd-disc-dispatch" onclick="toggleDropdown(event, 'dd-disc-dispatch')"
-              style="width:100%;">
-              <button type="button" class="tag-chip" id="summary-disc-dispatch"
-                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
-                <span>All at Once</span> <span style="font-size:10px; opacity:0.5;">▼</span>
-              </button>
-              <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
-                <button type="button" class="dropdown-item" style="padding:10px 14px;"
-                  onclick="setDiscordDispatch('all_at_once', 'All at Once'); toggleDropdown(event, 'dd-disc-dispatch')">
-                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">All at Once</strong>
-                  <span style="font-size:11px; color:var(--text-muted);">One message with a summary list of all scraped
-                    items</span>
+          <div id="conn-discord-data-settings">
+            <!-- Mode -->
+            <div class="form-group" style="margin-bottom:16px; position:relative;">
+              <label>Mode</label>
+              <input type="hidden" id="conn-dispatch-mode" value="all_at_once" />
+              <div class="custom-dropdown" id="dd-disc-dispatch" onclick="toggleDropdown(event, 'dd-disc-dispatch')"
+                style="width:100%;">
+                <button type="button" class="tag-chip" id="summary-disc-dispatch"
+                  style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
+                  <span>All at Once</span> <span style="font-size:10px; opacity:0.5;">▼</span>
                 </button>
-                <button type="button" id="disc-dispatch-per-option" class="dropdown-item" style="padding:10px 14px;"
-                  onclick="setDiscordDispatch('per_element', 'One by One'); toggleDropdown(event, 'dd-disc-dispatch')">
-                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">One by One</strong>
-                  <span style="font-size:11px; color:var(--text-muted);">Triggers one separate message per scraped
-                    item</span>
-                </button>
+                <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
+                  <button type="button" class="dropdown-item" style="padding:10px 14px;"
+                    onclick="setDiscordDispatch('all_at_once', 'All at Once'); toggleDropdown(event, 'dd-disc-dispatch')">
+                    <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">All at Once</strong>
+                    <span style="font-size:11px; color:var(--text-muted);">One message with a summary list of all scraped
+                      items</span>
+                  </button>
+                  <button type="button" id="disc-dispatch-per-option" class="dropdown-item" style="padding:10px 14px;"
+                    onclick="setDiscordDispatch('per_element', 'One by One'); toggleDropdown(event, 'dd-disc-dispatch')">
+                    <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">One by One</strong>
+                    <span style="font-size:11px; color:var(--text-muted);">Triggers one separate message per scraped
+                      item</span>
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Message style (per_element only) -->
-          <div class="form-group" id="conn-format-style-row"
-            style="margin-bottom:16px; position:relative; display:none;">
-            <label>Message Style</label>
-            <input type="hidden" id="conn-format-style" value="embed" />
-            <div class="custom-dropdown" id="dd-disc-style" onclick="toggleDropdown(event, 'dd-disc-style')"
-              style="width:100%;">
-              <button type="button" class="tag-chip" id="summary-disc-style"
-                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
-                <span>Rich Embed</span> <span style="font-size:10px; opacity:0.5;">▼</span>
-              </button>
-              <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
-                <button type="button" class="dropdown-item"
-                  onclick="setDiscordStyle('embed', 'Rich Embed'); toggleDropdown(event, 'dd-disc-style')">Rich
-                  Embed</button>
-                <button type="button" class="dropdown-item"
-                  onclick="setDiscordStyle('text', 'Raw Text'); toggleDropdown(event, 'dd-disc-style')">Raw
-                  Text</button>
+            <!-- Message style (per_element only) -->
+            <div class="form-group" id="conn-format-style-row"
+              style="margin-bottom:16px; position:relative; display:none;">
+              <label>Message Style</label>
+              <input type="hidden" id="conn-format-style" value="embed" />
+              <div class="custom-dropdown" id="dd-disc-style" onclick="toggleDropdown(event, 'dd-disc-style')"
+                style="width:100%;">
+                <button type="button" class="tag-chip" id="summary-disc-style"
+                  style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
+                  <span>Rich Embed</span> <span style="font-size:10px; opacity:0.5;">▼</span>
+                </button>
+                <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
+                  <button type="button" class="dropdown-item"
+                    onclick="setDiscordStyle('embed', 'Rich Embed'); toggleDropdown(event, 'dd-disc-style')">Rich
+                    Embed</button>
+                  <button type="button" class="dropdown-item"
+                    onclick="setDiscordStyle('text', 'Raw Text'); toggleDropdown(event, 'dd-disc-style')">Raw
+                    Text</button>
+                </div>
               </div>
             </div>
-          </div>
 
-          <!-- Send as File -->
-          <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
-            <div>
-              <strong>Send payload as File</strong>
-              <p>Attach payload as a <code>.json</code> file instead of inline text or embed.</p>
+            <!-- Send as File -->
+            <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
+              <div>
+                <strong>Send payload as File</strong>
+                <p>Attach payload as a <code>.json</code> file instead of inline text or embed.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="conn-send-as-file" onchange="onDiscordFileToggle()">
+                <span class="slider"></span>
+              </label>
             </div>
-            <label class="switch">
-              <input type="checkbox" id="conn-send-as-file" onchange="onDiscordFileToggle()">
-              <span class="slider"></span>
-            </label>
-          </div>
 
-          <!-- Tag Everyone -->
-          <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
-            <div>
-              <strong>Tag Everyone (@everyone)</strong>
-              <p>Includes an @everyone ping when successfully triggered.</p>
+            <!-- Tag Everyone -->
+            <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
+              <div>
+                <strong>Tag Everyone (@everyone)</strong>
+                <p>Includes an @everyone ping when successfully triggered.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="conn-tag">
+                <span class="slider"></span>
+              </label>
             </div>
-            <label class="switch">
-              <input type="checkbox" id="conn-tag">
-              <span class="slider"></span>
-            </label>
-          </div>
+          </div> <!-- end conn-discord-data-settings -->
 
-          <!-- Retries / Delay via standard numeric inputs -->
+          <!-- Retries / Delay via standard numeric inputs (Always enabled) -->
           <div class="form-row" style="margin-bottom:0;">
             <div class="form-group flex-1">
               <label>Retry Attempts</label>
@@ -794,28 +785,30 @@
           </div>
         </div>
 
-        <!-- Thumbnail (embed only) -->
-        <div id="conn-format-settings" style="margin-top:2px;">
-          <div class="form-row" style="margin-bottom:12px;">
-            <div class="form-group flex-2">
-              <label>Thumbnail JSON Path <span
-                  style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-              <input type="text" id="conn-thumb-path" placeholder="e.g. data.cover_url" />
-              <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Extracts a thumbnail from nested payload
-                keys during runs.</p>
+        <div id="conn-discord-thumb-settings">
+          <!-- Thumbnail (embed only) -->
+          <div id="conn-format-settings" style="margin-top:2px;">
+            <div class="form-row" style="margin-bottom:12px;">
+              <div class="form-group flex-2">
+                <label>Thumbnail JSON Path <span
+                    style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+                <input type="text" id="conn-thumb-path" placeholder="e.g. data.cover_url" />
+                <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Extracts a thumbnail from nested payload
+                  keys during runs.</p>
+              </div>
             </div>
-          </div>
-          <div class="form-row" style="margin-bottom:14px">
-            <div class="form-group flex-2">
-              <label>Static Fallback Thumbnail <span
-                  style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-              <div style="display:flex;gap:12px;align-items:center;">
-                <input type="file" id="conn-thumb-file" accept="image/*" style="display:none"
-                  onchange="handleConnThumb(this)" />
-                <button class="btn btn-secondary" onclick="document.getElementById('conn-thumb-file').click()">Upload
-                  Image</button>
-                <span id="conn-thumb-filename" style="font-size:13px;color:var(--text-secondary)">No file
-                  selected</span>
+            <div class="form-row" style="margin-bottom:14px">
+              <div class="form-group flex-2">
+                <label>Static Fallback Thumbnail <span
+                    style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+                <div style="display:flex;gap:12px;align-items:center;">
+                  <input type="file" id="conn-thumb-file" accept="image/*" style="display:none"
+                    onchange="handleConnThumb(this)" />
+                  <button class="btn btn-secondary" onclick="document.getElementById('conn-thumb-file').click()">Upload
+                    Image</button>
+                  <span id="conn-thumb-filename" style="font-size:13px;color:var(--text-secondary)">No file
+                    selected</span>
+                </div>
               </div>
             </div>
           </div>
@@ -852,69 +845,62 @@
           </div>
         </div>
 
-        <!-- Mode -->
-        <div class="form-group" style="margin-bottom:16px; position:relative;">
-          <label>Mode</label>
-          <input type="hidden" id="conn-http-dispatch-mode" value="all_at_once" />
-          <div class="custom-dropdown" id="dd-http-dispatch" onclick="toggleDropdown(event, 'dd-http-dispatch')"
-            style="width:100%;">
-            <button type="button" class="tag-chip" id="summary-http-dispatch"
-              style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
-              <span>All at Once</span> <span style="font-size:10px; opacity:0.5;">▼</span>
-            </button>
-            <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
-              <button type="button" class="dropdown-item" style="padding:10px 14px;"
-                onclick="setHttpDispatch('all_at_once', 'All at Once'); toggleDropdown(event, 'dd-http-dispatch')">
-                <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">All at Once</strong>
-                <span style="font-size:11px; color:var(--text-muted);">Single request with the full data array</span>
-              </button>
-              <button type="button" class="dropdown-item" style="padding:10px 14px;"
-                onclick="setHttpDispatch('per_element', 'One by One'); toggleDropdown(event, 'dd-http-dispatch')">
-                <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">One by One</strong>
-                <span style="font-size:11px; color:var(--text-muted);">One individual request per scraped item</span>
-              </button>
-            </div>
+        <!-- Content Type: State vs Data -->
+        <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
+          <div>
+            <strong>Include Scraping Results</strong>
+            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">When disabled, only the status (Success/Failure) is sent without the full data payload.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="conn-http-include-data" checked onchange="updateIntegrationFieldsUI()">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Trigger Conditions -->
+        <div class="form-group" style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <label style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:10px; display:block;">Trigger On State</label>
+          <div style="display:flex; gap:16px; flex-wrap:wrap;">
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-http-trig-success" checked> <span>Success</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-http-trig-failure" checked> <span>Failure</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-http-trig-skip"> <span>Skipped</span></label>
           </div>
         </div>
 
-        <!-- Content Type: State vs Data -->
-        <div class="form-row" style="margin-bottom:16px">
-          <div class="form-group flex-2" style="position:relative;">
-            <label>Data to Send</label>
-            <input type="hidden" id="conn-http-content-type" value="full_data" />
-            <div class="custom-dropdown" id="dd-conn-content-type-http"
-              onclick="toggleDropdown(event, 'dd-content-type-http')" style="width:100%;">
-              <button type="button" class="tag-chip" id="summary-conn-content-type-http"
-                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border-style:solid; border-width:1px; border-color:var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
-                <span>Full Scraped Data</span> <span style="font-size:10px; opacity:0.5;">▼</span>
+        <div id="conn-http-data-settings">
+          <!-- Mode -->
+          <div class="form-group" style="margin-bottom:16px; position:relative;">
+            <label>Mode</label>
+            <input type="hidden" id="conn-http-dispatch-mode" value="all_at_once" />
+            <div class="custom-dropdown" id="dd-http-dispatch" onclick="toggleDropdown(event, 'dd-http-dispatch')"
+              style="width:100%;">
+              <button type="button" class="tag-chip" id="summary-http-dispatch"
+                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
+                <span>All at Once</span> <span style="font-size:10px; opacity:0.5;">▼</span>
               </button>
-              <div class="custom-dropdown-menu" id="dd-content-type-http" onclick="event.stopPropagation()"
-                style="width:100%;">
+              <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
                 <button type="button" class="dropdown-item" style="padding:10px 14px;"
-                  onclick="setContentTypeHttp('full_data', 'Full Scraped Data'); toggleDropdown(event, 'dd-content-type-http')">
-                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">Full Scraped
-                    Data</strong>
-                  <span style="font-size:11px; color:var(--text-muted);">Include the list of found episodes/items in the
-                    request body</span>
+                  onclick="setHttpDispatch('all_at_once', 'All at Once'); toggleDropdown(event, 'dd-http-dispatch')">
+                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">All at Once</strong>
+                  <span style="font-size:11px; color:var(--text-muted);">Single request with the full data array</span>
                 </button>
                 <button type="button" class="dropdown-item" style="padding:10px 14px;"
-                  onclick="setContentTypeHttp('state_only', 'State Only'); toggleDropdown(event, 'dd-content-type-http')">
-                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">State Only</strong>
-                  <span style="font-size:11px; color:var(--text-muted);">Only send status/success/failure without the
-                    actual data</span>
+                  onclick="setHttpDispatch('per_element', 'One by One'); toggleDropdown(event, 'dd-http-dispatch')">
+                  <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">One by One</strong>
+                  <span style="font-size:11px; color:var(--text-muted);">One individual request per scraped item</span>
                 </button>
               </div>
             </div>
           </div>
-        </div>
 
-        <!-- Extra headers -->
-        <div class="form-group" style="margin-bottom:16px;">
-          <label>Extra Headers <span style="font-weight:400;color:var(--text-muted);text-transform:none;">— JSON,
-              optional</span></label>
-          <div class="code-textarea-wrap">
-            <textarea id="conn-http-headers" spellcheck="false"
-              placeholder='{"Authorization": "Bearer token", "X-Custom": "value"}'></textarea>
+          <!-- Extra headers -->
+          <div class="form-group" style="margin-bottom:16px;">
+            <label>Extra Headers <span style="font-weight:400;color:var(--text-muted);text-transform:none;">— JSON,
+                optional</span></label>
+            <div class="code-textarea-wrap">
+              <textarea id="conn-http-headers" spellcheck="false"
+                placeholder='{"Authorization": "Bearer token", "X-Custom": "value"}'></textarea>
+            </div>
           </div>
         </div>
 
@@ -925,19 +911,21 @@
             style="font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-secondary); margin-bottom:14px; border-bottom:1px solid var(--border); padding-bottom:8px;">
             Delivery Settings</h3>
 
-          <!-- Send as File -->
-          <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
-            <div>
-              <strong>Send payload as File</strong>
-              <p>Send payload as multipart <code>.json</code> upload instead of JSON body.</p>
+          <div id="conn-http-data-settings-inner">
+            <!-- Send as File -->
+            <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
+              <div>
+                <strong>Send payload as File</strong>
+                <p>Send payload as multipart <code>.json</code> upload instead of JSON body.</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="conn-http-send-as-file" onchange="updateIntegrationFieldsUI()">
+                <span class="slider"></span>
+              </label>
             </div>
-            <label class="switch">
-              <input type="checkbox" id="conn-http-send-as-file">
-              <span class="slider"></span>
-            </label>
           </div>
 
-          <!-- Retries / Delay via standard numeric inputs -->
+          <!-- Retries / Delay via standard numeric inputs (Always enabled) -->
           <div class="form-row" style="margin-bottom:0;">
             <div class="form-group flex-1">
               <label>Retry Attempts</label>
