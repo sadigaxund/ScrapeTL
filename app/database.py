@@ -3,7 +3,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATABASE_URL = f"sqlite:///{os.path.join(BASE_DIR, 'scraper_registry.db')}"
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.join(BASE_DIR, 'scraper_registry.db')}")
 
 engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
@@ -21,7 +21,32 @@ def get_db():
 def init_db():
     from app import models  # noqa: F401 — ensure all models are registered
     Base.metadata.create_all(bind=engine)
+    _ensure_schema_columns()
     _seed_defaults()
+
+
+def _ensure_schema_columns():
+    """Proactively add missing columns if they don't exist (since use asked for no migration)."""
+    with engine.connect() as conn:
+        # Check scrape_logs
+        res = conn.execute(text("PRAGMA table_info(scrape_logs)"))
+        cols = [r[1] for r in res]
+        if "schedule_id" not in cols:
+            conn.execute(text("ALTER TABLE scrape_logs ADD COLUMN schedule_id INTEGER REFERENCES schedules(id)"))
+            conn.commit()
+            print("[DB] Added schedule_id to scrape_logs")
+
+        # Check task_queue
+        res = conn.execute(text("PRAGMA table_info(task_queue)"))
+        cols = [r[1] for r in res]
+        if "input_values" not in cols:
+            conn.execute(text("ALTER TABLE task_queue ADD COLUMN input_values TEXT"))
+            conn.commit()
+            print("[DB] Added input_values to task_queue")
+        if "note" not in cols:
+            conn.execute(text("ALTER TABLE task_queue ADD COLUMN note TEXT"))
+            conn.commit()
+            print("[DB] Added note to task_queue")
 
 
 def _seed_defaults():

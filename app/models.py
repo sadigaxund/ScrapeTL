@@ -66,6 +66,7 @@ class ScrapeLog(Base):
 
     id            = Column(Integer, primary_key=True, index=True)
     scraper_id    = Column(Integer, ForeignKey("scrapers.id"), nullable=False)
+    schedule_id   = Column(Integer, ForeignKey("schedules.id"), nullable=True)
     status        = Column(String, nullable=False)   # "success" | "failure"
     payload       = Column(Text,   nullable=True)    # JSON: full latest episode dict
     episode_count = Column(Integer, default=0)       # total episodes found this run
@@ -76,6 +77,7 @@ class ScrapeLog(Base):
     integration_details = Column(Text, nullable=True) # JSON with integration results
 
     scraper = relationship("Scraper", back_populates="logs")
+    schedule = relationship("Schedule")
 
 
 class TaskQueue(Base):
@@ -85,6 +87,8 @@ class TaskQueue(Base):
     scraper_id = Column(Integer, ForeignKey("scrapers.id"), nullable=False)
     scheduled_for = Column(DateTime, nullable=False)   # when it *should* have run
     status = Column(String, default="pending")         # "pending" | "running" | "done" | "failed"
+    input_values = Column(Text, nullable=True)         # JSON inputs for one-time tasks
+    note = Column(Text, nullable=True)                 # Label/note for one-time tasks
     created_at = Column(DateTime, default=datetime.utcnow)
     processed_at = Column(DateTime, nullable=True)
 

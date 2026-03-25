@@ -31,7 +31,7 @@ def _get_retry_settings(db: Session) -> tuple[int, float]:
     return max_retries, backoff_seconds
 
 
-def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None):
+def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None, schedule_id: int = None):
     scraper_record: Scraper = db.get(Scraper, scraper_id)
     if not scraper_record:
         print(f"[Runner] Scraper ID {scraper_id} not found.")
@@ -153,12 +153,12 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         run_at=datetime.utcnow(),
         triggered_by=triggered_by,
         retry_count=retry_count,
+        schedule_id=schedule_id,
     )
     db.add(log)
 
     if queue_task:
-        queue_task.status = "done" if status == "success" else "failed"
-        queue_task.processed_at = datetime.utcnow()
+        db.delete(queue_task)
 
     db.commit()
 
@@ -180,6 +180,7 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
     integrations = scraper_record.integrations
     if not integrations:
         # Fallback: use the legacy .env webhook if no integrations configured
+        # Default to sending episodes for legacy
         res = discord_notifier.send_notification(
             scraper_name=scraper_record.name,
             scraper_thumbnail=scraper_record.thumbnail_url,
@@ -196,11 +197,14 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
             if integ.type == "discord_webhook":
                 import json as _json
                 config = _json.loads(integ.config)
+                content_type = config.get("content_type", "full_data")
+                eps_to_send = episodes_list if status == "success" and content_type != "state_only" else None
+
                 res = discord_notifier.send_notification(
                     scraper_name=scraper_record.name,
                     scraper_thumbnail=scraper_record.thumbnail_url,
                     status=status,
-                    episodes=episodes_list if status == "success" else None,
+                    episodes=eps_to_send,
                     error_msg=error_msg,
                     triggered_by=triggered_by,
                     config=config,
@@ -213,10 +217,13 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
                 from app import http_sender
                 import json as _json
                 config = _json.loads(integ.config)
+                content_type = config.get("content_type", "full_data")
+                eps_to_send = episodes_list if status == "success" and content_type != "state_only" else None
+
                 res = http_sender.send_http(
                     scraper_name=scraper_record.name,
                     status=status,
-                    episodes=episodes_list if status == "success" else None,
+                    episodes=eps_to_send,
                     error_msg=error_msg,
                     triggered_by=triggered_by,
                     config=config,
