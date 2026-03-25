@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    container_name: anime-scraper-hub
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      - APP_TIMEZONE=UTC
+      # Point DB to the persistent volume
+      - DATABASE_URL=sqlite:////app/data/scraper_registry.db
+    restart: unless-stopped

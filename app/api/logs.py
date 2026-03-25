@@ -1,11 +1,14 @@
 import csv
 import io
 import json
+from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import ScrapeLog, TaskQueue, Scraper
+from app.models import ScrapeLog, TaskQueue, Scraper, Schedule
+from datetime import datetime, timedelta
 
 router = APIRouter(tags=["logs"])
 
@@ -43,6 +46,8 @@ def get_logs(
                 "error_msg": log.error_msg,
                 "run_at": log.run_at.isoformat() + "Z" if log.run_at else None,
                 "triggered_by": log.triggered_by,
+                "schedule_id": log.schedule_id,
+                "schedule_name": log.schedule.label or f"Schedule #{log.schedule_id}" if log.schedule else None,
                 "retry_count": log.retry_count,
                 "integration_details": log.integration_details,
             }
@@ -110,16 +115,83 @@ def download_log_payload(
 
 @router.get("/api/queue")
 def get_queue(db: Session = Depends(get_db)):
-    tasks = db.query(TaskQueue).order_by(TaskQueue.scheduled_for.desc()).limit(200).all()
-    return [
+    # 1. Real tasks from DB (catchup / one-time)
+    tasks = db.query(TaskQueue).order_by(TaskQueue.scheduled_for.desc()).limit(100).all()
+    items = [
         {
             "id": t.id,
             "scraper_id": t.scraper_id,
-            "scraper_name": t.scraper.name if t.scraper else None,
+            "scraper_name": t.scraper.name if t.scraper else f"Scraper #{t.scraper_id}",
             "scheduled_for": t.scheduled_for.isoformat() if t.scheduled_for else None,
             "status": t.status,
             "created_at": t.created_at.isoformat() if t.created_at else None,
             "processed_at": t.processed_at.isoformat() if t.processed_at else None,
+            "input_values": json.loads(t.input_values) if t.input_values else None,
+            "note": t.note,
+            "is_virtual": False,
         }
         for t in tasks
     ]
+
+    # 2. Virtual tasks (upcoming scheduler runs)
+    active_schedules = db.query(Schedule).filter(Schedule.enabled == True).all()  # noqa: E712
+    for s in active_schedules:
+        if s.next_run:
+            items.append({
+                "id": f"virt_{s.id}",
+                "scraper_id": s.scraper_id,
+                "scraper_name": s.scraper.name if s.scraper else f"Scraper #{s.scraper_id}",
+                "scheduled_for": s.next_run.isoformat(),
+                "status": "scheduled",
+                "created_at": s.created_at.isoformat(),
+                "processed_at": None,
+                "input_values": json.loads(s.input_values) if s.input_values else None,
+                "note": s.label or "Cron Schedule",
+                "is_virtual": True,
+            })
+
+    # Sort by scheduled_for
+    items.sort(key=lambda x: x["scheduled_for"] or "", reverse=True)
+    return items
+
+
+class QueueCreate(BaseModel):
+    scraper_id: int
+    scheduled_for: Optional[datetime] = None
+    input_values: dict = None
+    note: str = None
+
+
+@router.post("/api/queue")
+def add_to_queue(payload: QueueCreate, db: Session = Depends(get_db)):
+    if payload.scheduled_for:
+        from app.scheduler import get_app_timezone
+        import pytz
+        tz = get_app_timezone()
+        local_dt = tz.localize(payload.scheduled_for)
+        scheduled_utc = local_dt.astimezone(pytz.utc).replace(tzinfo=None)
+    else:
+        scheduled_utc = datetime.utcnow()
+
+    task = TaskQueue(
+        scraper_id=payload.scraper_id,
+        scheduled_for=scheduled_utc,
+        input_values=json.dumps(payload.input_values) if payload.input_values else None,
+        note=payload.note or "Manual One-Time",
+        status="pending"
+    )
+    db.add(task)
+    db.commit()
+    return {"id": task.id, "status": "pending"}
+
+
+@router.delete("/api/queue/{task_id}")
+def remove_from_queue(task_id: int, db: Session = Depends(get_db)):
+    task = db.get(TaskQueue, task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found.")
+    if task.status != "pending":
+        raise HTTPException(status_code=400, detail="Cannot remove a task that is already running or done.")
+    db.delete(task)
+    db.commit()
+    return {"detail": "Removed."}

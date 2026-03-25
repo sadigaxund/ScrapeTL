@@ -61,7 +61,7 @@ def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: 
         if schedule:
             schedule.last_run = datetime.utcnow()
             db.commit()
-        run_scraper(db, scraper_id, triggered_by="scheduler", input_values=input_values)
+        run_scraper(db, scraper_id, triggered_by="scheduler", input_values=input_values, schedule_id=schedule_id)
     finally:
         db.close()
 
@@ -93,16 +93,21 @@ def process_catchup_queue():
 
     db = SessionLocal()
     try:
+        now_utc = datetime.utcnow()
         pending = (
             db.query(TaskQueue)
             .filter(TaskQueue.status == "pending")
+            .filter(TaskQueue.scheduled_for <= now_utc)
             .order_by(TaskQueue.scheduled_for)
             .all()
         )
         for task in pending:
             task.status = "running"
             db.commit()
-            run_scraper(db, task.scraper_id, triggered_by="catchup", queue_task_id=task.id)
+            import json as _json
+            iv = _json.loads(task.input_values) if task.input_values else None
+            triggered_by = "one-time" if task.note else "catchup"
+            run_scraper(db, task.scraper_id, triggered_by=triggered_by, queue_task_id=task.id, input_values=iv)
     finally:
         db.close()
 
@@ -170,5 +175,6 @@ def load_schedules_from_db():
 def start():
     if not _scheduler.running:
         _scheduler.start()
+        _scheduler.add_job(process_catchup_queue, 'interval', seconds=20, id='catchup_queue_processor', replace_existing=True)
         tz = get_app_timezone()
         print(f"[Scheduler] Started. Timezone: {tz}")
