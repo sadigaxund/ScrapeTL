@@ -2,9 +2,10 @@
 7. schema registry
 9. might break most of the stuff but, a variable registry where one can define maybe tokens or commonly used strings, and then use them in the scraper code or input fields everywhere
 1. rework the queue system, make is more user handable
-* a way to edit queue, like removing or one-time scheduling that adds to the queue, maybe when schedule is active, it displays in a queue the next execution of the schedule
+* , maybe when schedule is active, it displays in a queue the next execution of the schedule
 2. more integrations
 5. more complex workflows
 6. AI html scraping that detects schema
 ---
 1. Display which schedule in logs menu too
+2. modify integration so that it would be possible to send either a state (failed, executed, blah blah) or data itself
