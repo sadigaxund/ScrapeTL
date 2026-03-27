@@ -13,6 +13,7 @@ const API = {
     upload: '/api/scrapers/upload',
     tags: '/api/tags',
     scraperTags: (sid, tid) => `/api/scrapers/${sid}/tags/${tid}`,
+    scheduleTags: (sid, tid) => `/api/schedules/${sid}/tags/${tid}`,
     integrations: '/api/integrations',
     scraperInteg: (sid, iid) => `/api/scrapers/${sid}/integrations/${iid}`,
     verifyInteg: (id) => `/api/integrations/${id}/verify`,
@@ -32,7 +33,8 @@ let state = {
     integrations: [],
     currentLogsPage: 0,
     logsPageSize: 50,
-    activeTagFilter: '',   // '' = all
+    activeTagFilter: '',          // for scrapers
+    activeScheduleTagFilter: '',  // for schedules
     logFilters: {
         scraperId: '',
         tagId: '',
@@ -230,6 +232,7 @@ async function loadScrapers() {
 
     // Render tag filter chips
     renderTagFilterChips(tags);
+    renderScheduleTagFilterChips(tags);
 
     // Render scrapers list (filtered)
     renderScrapersList(scrapers);
@@ -264,9 +267,27 @@ function renderTagFilterChips(tags) {
 
 function filterByTag(btn, tagId) {
     state.activeTagFilter = tagId;
-    document.querySelectorAll('.tag-chip').forEach(b => b.classList.remove('tag-chip--active'));
+    document.querySelectorAll('#tab-scrapers .tag-chip').forEach(b => b.classList.remove('tag-chip--active'));
     btn.classList.add('tag-chip--active');
     renderScrapersList(state.scrapers);
+}
+
+function renderScheduleTagFilterChips(tags) {
+    const container = document.getElementById('schedule-tag-filter-chips');
+    if (!container) return;
+    let html = `<button class="tag-chip ${!state.activeScheduleTagFilter ? 'tag-chip--active' : ''}" data-tag-id="" onclick="filterSchedulesByTag(this, '')">All</button>`;
+    tags.forEach(t => {
+        const active = String(state.activeScheduleTagFilter) === String(t.id);
+        html += `<button class="tag-chip ${active ? 'tag-chip--active' : ''}" data-tag-id="${t.id}" style="--chip-color:${t.color}" onclick="filterSchedulesByTag(this, '${t.id}')">${t.name}</button>`;
+    });
+    container.innerHTML = html;
+}
+
+function filterSchedulesByTag(btn, tagId) {
+    state.activeScheduleTagFilter = tagId;
+    document.querySelectorAll('#tab-schedules .tag-chip').forEach(b => b.classList.remove('tag-chip--active'));
+    btn.classList.add('tag-chip--active');
+    loadSchedules(true); // pass true to skip re-fetching
 }
 
 function renderScrapersList(scrapers) {
@@ -528,17 +549,27 @@ async function deleteScraper(id) {
 }
 
 /* ── Assign Tags Modal ──────────────────────────────── */
-function openAssignTagsModal(scraperId) {
-    document.getElementById('assign-tags-scraper-id').value = scraperId;
+function openAssignTagsModal(targetId, type = 'scraper') {
+    document.getElementById('assign-tags-target-id').value = targetId;
+    document.getElementById('assign-tags-target-type').value = type;
+    document.getElementById('assign-tags-title').textContent = type === 'scraper' ? '🏷️ Assign Tags to Scraper' : '🏷️ Assign Tags to Schedule';
     renderAssignTagsList();
     document.getElementById('assign-tags-modal').style.display = 'flex';
 }
 
 function renderAssignTagsList() {
-    const scraperId = parseInt(document.getElementById('assign-tags-scraper-id').value);
-    const scraper = state.scrapers.find(s => s.id === scraperId);
-    if (!scraper) return;
-    const assignedIds = new Set((scraper.tags || []).map(t => t.id));
+    const targetId = parseInt(document.getElementById('assign-tags-target-id').value);
+    const type = document.getElementById('assign-tags-target-type').value;
+
+    let target;
+    if (type === 'scraper') {
+        target = state.scrapers.find(s => s.id === targetId);
+    } else {
+        target = state.schedules.find(s => s.id === targetId);
+    }
+
+    if (!target) return;
+    const assignedIds = new Set((target.tags || []).map(t => t.id));
     const container = document.getElementById('assign-tags-list');
 
     if (!state.tags.length) {
@@ -552,7 +583,7 @@ function renderAssignTagsList() {
             const check = on ? '✓' : '+';
             return `
             <div class="tag-pill tag-pill-hover" style="cursor:pointer; display:flex; align-items:center; gap:6px; padding:6px 14px; transition:all 0.2s; ${style}" 
-                 onclick="toggleTagAssignment(${scraperId}, ${t.id}, ${on})" title="${on ? 'Click to unassign' : 'Click to assign'}">
+                 onclick="toggleTagAssignment(${targetId}, ${t.id}, ${on}, '${type}')" title="${on ? 'Click to unassign' : 'Click to assign'}">
                 <span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>
                 <span style="font-weight:700; width:12px; text-align:center; color:${on ? 'var(--success)' : 'var(--text-muted)'}">${check}</span>
                 <span style="font-weight:600;">${t.name}</span>
@@ -588,38 +619,58 @@ async function createTag() {
         toast('Tag created!', 'success');
 
         // Refresh state
-        const [scrapers, tags] = await Promise.all([apiFetch(API.scrapers), apiFetch(API.tags)]);
-        state.scrapers = scrapers; state.tags = tags;
+        const [scrapers, tags, schedules] = await Promise.all([
+            apiFetch(API.scrapers),
+            apiFetch(API.tags),
+            apiFetch(API.schedules)
+        ]);
+        state.scrapers = scrapers; state.tags = tags; state.schedules = schedules;
         renderTagFilterChips(tags);
+        renderScheduleTagFilterChips(tags);
         renderScrapersList(scrapers);
+        loadSchedules(true);
         renderAssignTagsList();
     } catch (e) { toast(e.message, 'error'); }
 }
 
-async function toggleTagAssignment(scraperId, tagId, isAssigned) {
+async function toggleTagAssignment(targetId, tagId, isAssigned, type = 'scraper') {
     try {
+        const url = type === 'scraper' ? API.scraperTags(targetId, tagId) : API.scheduleTags(targetId, tagId);
         if (isAssigned) {
-            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'DELETE' });
+            await apiFetch(url, { method: 'DELETE' });
         } else {
-            await apiFetch(API.scraperTags(scraperId, tagId), { method: 'POST' });
+            await apiFetch(url, { method: 'POST' });
         }
-        const scrapers = await apiFetch(API.scrapers);
+        
+        // Refresh everything to be safe
+        const [scrapers, schedules] = await Promise.all([
+            apiFetch(API.scrapers),
+            apiFetch(API.schedules)
+        ]);
         state.scrapers = scrapers;
+        state.schedules = schedules;
         renderScrapersList(scrapers);
+        loadSchedules(true);
         renderAssignTagsList();
     } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteTag(id) {
-    if (!confirm('Globally delete this tag from all scrapers?')) return;
+    if (!confirm('Globally delete this tag from all scrapers and schedules?')) return;
     try {
         await apiFetch(`${API.tags}/${id}`, { method: 'DELETE' });
         toast('Tag deleted.', 'info');
 
-        const [scrapers, tags] = await Promise.all([apiFetch(API.scrapers), apiFetch(API.tags)]);
-        state.scrapers = scrapers; state.tags = tags;
+        const [scrapers, tags, schedules] = await Promise.all([
+            apiFetch(API.scrapers),
+            apiFetch(API.tags),
+            apiFetch(API.schedules)
+        ]);
+        state.scrapers = scrapers; state.tags = tags; state.schedules = schedules;
         renderTagFilterChips(tags);
+        renderScheduleTagFilterChips(tags);
         renderScrapersList(scrapers);
+        loadSchedules(true);
         renderAssignTagsList();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -632,27 +683,47 @@ function closeAssignTagsModal(e) {
 /* ════════════════════════════════════════════════
    SCHEDULES
 ════════════════════════════════════════════════ */
-async function loadSchedules() {
+async function loadSchedules(skipFetch = false) {
     try {
-        const schedules = await apiFetch(API.schedules);
-        state.schedules = schedules; // Store for easy lookup
+        let schedules = state.schedules;
+        if (!skipFetch || !schedules || schedules.length === 0) {
+            schedules = await apiFetch(API.schedules);
+            state.schedules = schedules;
+        }
 
-        const dataHash = JSON.stringify(schedules);
-        if (responseCache['schedules'] === dataHash) return;
-        responseCache['schedules'] = dataHash;
+        let filtered = schedules;
+        if (state.activeScheduleTagFilter) {
+            filtered = schedules.filter(s => {
+                const hasTag = s.tags && s.tags.some(t => String(t.id) === String(state.activeScheduleTagFilter));
+                return hasTag;
+            });
+        }
 
-        document.getElementById('schedule-count').textContent = schedules.length;
+        const dataHash = JSON.stringify({ filtered, tags: state.tags, activeFilter: state.activeScheduleTagFilter });
+        if (responseCache['schedules_rendered'] === dataHash) return;
+        responseCache['schedules_rendered'] = dataHash;
+
+        console.log(`[Schedules] Rendering ${filtered.length}/${schedules.length} items (Filter: ${state.activeScheduleTagFilter || 'None'})`);
+
+
+
+        document.getElementById('schedule-count').textContent = filtered.length;
         const list = document.getElementById('schedules-list');
-        if (!schedules.length) {
-            list.innerHTML = '<div class="empty-state">No schedules configured.</div>';
+        if (!filtered.length) {
+            list.innerHTML = `<div class="empty-state">${state.activeScheduleTagFilter ? 'No schedules match the current tag filter.' : 'No schedules configured.'}</div>`;
             return;
         }
-        list.innerHTML = schedules.map(s => {
+        list.innerHTML = filtered.map(s => {
             const displayName = s.label || s.scraper_name || 'Unnamed Schedule';
             const subtitle = s.label ? s.scraper_name : null;
             const thumb = s.thumbnail_url
                 ? `<img src="${s.thumbnail_url}" class="sched-thumb" alt="">`
                 : `<div class="sched-thumb sched-thumb--placeholder">📡</div>`;
+            
+            const tagsHtml = s.tags && s.tags.length
+                ? s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')
+                : '';
+
             const inputs = s.input_values && Object.keys(s.input_values).length
                 ? Object.entries(s.input_values).map(([k,v]) =>
                     `<span class="sched-param"><b>${k}</b>: ${v}</span>`
@@ -665,7 +736,11 @@ async function loadSchedules() {
                 <div class="sched-card__info">
                   <div class="sched-card__name">${displayName}</div>
                   ${subtitle ? `<div class="sched-card__subtitle">${subtitle}</div>` : ''}
-                  <div class="sched-card__meta"><code style="color:#c4b5fd;font-size:11px">${s.cron_expression}</code></div>
+                  <div class="sched-card__meta">
+                    <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}" style="margin-right:8px; vertical-align:middle;">${s.enabled ? '\u25cf Active' : '\u25cb Disabled'}</span>
+                    <code style="color:#c4b5fd;font-size:11px;vertical-align:middle;">${s.cron_expression}</code>
+                    ${tagsHtml ? `<div style="display:inline-flex;flex-wrap:wrap;gap:4px;margin-left:8px;vertical-align:middle;">${tagsHtml}</div>` : ''}
+                  </div>
                 </div>
                 <div class="sched-card__last-col">
                   ${s.last_run ? `<span class="sched-badge sched-badge--last">🕒 Last: ${fmt(s.last_run)}</span>` : ''}
@@ -674,10 +749,12 @@ async function loadSchedules() {
                   ${s.next_run ? `<span class="sched-badge sched-badge--next">⏭ Next: ${fmt(s.next_run)}</span>` : '<span class="sched-badge sched-badge--none">Next: Not scheduled</span>'}
                 </div>
                 <div class="sched-card__actions" onclick="event.stopPropagation()">
-                  <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '● On' : '○ Off'}</span>
-                  <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;height: 28px;" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
-                  <button class="btn btn-ghost" title="Edit Schedule" onclick="openEditScheduleModal(${s.id})" style="height: 28px; padding: 4px 10px; font-size: 12px; justify-content: center;">✏️ Edit</button>
-                  <button class="btn btn-danger" style="height: 28px; padding: 4px 10px;" onclick="deleteSchedule(${s.id})">✕</button>
+                  <div class="action-btn-group">
+                    <button class="icon-btn" onclick="openAssignTagsModal(${s.id}, 'schedule')" title="Manage Tags">🏷️</button>
+                    <button class="icon-btn" onclick="openEditScheduleModal(${s.id})" title="Edit Schedule">✏️</button>
+                    <button class="icon-btn" onclick="toggleSchedule(${s.id})" title="${s.enabled ? 'Disable' : 'Enable'}">${s.enabled ? '⏸️' : '▶️'}</button>
+                    <button class="icon-btn icon-btn-danger" onclick="deleteSchedule(${s.id})" title="Delete">✕</button>
+                  </div>
                 </div>
               </div>
               ${inputs ? `<div class="sched-card__expand" id="sched-expand-${s.id}">

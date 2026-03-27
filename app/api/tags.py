@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
 from app.database import get_db
-from app.models import Tag, Scraper
+from app.models import Tag, Scraper, Schedule
 
 router = APIRouter(tags=["tags"])
 
@@ -75,5 +75,35 @@ def remove_tag(scraper_id: int, tag_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Tag not found.")
     if tag in scraper.tags:
         scraper.tags.remove(tag)
+        db.commit()
+    return {"detail": "Tag removed."}
+
+
+# ── Schedule ↔ Tag assignment ───────────────────────────────────────────────────
+
+@router.post("/api/schedules/{schedule_id}/tags/{tag_id}")
+def assign_schedule_tag(schedule_id: int, tag_id: int, db: Session = Depends(get_db)):
+    schedule = db.get(Schedule, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found.")
+    tag = db.get(Tag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found.")
+    if tag not in schedule.tags:
+        schedule.tags.append(tag)
+        db.commit()
+    return {"detail": "Tag assigned."}
+
+
+@router.delete("/api/schedules/{schedule_id}/tags/{tag_id}")
+def remove_schedule_tag(schedule_id: int, tag_id: int, db: Session = Depends(get_db)):
+    schedule = db.get(Schedule, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found.")
+    tag = db.get(Tag, tag_id)
+    if not tag:
+        raise HTTPException(status_code=404, detail="Tag not found.")
+    if tag in schedule.tags:
+        schedule.tags.remove(tag)
         db.commit()
     return {"detail": "Tag removed."}
