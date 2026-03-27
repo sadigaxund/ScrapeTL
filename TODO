@@ -3,9 +3,30 @@
 9. might break most of the stuff but, a variable registry where one can define maybe tokens or commonly used strings, and then use them in the scraper code or input fields everywhere
 1. rework the queue system, make is more user handable
 * , maybe when schedule is active, it displays in a queue the next execution of the schedule
-2. more integrations
 5. more complex workflows
 6. AI html scraping that detects schema
 ---
-1. Display which schedule in logs menu too
-2. modify integration so that it would be possible to send either a state (failed, executed, blah blah) or data itself
+2. more integrations: SQL: sqlite, postgres, microsoft sql server, mysql
+3. when trying to create a scraper without a given scraper code, it shows [Object object]
+4. changing timezone after creating a schedule does not update the schedule
+5. ability to edit a schedule
+6. somehow a logic to paginate maybe thru UI inputs
+7. modal when creating a schedule says "run" instead of "create" button or save button
+8. ability to tag schedules
+9. run with inputs looks misplaced, uncentered. Also, i think description of input variables is not displayed.
+10. functional values like current date, current time, etc. should be available as inputs
+11. when iteration/loop/ pagination is implemented: an ability to pass list of inputs to execute individually | Note: make sure to create groups within queue in this case
+12. somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. MAke sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain
+13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
+14. remove emojii from  "run" button within scrapers menu
+15. rework the "Format:..." label within schedules menu
+16. something wrong with scheduler, it shows 12am, it has correct timezone but it has executed at 8pm. exactly the amount of timezone difference.
+17. ability to reorder the elements of schedules, scrapers and integrations list
+18. Display the schedule within logs menu in a better and more visible way and so that it does not look like it's appended to the scraper name
+19. When a scraper contains some new library thats not in the app's environment, scraper does not run, maybe a way of dynamically installing libraries.
+20. investigate why is there 2 retries when i manually ran the scraper, it should be applied only to the integration, where if and only if after the message is scraped, it retries the message sending process not the scraping process, which has to be idempotent unless stated otherwise.
+21. Show currently running scrapers within logs menu
+22. option to be able to hide urls as Link or show full maybe shortened
+23. option to resend integ from logs
+24. option to format JSON
+25. catchup ignores inputs

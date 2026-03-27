@@ -68,18 +68,29 @@ def load_scraper_class_from_code(code: str) -> Type[BaseScraper]:
 
 def list_available_scraper_modules() -> Dict[str, str]:
     """
-    Scan the scrapers/ directory and return a mapping of
-    {module_path: scraper_name} for all valid scraper modules.
+    Scan the scrapers/ directory and subdirectories for valid scraper modules.
+    Returns a mapping of {module_path: scraper_name}.
     """
     scrapers_dir = os.path.dirname(__file__)
     result = {}
-    for fname in os.listdir(scrapers_dir):
-        if fname.startswith("_") or not fname.endswith(".py") or fname == "base.py":
+    
+    for root, _, files in os.walk(scrapers_dir):
+        # Skip __pycache__ and hidden dirs
+        if "__pycache__" in root or any(p.startswith(".") for p in root.split(os.sep)):
             continue
-        module_path = f"app.scrapers.{fname[:-3]}"
-        try:
-            cls = load_scraper_class(module_path)
-            result[module_path] = cls.name
-        except Exception:
-            pass
+            
+        for fname in files:
+            if fname.startswith("_") or not fname.endswith(".py") or fname == "base.py":
+                continue
+            
+            # Calculate the dotted module path relative to app.scrapers
+            rel_path = os.path.relpath(os.path.join(root, fname), scrapers_dir)
+            module_parts = rel_path[:-3].replace(os.sep, ".")
+            module_path = f"app.scrapers.{module_parts}"
+            
+            try:
+                cls = load_scraper_class(module_path)
+                result[module_path] = cls.name
+            except Exception:
+                pass
     return result

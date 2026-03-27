@@ -672,7 +672,8 @@
         <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
           <div>
             <strong>Include Scraping Results</strong>
-            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">When disabled, only the status (Success/Failure) is sent without the full data payload.</p>
+            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">When disabled, only the status
+              (Success/Failure) is sent without the full data payload.</p>
           </div>
           <label class="switch">
             <input type="checkbox" id="conn-include-data" checked onchange="updateIntegrationFieldsUI()">
@@ -681,12 +682,18 @@
         </div>
 
         <!-- Trigger Conditions -->
-        <div class="form-group" style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm);">
-          <label style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:10px; display:block;">Trigger On State</label>
+        <div class="form-group"
+          style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <label
+            style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:10px; display:block;">Trigger
+            On State</label>
           <div style="display:flex; gap:16px; flex-wrap:wrap;">
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-trig-success" checked> <span>Success</span></label>
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-trig-failure" checked> <span>Failure</span></label>
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-trig-skip"> <span>Skipped</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input
+                type="checkbox" id="conn-trig-success" checked> <span>Success</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input
+                type="checkbox" id="conn-trig-failure" checked> <span>Failure</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input
+                type="checkbox" id="conn-trig-skip"> <span>Skipped</span></label>
           </div>
         </div>
 
@@ -712,7 +719,8 @@
                   <button type="button" class="dropdown-item" style="padding:10px 14px;"
                     onclick="setDiscordDispatch('all_at_once', 'All at Once'); toggleDropdown(event, 'dd-disc-dispatch')">
                     <strong style="display:block; color:var(--text-primary); margin-bottom:2px;">All at Once</strong>
-                    <span style="font-size:11px; color:var(--text-muted);">One message with a summary list of all scraped
+                    <span style="font-size:11px; color:var(--text-muted);">One message with a summary list of all
+                      scraped
                       items</span>
                   </button>
                   <button type="button" id="disc-dispatch-per-option" class="dropdown-item" style="padding:10px 14px;"
@@ -793,7 +801,8 @@
                 <label>Thumbnail JSON Path <span
                     style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
                 <input type="text" id="conn-thumb-path" placeholder="e.g. data.cover_url" />
-                <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Extracts a thumbnail from nested payload
+                <p style="font-size:11px;color:var(--text-muted);margin-top:6px;">Extracts a thumbnail from nested
+                  payload
                   keys during runs.</p>
               </div>
             </div>
@@ -849,7 +858,8 @@
         <div class="toggle-row" style="margin-bottom:16px; background:rgba(255,255,255,0.01);">
           <div>
             <strong>Include Scraping Results</strong>
-            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">When disabled, only the status (Success/Failure) is sent without the full data payload.</p>
+            <p style="font-size:11px; color:var(--text-muted); margin-top:4px;">When disabled, only the status
+              (Success/Failure) is sent without the full data payload.</p>
           </div>
           <label class="switch">
             <input type="checkbox" id="conn-http-include-data" checked onchange="updateIntegrationFieldsUI()">
@@ -858,12 +868,18 @@
         </div>
 
         <!-- Trigger Conditions -->
-        <div class="form-group" style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm);">
-          <label style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:10px; display:block;">Trigger On State</label>
+        <div class="form-group"
+          style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:var(--radius-sm);">
+          <label
+            style="font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:var(--text-muted); margin-bottom:10px; display:block;">Trigger
+            On State</label>
           <div style="display:flex; gap:16px; flex-wrap:wrap;">
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-http-trig-success" checked> <span>Success</span></label>
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-http-trig-failure" checked> <span>Failure</span></label>
-            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input type="checkbox" id="conn-http-trig-skip"> <span>Skipped</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input
+                type="checkbox" id="conn-http-trig-success" checked> <span>Success</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input
+                type="checkbox" id="conn-http-trig-failure" checked> <span>Failure</span></label>
+            <label style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:13px;"><input
+                type="checkbox" id="conn-http-trig-skip"> <span>Skipped</span></label>
           </div>
         </div>
 
