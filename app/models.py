@@ -19,6 +19,13 @@ scraper_integrations = Table(
     Column("integration_id", Integer, ForeignKey("integrations.id", ondelete="CASCADE"), primary_key=True),
 )
 
+schedule_tags = Table(
+    "schedule_tags",
+    Base.metadata,
+    Column("schedule_id", Integer, ForeignKey("schedules.id", ondelete="CASCADE"), primary_key=True),
+    Column("tag_id",      Integer, ForeignKey("tags.id",      ondelete="CASCADE"), primary_key=True),
+)
+
 
 class Scraper(Base):
     __tablename__ = "scrapers"
@@ -62,6 +69,7 @@ class Schedule(Base):
     thumbnail_data = Column(LargeBinary, nullable=True)
 
     scraper = relationship("Scraper", back_populates="schedules")
+    tags    = relationship("Tag",     secondary="schedule_tags", back_populates="schedules")
 
 
 class ScrapeLog(Base):
@@ -123,7 +131,8 @@ class Tag(Base):
     color      = Column(String, default="#6366f1")   # CSS hex colour
     created_at = Column(DateTime, default=datetime.utcnow)
 
-    scrapers = relationship("Scraper", secondary="scraper_tags", back_populates="tags")
+    scrapers  = relationship("Scraper",  secondary="scraper_tags",  back_populates="tags")
+    schedules = relationship("Schedule", secondary="schedule_tags", back_populates="tags")
 
 
 # ── Integration ───────────────────────────────────────────────────────────────

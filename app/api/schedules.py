@@ -54,6 +54,7 @@ def list_schedules(db: Session = Depends(get_db)):
             # For editing convenience, also return the raw override values
             "custom_thumbnail_url": s.thumbnail_url,
             "custom_local_thumbnail_path": s.local_thumbnail_path,
+            "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in s.tags],
         })
     return res
 
