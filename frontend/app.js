@@ -1908,6 +1908,7 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
     form.innerHTML = inputs.map(inp => {
         const id = `ri-${inp.name}`;
         const def = inp.default !== undefined ? inp.default : '';
+        const desc = inp.description ? `<p class="input-desc">${inp.description}</p>` : '';
         let field = '';
         if (inp.type === 'select' && inp.options) {
             const opts = inp.options.map(o =>
@@ -1917,7 +1918,7 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
         } else if (inp.type === 'boolean') {
             field = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
                 <input type="checkbox" id="${id}" ${def ? 'checked' : ''} style="width:16px;height:16px">
-                <span>${inp.label || inp.name}</span>
+                <span style="font-size:14px">${inp.label || inp.name}</span>
             </label>`;
         } else {
             const t = inp.type === 'number' ? 'number' : 'text';
@@ -1925,7 +1926,7 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
         }
         const lbl = inp.type !== 'boolean'
             ? `<label class="form-label" for="${id}">${inp.label || inp.name}</label>` : '';
-        return `<div class="form-group" style="margin-bottom:14px">${lbl}${field}</div>`;
+        return `<div class="form-group--modal">${lbl}${field}${desc}</div>`;
     }).join('');
 
     document.getElementById('run-inputs-modal').style.display = 'flex';
