@@ -967,18 +967,16 @@
   <div class="modal-overlay" id="run-inputs-modal" onclick="closeRunInputsModal(event)" style="display:none">
     <div class="modal-box" style="max-width:460px">
       <div class="modal-header">
-        <span class="modal-title" id="run-inputs-title">Run with Inputs</span>
-        <button class="modal-close"
-          onclick="document.getElementById('run-inputs-modal').style.display='none'">✕</button>
+        <h2 class="modal-title" id="run-inputs-title">Run with Inputs</h2>
+        <button class="modal-close" onclick="document.getElementById('run-inputs-modal').style.display='none'">✕</button>
       </div>
-      <div class="modal-body" style="padding:20px 24px">
+      <div class="modal-body">
         <p style="color:var(--text-secondary);font-size:13px;margin:0 0 18px">Fill in the parameters before running.
           Defaults are pre-populated.</p>
         <div id="run-inputs-form"></div>
       </div>
-      <div class="modal-footer" style="margin-top:8px; display:flex; justify-content:flex-end;">
-        <button class="btn btn-ghost" style="margin-right:8px;"
-          onclick="document.getElementById('run-inputs-modal').style.display='none'">Cancel</button>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('run-inputs-modal').style.display='none'">Cancel</button>
         <button class="btn btn-primary" id="run-inputs-submit-btn" onclick="submitRunInputs()">▶ Run</button>
       </div>
     </div>
