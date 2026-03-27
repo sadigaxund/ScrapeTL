@@ -48,6 +48,22 @@ def _ensure_schema_columns():
             conn.commit()
             print("[DB] Added note to task_queue")
 
+        # Check schedules
+        res = conn.execute(text("PRAGMA table_info(schedules)"))
+        cols = [r[1] for r in res]
+        if "thumbnail_url" not in cols:
+            conn.execute(text("ALTER TABLE schedules ADD COLUMN thumbnail_url TEXT"))
+            conn.commit()
+            print("[DB] Added thumbnail_url to schedules")
+        if "local_thumbnail_path" not in cols:
+            conn.execute(text("ALTER TABLE schedules ADD COLUMN local_thumbnail_path TEXT"))
+            conn.commit()
+            print("[DB] Added local_thumbnail_path to schedules")
+        if "thumbnail_data" not in cols:
+            conn.execute(text("ALTER TABLE schedules ADD COLUMN thumbnail_data BLOB"))
+            conn.commit()
+            print("[DB] Added thumbnail_data to schedules")
+
 
 def _seed_defaults():
     """Seed default values into app_settings if they don't exist."""

@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import pytz
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import Response
@@ -138,10 +139,11 @@ def get_queue(db: Session = Depends(get_db)):
     for s in active_schedules:
         if s.next_run:
             items.append({
-                "id": f"virt_{s.id}",
+                "id": None, # Signal to frontend that it's virtual
+                "virt_id": f"virt_{s.id}",
                 "scraper_id": s.scraper_id,
                 "scraper_name": s.scraper.name if s.scraper else f"Scraper #{s.scraper_id}",
-                "scheduled_for": s.next_run.isoformat(),
+                "scheduled_for": s.next_run.astimezone(pytz.utc).isoformat() if s.next_run.tzinfo else s.next_run.isoformat(),
                 "status": "scheduled",
                 "created_at": s.created_at.isoformat(),
                 "processed_at": None,

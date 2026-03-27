@@ -57,6 +57,9 @@ class Schedule(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     input_values = Column(Text, nullable=True)         # JSON: runtime input params
     label = Column(String, nullable=True)              # optional custom name
+    thumbnail_url = Column(String, nullable=True)      # optional custom thumbnail override
+    local_thumbnail_path = Column(String, nullable=True)
+    thumbnail_data = Column(LargeBinary, nullable=True)
 
     scraper = relationship("Scraper", back_populates="schedules")
 
