@@ -9,10 +9,7 @@
 2. more integrations: SQL: sqlite, postgres, microsoft sql server, mysql
 "an sqlite integration where I can provide all the connection parameters, as well as, the schema and table and whatever is needed to save the data. Also I want you implement the "
 
-3. when trying to create a scraper without a given scraper code, it shows [Object object]. DONE
-4. changing timezone after creating a schedule does not update the schedule. TESTING
-5. ability to edit a schedule, 
-5.5: label that shows how much time is left for the next execution within queue menu
+
 6. somehow a logic to paginate maybe thru UI inputs
 7. modal when creating a schedule says "run" instead of "create" button or save button
 8. ability to tag schedules

@@ -1899,6 +1899,11 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
     const title = scheduleCb ? 'Set Schedule Inputs' : 'Run with Inputs';
     document.getElementById('run-inputs-title').textContent = title;
 
+    const submitBtn = document.getElementById('run-inputs-submit-btn');
+    if (submitBtn) {
+        submitBtn.innerHTML = scheduleCb ? '📅 Create Schedule' : '▶ Run';
+    }
+
     const form = document.getElementById('run-inputs-form');
     form.innerHTML = inputs.map(inp => {
         const id = `ri-${inp.name}`;
