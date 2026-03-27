@@ -37,6 +37,8 @@ def reload_timezone(tz_str: str):
         new_tz = pytz.timezone(tz_str)
         _scheduler.configure(timezone=new_tz)
         print(f"[Scheduler] Timezone updated to: {tz_str}")
+        # Refresh all existing jobs with the new timezone
+        load_schedules_from_db()
     except Exception as e:
         print(f"[Scheduler] Failed to update timezone: {e}")
 
@@ -60,6 +62,10 @@ def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: 
         schedule = db.get(Schedule, schedule_id)
         if schedule:
             schedule.last_run = datetime.utcnow()
+            # Get the job from the current scheduler to find the NEXT next_run_time
+            job = _scheduler.get_job(_make_job_id(schedule_id))
+            if job and job.next_run_time:
+                schedule.next_run = job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)
             db.commit()
         run_scraper(db, scraper_id, triggered_by="scheduler", input_values=input_values, schedule_id=schedule_id)
     finally:

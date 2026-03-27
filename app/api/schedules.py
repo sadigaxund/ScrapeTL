@@ -1,8 +1,10 @@
 import json
+import os
+import uuid
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import Schedule, Scraper
@@ -22,15 +24,26 @@ class ScheduleCreate(BaseModel):
 @router.get("")
 def list_schedules(db: Session = Depends(get_db)):
     schedules = db.query(Schedule).order_by(Schedule.created_at.desc()).all()
-    return [
-        {
+    res = []
+    for s in schedules:
+        # Prioritize schedule's custom thumbnail over scraper's
+        if s.local_thumbnail_path:
+            thumb = f"/thumbnails/{s.local_thumbnail_path}"
+        elif s.thumbnail_url:
+            thumb = s.thumbnail_url
+        elif s.scraper:
+            if s.scraper.local_thumbnail_path:
+                thumb = f"/thumbnails/{s.scraper.local_thumbnail_path}"
+            else:
+                thumb = s.scraper.thumbnail_url
+        else:
+            thumb = None
+
+        res.append({
             "id": s.id,
             "scraper_id": s.scraper_id,
             "scraper_name": s.scraper.name if s.scraper else None,
-            "thumbnail_url": (
-                f"/thumbnails/{s.scraper.local_thumbnail_path}" if s.scraper and s.scraper.local_thumbnail_path
-                else (s.scraper.thumbnail_url if s.scraper else None)
-            ),
+            "thumbnail_url": thumb,
             "cron_expression": s.cron_expression,
             "enabled": s.enabled,
             "last_run": s.last_run.isoformat() if s.last_run else None,
@@ -38,9 +51,11 @@ def list_schedules(db: Session = Depends(get_db)):
             "created_at": s.created_at.isoformat() if s.created_at else None,
             "input_values": json.loads(s.input_values) if s.input_values else None,
             "label": s.label or None,
-        }
-        for s in schedules
-    ]
+            # For editing convenience, also return the raw override values
+            "custom_thumbnail_url": s.thumbnail_url,
+            "custom_local_thumbnail_path": s.local_thumbnail_path,
+        })
+    return res
 
 
 @router.post("")
@@ -96,6 +111,75 @@ def toggle_schedule(schedule_id: int, db: Session = Depends(get_db)):
         sched.remove_schedule_job(schedule.id)
 
     return {"id": schedule.id, "enabled": schedule.enabled}
+
+
+@router.patch("/{schedule_id}")
+async def update_schedule(
+    schedule_id: int,
+    cron_expression: Optional[str] = Form(None),
+    label: Optional[str] = Form(None),
+    input_values: Optional[str] = Form(None),
+    thumbnail_url: Optional[str] = Form(None),
+    thumbnail_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    schedule = db.get(Schedule, schedule_id)
+    if not schedule:
+        raise HTTPException(status_code=404, detail="Schedule not found.")
+
+    if cron_expression:
+        from croniter import croniter
+        if not croniter.is_valid(cron_expression):
+            raise HTTPException(status_code=400, detail="Invalid cron expression.")
+        schedule.cron_expression = cron_expression
+
+    if label is not None:
+        schedule.label = label.strip() or None
+
+    if input_values is not None:
+        try:
+            # Validate JSON
+            json.loads(input_values) if input_values else None
+            schedule.input_values = input_values
+        except:
+            raise HTTPException(status_code=400, detail="Invalid input_values JSON.")
+
+    # Handle thumbnail override
+    if thumbnail_file and thumbnail_file.filename:
+        ext = thumbnail_file.filename.split(".")[-1].lower()
+        if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
+            ext = "jpg"
+        thumb_name = f"schedule_{schedule_id}_{uuid.uuid4().hex[:6]}.{ext}"
+        t_contents = await thumbnail_file.read()
+        schedule.local_thumbnail_path = thumb_name
+        schedule.thumbnail_data = t_contents
+        schedule.thumbnail_url = None
+    elif thumbnail_url is not None:
+        if thumbnail_url.startswith("/thumbnails/"):
+            # Existing local thumb or scraper thumb; do not touch
+            pass
+        else:
+            schedule.thumbnail_url = thumbnail_url.strip() or None
+            # If they cleared the URL, also clear the local override
+            if not schedule.thumbnail_url:
+                schedule.local_thumbnail_path = None
+                schedule.thumbnail_data = None
+
+    db.commit()
+    db.refresh(schedule)
+
+    # Re-register if enabled
+    if schedule.enabled:
+        iv = json.loads(schedule.input_values) if schedule.input_values else None
+        sched.add_schedule_job(schedule.id, schedule.scraper_id, schedule.cron_expression, input_values=iv)
+        
+        # Update next_run in DB
+        job = sched.get_scheduler().get_job(f"schedule_{schedule.id}")
+        if job and job.next_run_time:
+            schedule.next_run = job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)
+            db.commit()
+
+    return {"id": schedule.id, "next_run": schedule.next_run.isoformat() if schedule.next_run else None}
 
 
 @router.delete("/{schedule_id}")

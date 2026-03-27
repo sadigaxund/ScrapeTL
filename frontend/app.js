@@ -57,7 +57,14 @@ async function apiFetch(url, options = {}) {
     });
     if (!res.ok) {
         const err = await res.json().catch(() => ({ detail: res.statusText }));
-        throw new Error(err.detail || `HTTP ${res.status}`);
+        let msg = err.detail || `HTTP ${res.status}`;
+        if (Array.isArray(msg)) {
+            // FastAPI validation errors are usually a list of {loc, msg, type}
+            msg = msg.map(m => m.msg || JSON.stringify(m)).join(', ');
+        } else if (typeof msg === 'object' && msg !== null) {
+            msg = msg.msg || msg.detail || JSON.stringify(msg);
+        }
+        throw new Error(msg);
     }
     return res.json();
 }
@@ -417,7 +424,13 @@ async function submitWizard(e) {
     formData.append('commit_message', commitMsg);
 
     const codeFile = document.getElementById('wiz-code-file').files[0];
-    if (codeFile) formData.append('scraper_file', codeFile);
+    if (!codeFile) {
+        toast('Scraper script (.py) is required.', 'error');
+        btn.disabled = false;
+        btn.textContent = '\u2728 Build Scraper';
+        return;
+    }
+    formData.append('scraper_file', codeFile);
     
     const thumbFile = document.getElementById('wiz-thumb-file').files[0];
     if (thumbFile) formData.append('thumbnail_file', thumbFile);
@@ -622,6 +635,7 @@ function closeAssignTagsModal(e) {
 async function loadSchedules() {
     try {
         const schedules = await apiFetch(API.schedules);
+        state.schedules = schedules; // Store for easy lookup
 
         const dataHash = JSON.stringify(schedules);
         if (responseCache['schedules'] === dataHash) return;
@@ -653,14 +667,17 @@ async function loadSchedules() {
                   ${subtitle ? `<div class="sched-card__subtitle">${subtitle}</div>` : ''}
                   <div class="sched-card__meta"><code style="color:#c4b5fd;font-size:11px">${s.cron_expression}</code></div>
                 </div>
-                <div class="sched-card__next">
-                  ${s.next_run ? `<span class="sched-next-badge">⏭ Next: ${fmt(s.next_run)}</span>` : '<span class="sched-next-badge sched-next-badge--none">Not scheduled</span>'}
-                  ${s.last_run ? `<span class="sched-last">Last: ${fmt(s.last_run)}</span>` : ''}
+                <div class="sched-card__last-col">
+                  ${s.last_run ? `<span class="sched-badge sched-badge--last">🕒 Last: ${fmt(s.last_run)}</span>` : ''}
+                </div>
+                <div class="sched-card__next-col">
+                  ${s.next_run ? `<span class="sched-badge sched-badge--next">⏭ Next: ${fmt(s.next_run)}</span>` : '<span class="sched-badge sched-badge--none">Next: Not scheduled</span>'}
                 </div>
                 <div class="sched-card__actions" onclick="event.stopPropagation()">
                   <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '● On' : '○ Off'}</span>
-                  <button class="btn btn-ghost" style="font-size:12px;padding:6px 10px" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
-                  <button class="btn btn-danger" onclick="deleteSchedule(${s.id})">✕</button>
+                  <button class="btn btn-ghost" style="font-size:12px;padding:4px 10px;height: 28px;" onclick="toggleSchedule(${s.id})">${s.enabled ? 'Pause' : 'Resume'}</button>
+                  <button class="btn btn-ghost" title="Edit Schedule" onclick="openEditScheduleModal(${s.id})" style="height: 28px; padding: 4px 10px; font-size: 12px; justify-content: center;">✏️ Edit</button>
+                  <button class="btn btn-danger" style="height: 28px; padding: 4px 10px;" onclick="deleteSchedule(${s.id})">✕</button>
                 </div>
               </div>
               ${inputs ? `<div class="sched-card__expand" id="sched-expand-${s.id}">
@@ -732,6 +749,110 @@ async function deleteSchedule(id) {
     try {
         await apiFetch(`${API.schedules}/${id}`, { method: 'DELETE' });
         toast('Schedule removed.', 'info');
+        loadSchedules();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+let currentEditSchedInputs = null;
+
+function openEditScheduleModal(id) {
+    const s = state.schedules.find(x => x.id === id);
+    if (!s) return;
+
+    document.getElementById('edit-sched-id').value = s.id;
+    document.getElementById('edit-sched-scraper-id').value = s.scraper_id;
+    document.getElementById('edit-sched-label').value = s.label || '';
+    document.getElementById('edit-sched-cron').value = s.cron_expression;
+    document.getElementById('edit-sched-thumb-url').value = s.custom_thumbnail_url || '';
+    document.getElementById('edit-sched-thumb-file').value = '';
+    document.getElementById('edit-sched-thumb-filename').textContent = '';
+    
+    currentEditSchedInputs = s.input_values || {};
+    previewEditSchedThumb(s.thumbnail_url);
+
+    const scraper = state.scrapers.find(scr => scr.id === s.scraper_id);
+    renderEditSchedParams(scraper ? scraper.inputs : [], currentEditSchedInputs);
+
+    document.getElementById('edit-schedule-modal').style.display = 'flex';
+}
+
+function renderEditSchedParams(inputs, values) {
+    const container = document.getElementById('edit-sched-params-container');
+    if (!inputs || inputs.length === 0) {
+        container.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">No parameters for this scraper.</span>';
+        return;
+    }
+
+    container.innerHTML = inputs.map(inp => {
+        const val = values[inp.name] !== undefined ? values[inp.name] : (inp.default || '');
+        return `
+            <div class="form-group" style="min-width: 0; flex: 1;">
+                <label style="font-size: 11px;">${inp.label}${inp.required ? ' *' : ''}</label>
+                <input type="text" class="edit-sched-input-field" data-name="${inp.name}" value="${val}" placeholder="${inp.description || ''}" />
+            </div>
+        `;
+    }).join('');
+}
+
+function closeEditScheduleModal(e) {
+    if (e && e.target !== document.getElementById('edit-schedule-modal')) return;
+    document.getElementById('edit-schedule-modal').style.display = 'none';
+}
+
+function previewEditSchedThumb(url) {
+    const img = document.getElementById('edit-sched-thumb-img');
+    const ph = document.getElementById('edit-sched-thumb-placeholder');
+    if (url) {
+        img.src = url;
+        img.style.display = 'block';
+        ph.style.display = 'none';
+    } else {
+        img.style.display = 'none';
+        ph.style.display = 'flex';
+    }
+}
+
+function handleEditSchedThumbFile(input) {
+    if (input.files && input.files[0]) {
+        const file = input.files[0];
+        document.getElementById('edit-sched-thumb-filename').textContent = file.name;
+        const reader = new FileReader();
+        reader.onload = e => previewEditSchedThumb(e.target.result);
+        reader.readAsDataURL(file);
+    }
+}
+
+async function saveEditSchedule() {
+    const id = document.getElementById('edit-sched-id').value;
+    const cron = document.getElementById('edit-sched-cron').value.trim();
+    const label = document.getElementById('edit-sched-label').value.trim();
+    const thumbUrl = document.getElementById('edit-sched-thumb-url').value.trim();
+    const thumbFile = document.getElementById('edit-sched-thumb-file').files[0];
+
+    // Collect inline inputs
+    const inputFields = document.querySelectorAll('.edit-sched-input-field');
+    const inputValues = {};
+    inputFields.forEach(f => {
+        inputValues[f.getAttribute('data-name')] = f.value;
+    });
+
+    if (!cron) { toast('Cron expression is required.', 'error'); return; }
+
+    try {
+        const formData = new FormData();
+        formData.append('cron_expression', cron);
+        formData.append('label', label);
+        formData.append('input_values', JSON.stringify(inputValues));
+        formData.append('thumbnail_url', thumbUrl);
+        if (thumbFile) formData.append('thumbnail_file', thumbFile);
+
+        const res = await apiFetch(`${API.schedules}/${id}`, {
+            method: 'PATCH',
+            body: formData
+        });
+
+        toast('Schedule updated!', 'success');
+        closeEditScheduleModal();
         loadSchedules();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -1052,15 +1173,36 @@ function renderQueueTasks() {
         tbody.innerHTML = '<tr><td colspan="5" class="empty-td">Queue is empty.</td></tr>';
         return;
     }
+
+    const now = new Date().getTime();
+
     tbody.innerHTML = tasks.map(t => {
-        const isManualOrCatchup = !!t.id; // virtual tasks from scheduler don't have DB IDs
-        const removeBtn = isManualOrCatchup 
+        const isVirtual = !!t.is_virtual;
+        const removeBtn = !isVirtual 
             ? `<button class="btn btn-ghost" style="color:var(--failure);padding:4px 8px" onclick="removeQueueTask(${t.id})">✕</button>`
             : '';
+        
+        // Time left calculation
+        let timeLeftStr = '';
+        if (t.scheduled_for) {
+            const iso = t.scheduled_for + (t.scheduled_for.endsWith('Z') ? '' : 'Z');
+            const schTime = new Date(iso).getTime();
+            const diff = schTime - now;
+            if (diff > 0) {
+                const mins = Math.floor(diff / 60000);
+                const hrs = Math.floor(mins / 60);
+                if (hrs > 0) timeLeftStr = ` <small style="color:var(--text-muted);margin-left:4px">(${hrs}h ${mins % 60}m)</small>`;
+                else if (mins > 0) timeLeftStr = ` <small style="color:var(--text-muted);margin-left:4px">(${mins}m)</small>`;
+                else timeLeftStr = ` <small style="color:var(--text-muted);margin-left:4px">(< 1m)</small>`;
+            } else if (t.status === 'pending') {
+                timeLeftStr = ` <small style="color:var(--warning);margin-left:4px">(Overdue)</small>`;
+            }
+        }
+
         return `
         <tr>
             <td><strong>${t.scraper_name || 'N/A'}</strong></td>
-            <td style="white-space:nowrap"><span class="log-epcount" style="margin:0">${fmt(t.scheduled_for)}</span></td>
+            <td style="white-space:nowrap"><span class="log-epcount" style="margin:0">${fmt(t.scheduled_for)}</span>${timeLeftStr}</td>
             <td><div style="font-size:12px;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis">${t.note || '—'}</div></td>
             <td>${statusBadge(t.status)}</td>
             <td style="text-align:right">${removeBtn}</td>
