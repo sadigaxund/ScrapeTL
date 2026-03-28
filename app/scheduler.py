@@ -59,6 +59,9 @@ def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: 
 
     db = SessionLocal()
     try:
+        from app.models import TaskQueue
+        import json as _json
+
         schedule = db.get(Schedule, schedule_id)
         if schedule:
             schedule.last_run = datetime.utcnow()
@@ -67,7 +70,19 @@ def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: 
             if job and job.next_run_time:
                 schedule.next_run = job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)
             db.commit()
-        run_scraper(db, scraper_id, triggered_by="scheduler", input_values=input_values, schedule_id=schedule_id)
+
+        # Create temporary task for tracking
+        task = TaskQueue(
+            scraper_id=scraper_id,
+            scheduled_for=datetime.utcnow(),
+            status="running",
+            input_values=_json.dumps(input_values) if input_values else None,
+            note=f"Scheduled Run ({schedule.label or f'#{schedule_id}'})" if schedule else "Scheduled Run"
+        )
+        db.add(task)
+        db.commit()
+
+        run_scraper(db, scraper_id, triggered_by="scheduler", input_values=input_values, schedule_id=schedule_id, queue_task_id=task.id)
     finally:
         db.close()
 
