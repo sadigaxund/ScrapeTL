@@ -16,9 +16,10 @@ router = APIRouter(prefix="/api/schedules", tags=["schedules"])
 
 class ScheduleCreate(BaseModel):
     scraper_id: int
-    cron_expression: str        # standard 5-part cron, e.g. "0 12 * * *"
+    cron_expression: str
     input_values: Optional[dict] = None
     label: Optional[str] = None
+    thumbnail_url: Optional[str] = None
 
 
 @router.get("")
@@ -60,33 +61,61 @@ def list_schedules(db: Session = Depends(get_db)):
 
 
 @router.post("")
-def create_schedule(payload: ScheduleCreate, db: Session = Depends(get_db)):
-    scraper = db.get(Scraper, payload.scraper_id)
+async def create_schedule(
+    scraper_id: int = Form(...),
+    cron_expression: str = Form(...),
+    input_values: Optional[str] = Form(None),
+    label: Optional[str] = Form(None),
+    thumbnail_url: Optional[str] = Form(None),
+    thumbnail_file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    scraper = db.get(Scraper, scraper_id)
     if not scraper:
         raise HTTPException(status_code=404, detail="Scraper not found.")
 
     # Validate cron expression
     try:
         from croniter import croniter
-        if not croniter.is_valid(payload.cron_expression):
+        if not croniter.is_valid(cron_expression):
             raise ValueError("invalid")
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid cron expression.")
 
+    inputs = None
+    if input_values:
+        try:
+            inputs = json.loads(input_values)
+        except:
+            pass
+
     schedule = Schedule(
-        scraper_id=payload.scraper_id,
-        cron_expression=payload.cron_expression,
+        scraper_id=scraper_id,
+        cron_expression=cron_expression,
         enabled=True,
-        input_values=json.dumps(payload.input_values) if payload.input_values else None,
-        label=payload.label or None,
+        input_values=json.dumps(inputs) if inputs else None,
+        label=label or None,
+        thumbnail_url=thumbnail_url or None
     )
+
+    if thumbnail_file:
+        content = await thumbnail_file.read()
+        ext = os.path.splitext(thumbnail_file.filename)[1] or ".png"
+        fname = f"sched_{uuid.uuid4()}{ext}"
+        path = os.path.join("thumbnails", fname)
+        os.makedirs("thumbnails", exist_ok=True)
+        with open(path, "wb") as f:
+            f.write(content)
+        schedule.local_thumbnail_path = fname
+        schedule.thumbnail_data = content
+
     db.add(schedule)
     db.commit()
     db.refresh(schedule)
 
     # Register with APScheduler and compute next_run
-    sched.add_schedule_job(schedule.id, scraper.id, payload.cron_expression,
-                           input_values=payload.input_values)
+    sched.add_schedule_job(schedule.id, scraper.id, cron_expression,
+                           input_values=inputs)
     job = sched.get_scheduler().get_job(f"schedule_{schedule.id}")
     if job and job.next_run_time:
         schedule.next_run = job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)

@@ -374,81 +374,74 @@ function selectSchedScraper(id, name) {
     document.getElementById('sched-scraper').value = id;
     document.getElementById('summary-sched-scraper').innerHTML = `<span>${name}</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
     document.querySelectorAll('.custom-dropdown').forEach(d => d.classList.remove('open'));
+
+    // Update thumbnail preview (Inheritance)
+    const scraper = (state.scrapers || []).find(s => String(s.id) === String(id));
+    if (scraper && scraper.thumbnail_url) {
+        previewSchedThumb(scraper.thumbnail_url);
+    } else {
+        previewSchedThumb('');
+    }
+
+    // Render parameters in the left column dashboard area
+    renderNewSchedParams(id);
+}
+
+function renderNewSchedParams(scraperId) {
+    const scraper = (state.scrapers || []).find(s => String(s.id) === String(scraperId));
+    const container = document.getElementById('sched-params-container');
+    if (!container) return;
+
+    if (!scraper || !scraper.inputs || !scraper.inputs.length) {
+        container.innerHTML = '<div class="empty-state" style="padding:40px 0; opacity:0.3; font-size:13px">No input parameters for this scraper.</div>';
+        return;
+    }
+
+    container.innerHTML = scraper.inputs.map(inp => {
+        const id = `new-sched-ri-${inp.name}`;
+        const def = inp.default !== undefined ? inp.default : '';
+        const desc = inp.description ? `<p class="input-desc" style="font-size:10px; opacity:0.6; margin-top:4px">${inp.description}</p>` : '';
+        let field = '';
+        if (inp.type === 'select' && inp.options) {
+            const opts = inp.options.map(o =>
+                `<option value="${o}" ${String(o) === String(def) ? 'selected' : ''}>${o}</option>`
+            ).join('');
+            field = `<select id="${id}" class="form-control" style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; width:100%; font-size:13px">${opts}</select>`;
+        } else if (inp.type === 'boolean') {
+            field = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                <input type="checkbox" id="${id}" ${def ? 'checked' : ''} style="width:16px;height:16px">
+                <span style="font-size:13px">${inp.label || inp.name}</span>
+            </label>`;
+        } else {
+            const t = inp.type === 'number' ? 'number' : 'text';
+            field = `<input type="${t}" id="${id}" class="form-control" value="${def}" placeholder="${inp.label || inp.name}" style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; width:100%; font-size:13px">`;
+        }
+        const lbl = inp.type !== 'boolean'
+            ? `<label style="font-size:11px; margin-bottom:4px; display:block; opacity:0.7">${inp.label || inp.name}</label>` : '';
+        return `<div class="form-group" style="margin-bottom:12px">${lbl}${field}${desc}</div>`;
+    }).join('');
 }
 
 /* ── Wizard Modal ────────────────────────────────────── */
-function openWizardModal() {
-    try {
-        const form = document.getElementById('wizard-form');
-        if (form) form.reset();
-
-        const codeText = document.getElementById('wiz-code-text');
-        if (codeText) codeText.textContent = "Drag & Drop your .py file here";
-
-        const codeZone = document.getElementById('wiz-code-zone');
-        if (codeZone) {
-            codeZone.style.borderColor = 'var(--border-strong)';
-            codeZone.style.background = 'var(--bg-input)';
-        }
-
-        const thumbImg = document.getElementById('wiz-thumb-img');
-        if (thumbImg) {
-            thumbImg.src = '';
-            thumbImg.style.display = 'none';
-        }
-
-        const placeholder = document.getElementById('wiz-thumb-placeholder');
-        if (placeholder) placeholder.style.display = 'inline';
-
-        const preview = document.getElementById('wiz-thumb-preview');
-        if (preview) preview.style.borderColor = 'var(--border)';
-
-        const filename = document.getElementById('wiz-thumb-filename');
-        if (filename) filename.textContent = '';
-
-        ['major', 'minor', 'patch'].forEach(p => {
-            const el = document.getElementById('wiz-ver-' + p);
-            if (el) el.value = "0";
-        });
-
-        const modal = document.getElementById('wizard-modal');
-        if (modal) modal.style.display = 'flex';
-    } catch (e) {
-        console.error("openWizardModal error:", e);
-    }
-}
-
-function closeWizardModal(e) {
-    if (e && e.target !== document.getElementById('wizard-modal')) return;
-    document.getElementById('wizard-modal').style.display = 'none';
-}
-
+/* ── Wizard (Add Scraper) ────────────────────────────── */
 async function submitWizard(e) {
-    e.preventDefault();
+    if (e) e.preventDefault();
     const btn = document.getElementById('wiz-submit-btn');
     btn.disabled = true;
-    btn.textContent = '\u23f3 Building\u2026';
-
-    // Build semver label
-    const major = document.getElementById('wiz-ver-major').value || '1';
-    const minor = document.getElementById('wiz-ver-minor').value || '0';
-    const patch = document.getElementById('wiz-ver-patch').value || '0';
-    const versionLabel = `${major}.${minor}.${patch}`;
-    const commitMsg = document.getElementById('wiz-commit').value.trim() || 'Initial release';
+    btn.textContent = '⏳ Building…';
 
     const formData = new FormData();
     formData.append('name', document.getElementById('wiz-name').value);
     formData.append('description', document.getElementById('wiz-desc').value);
     formData.append('homepage_url', ensureHttps(document.getElementById('wiz-home').value));
     formData.append('thumbnail_url', document.getElementById('wiz-thumb-url').value);
-    formData.append('version_label', versionLabel);
-    formData.append('commit_message', commitMsg);
+    formData.append('version_label', '0.0.0');
+    formData.append('commit_message', document.getElementById('wiz-commit').value.trim() || 'Initial version');
 
     const codeFile = document.getElementById('wiz-code-file').files[0];
     if (!codeFile) {
         toast('Scraper script (.py) is required.', 'error');
-        btn.disabled = false;
-        btn.textContent = '\u2728 Build Scraper';
+        btn.disabled = false; btn.textContent = '✨ Build Scraper';
         return;
     }
     formData.append('scraper_file', codeFile);
@@ -456,22 +449,23 @@ async function submitWizard(e) {
     const thumbFile = document.getElementById('wiz-thumb-file').files[0];
     if (thumbFile) formData.append('thumbnail_file', thumbFile);
 
-    const endpoint = API.scrapers + '/wizard';
-
     try {
-        await apiFetch(endpoint, {
-            method: 'POST',
-            body: formData
-        });
+        await apiFetch(API.scrapers + '/wizard', { method: 'POST', body: formData });
         toast('Scraper configured and built successfully!', 'success');
-        closeWizardModal();
+        
+        // Reset form
+        document.getElementById('wizard-form').reset();
+        document.getElementById('wiz-code-text').textContent = 'Click or Drag .py file here';
+        const codeZone = document.getElementById('wiz-code-zone');
+        codeZone.style.borderColor = ''; codeZone.style.background = '';
+        
+        const img = document.getElementById('wiz-thumb-img');
+        img.src = ''; img.style.display = 'none';
+        document.getElementById('wiz-thumb-placeholder').style.display = 'flex';
+        
         loadScrapers();
-    } catch (err) {
-        toast(err.message, 'error');
-    } finally {
-        btn.disabled = false;
-        btn.textContent = '\u2728 Build Scraper';
-    }
+    } catch (err) { toast(err.message, 'error'); }
+    finally { btn.disabled = false; btn.textContent = '✨ Build Scraper'; }
 }
 
 function handleWizCodeFile(input) {
@@ -766,9 +760,42 @@ async function loadSchedules(skipFetch = false) {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-function applyCronPreset(val, label = null) {
-    if (val !== null) document.getElementById('sched-cron').value = val;
-    if (label) document.getElementById('summary-sched-preset').innerHTML = `<span>${label}</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
+function previewSchedThumb(url) {
+    const img = document.getElementById('sched-thumb-img');
+    const placeholder = document.getElementById('sched-thumb-placeholder');
+    if (!img || !placeholder) return;
+    if (url && url.trim().length > 0) {
+        img.src = url;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+    } else {
+        img.style.display = 'none';
+        placeholder.style.display = 'flex';
+    }
+}
+
+function handleSchedThumbFile(input) {
+    const file = input.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = document.getElementById('sched-thumb-img');
+            const placeholder = document.getElementById('sched-thumb-placeholder');
+            if (img && placeholder) {
+                img.src = e.target.result;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+}
+
+function applyCronPreset(val, label = null, inputId = 'sched-cron', summaryId = 'summary-sched-preset') {
+    const input = document.getElementById(inputId);
+    const summary = document.getElementById(summaryId);
+    if (input && val !== null) input.value = val;
+    if (summary && label) summary.innerHTML = `<span>${label}</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
 }
 
 async function createSchedule() {
@@ -779,30 +806,53 @@ async function createSchedule() {
     if (!cron) { toast('Please enter a cron expression.', 'error'); return; }
 
     const scraper = state.scrapers.find(s => String(s.id) === String(scraper_id));
-    const inputs = (scraper && scraper.inputs) ? scraper.inputs : [];
-
-    const doCreate = async (inputValues) => {
-        try {
-            const body = {
-                scraper_id: parseInt(scraper_id),
-                cron_expression: cron,
-                input_values: Object.keys(inputValues).length ? inputValues : null,
-                label: label || null,
-            };
-            const res = await apiFetch(API.schedules, { method: 'POST', body: JSON.stringify(body) });
-            toast(`Schedule created! Next run: ${fmt(res.next_run)}`, 'success');
-            document.getElementById('sched-cron').value = '';
-            document.getElementById('sched-label').value = '';
-            applyCronPreset('', 'Custom');
-            loadSchedules();
-        } catch (e) { toast(e.message, 'error'); }
-    };
-
-    if (inputs.length > 0) {
-        openRunInputsModal(null, inputs, null, doCreate);
-    } else {
-        await doCreate({});
+    
+    // Collect input values from the dashboard area
+    const inputValues = {};
+    if (scraper && scraper.inputs) {
+        scraper.inputs.forEach(inp => {
+            const el = document.getElementById(`new-sched-ri-${inp.name}`);
+            if (!el) return;
+            if (el.type === 'checkbox') inputValues[inp.name] = el.checked;
+            else if (el.type === 'number') inputValues[inp.name] = el.value !== '' ? Number(el.value) : null;
+            else inputValues[inp.name] = el.value;
+        });
     }
+
+    try {
+        const formData = new FormData();
+        formData.append('scraper_id', scraper_id);
+        formData.append('cron_expression', cron);
+        formData.append('input_values', Object.keys(inputValues).length ? JSON.stringify(inputValues) : '');
+        formData.append('label', label || '');
+
+        // Handle Thumbnail (Overrides or implicitly let backend inherit)
+        const customUrl = document.getElementById('sched-thumb-url').value.trim();
+        const customFile = document.getElementById('sched-thumb-file').files[0];
+
+        if (customUrl) {
+            formData.append('thumbnail_url', customUrl);
+        }
+        if (customFile) {
+            formData.append('thumbnail_file', customFile);
+        }
+
+        const res = await apiFetch(API.schedules, { method: 'POST', body: formData });
+        toast(`Schedule created! Next run: ${fmt(res.next_run)}`, 'success');
+        
+        // Reset form
+        document.getElementById('sched-cron').value = '';
+        document.getElementById('sched-label').value = '';
+        document.getElementById('sched-scraper').value = '';
+        document.getElementById('summary-sched-scraper').innerHTML = `<span>— Select —</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
+        document.getElementById('summary-sched-preset').innerHTML = `<span>Presets</span> <span style="font-size:10px; opacity:0.5">▼</span>`;
+        document.getElementById('sched-thumb-url').value = '';
+        document.getElementById('sched-thumb-file').value = '';
+        document.getElementById('sched-params-container').innerHTML = '<div class="empty-state" style="padding:40px 0; opacity:0.3; font-size:13px">Select a scraper to view available parameters.</div>';
+        previewSchedThumb('');
+        
+        loadSchedules();
+    } catch (e) { toast(e.message, 'error'); }
 }
 
 function toggleSchedExpand(event, id) {
@@ -1789,7 +1839,7 @@ function openEditModal(id) {
     const img = document.getElementById('edit-thumb-img');
     const ph = document.getElementById('edit-thumb-placeholder');
     if (s.thumbnail_url) { img.src = s.thumbnail_url; img.style.display = 'block'; ph.style.display = 'none'; }
-    else { img.style.display = 'none'; img.src = ''; ph.style.display = 'inline'; ph.textContent = '🎌'; }
+    else { img.style.display = 'none'; img.src = ''; ph.style.display = 'flex'; ph.textContent = '🎌'; }
     document.getElementById('edit-modal').style.display = 'flex';
 }
 
@@ -2200,3 +2250,35 @@ window.addEventListener('DOMContentLoaded', () => {
     }
     console.log("[App] Initialization complete.");
 });
+
+/* ── Helpers for Scraper Wizard ── */
+function previewWizThumb(url) {
+    const img = document.getElementById('wiz-thumb-img');
+    const placeholder = document.getElementById('wiz-thumb-placeholder');
+    if (!img || !placeholder) return;
+    if (url && url.trim().length > 0) {
+        img.src = url;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+    } else {
+        img.style.display = 'none';
+        placeholder.style.display = 'flex';
+    }
+}
+
+function handleWizThumbFile(input) {
+    const file = input.files[0];
+    if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = document.getElementById('wiz-thumb-img');
+            const placeholder = document.getElementById('wiz-thumb-placeholder');
+            if (img && placeholder) {
+                img.src = e.target.result;
+                img.style.display = 'block';
+                placeholder.style.display = 'none';
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+}
