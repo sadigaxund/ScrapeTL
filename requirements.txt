@@ -9,3 +9,4 @@ beautifulsoup4==4.12.3
 python-multipart==0.0.9
 pytz==2024.1
 playwright==1.49.1
+tzlocal==5.2
