@@ -23,6 +23,9 @@ const API = {
     versionCode: (sid, vid) => `/api/scrapers/${sid}/versions/${vid}`,
     revert: (sid, vid) => `/api/scrapers/${sid}/revert/${vid}`,
     logDownload: (lid, fmt) => `/api/logs/${lid}/download?format=${fmt}`,
+    reorderScrapers: '/api/scrapers/reorder',
+    reorderSchedules: '/api/schedules/reorder',
+    reorderIntegrations: '/api/integrations/reorder',
 };
 
 /* ── State ──────────────────────────────────────────── */
@@ -107,6 +110,87 @@ function statusBadge(status) {
     };
     const [icon, cls] = map[status] || ['•', 'pending'];
     return `<span class="status-badge badge-${cls}">${icon} ${status.toUpperCase()}</span>`;
+}
+
+/* ── Drag and Drop Logic ───────────────────────────── */
+let _draggedItem = null;
+
+function handleDragStart(e, type, id) {
+    _draggedItem = { type, id };
+    e.currentTarget.classList.add('dragging');
+    e.dataTransfer.effectAllowed = 'move';
+}
+
+function handleDragOver(e) {
+    e.preventDefault(); // allow drop
+    const card = e.currentTarget;
+    if (card.classList.contains('dragging')) return;
+    card.classList.add('drag-over');
+}
+
+function handleDragLeave(e) {
+    e.currentTarget.classList.remove('drag-over');
+}
+
+function handleDragEnd(e) {
+    e.currentTarget.classList.remove('dragging');
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+}
+
+async function handleDrop(e, type, targetId) {
+    e.preventDefault();
+    const card = e.currentTarget;
+    card.classList.remove('drag-over');
+
+    if (!_draggedItem || _draggedItem.type !== type) return;
+    if (_draggedItem.id === targetId) return;
+
+    let list;
+    let apiKey;
+    let refreshFn;
+
+    if (type === 'scraper') {
+        list = [...state.scrapers];
+        apiKey = 'reorderScrapers';
+        refreshFn = loadScrapers;
+    } else if (type === 'schedule') {
+        list = [...state.schedules];
+        apiKey = 'reorderSchedules';
+        refreshFn = loadSchedules;
+    } else if (type === 'integration') {
+        list = [...state.integrations];
+        apiKey = 'reorderIntegrations';
+        refreshFn = loadIntegrations;
+    } else return;
+
+    const fromIdx = list.findIndex(item => item.id === _draggedItem.id);
+    const toIdx = list.findIndex(item => item.id === targetId);
+
+    if (fromIdx === -1 || toIdx === -1) return;
+
+    // Splice move
+    const [moved] = list.splice(fromIdx, 1);
+    list.splice(toIdx, 0, moved);
+
+    try {
+        await apiFetch(API[apiKey], {
+            method: 'POST',
+            body: JSON.stringify(list.map(item => item.id))
+        });
+        toast('Order updated', 'success');
+        if (type === 'scraper') state.scrapers = list;
+        else if (type === 'schedule') state.schedules = list;
+        else if (type === 'integration') state.integrations = list;
+        
+        Object.keys(responseCache).forEach(k => { if(k.startsWith(type) || k.startsWith('integrations')) responseCache[k] = null; });
+        refreshFn(type === 'schedule' ? true : undefined);
+    } catch (e) {
+        toast(e.message, 'error');
+    }
+}
+
+async function moveItem(type, id, direction) {
+    // legacy button-based reordering logic
 }
 
 /* ── URL helpers ────────────────────────────────────── */
@@ -322,7 +406,13 @@ function renderScrapersList(scrapers) {
         }[s.health || 'untested'];
 
         return `
-        <div class="item-card item-card--with-thumb">
+        <div class="item-card item-card--with-thumb" draggable="true"
+             ondragstart="handleDragStart(event, 'scraper', ${s.id})"
+             ondragover="handleDragOver(event)"
+             ondragleave="handleDragLeave(event)"
+             ondrop="handleDrop(event, 'scraper', ${s.id})"
+             ondragend="handleDragEnd(event)">
+          <div class="drag-handle" title="Drag to reorder">⠿</div>
           ${thumbEl}
           <div class="item-info">
             <div class="item-name">
@@ -724,8 +814,15 @@ async function loadSchedules(skipFetch = false) {
                   ).join('')
                 : null;
             return `
-            <div class="sched-card" onclick="toggleSchedExpand(event, ${s.id})">
+            <div class="sched-card" draggable="true"
+                 ondragstart="handleDragStart(event, 'schedule', ${s.id})"
+                 ondragover="handleDragOver(event)"
+                 ondragleave="handleDragLeave(event)"
+                 ondrop="handleDrop(event, 'schedule', ${s.id})"
+                 ondragend="handleDragEnd(event)"
+                 onclick="toggleSchedExpand(event, ${s.id})">
               <div class="sched-card__main">
+                <div class="drag-handle" title="Drag to reorder">⠿</div>
                 ${thumb}
                 <div class="sched-card__info">
                   <div class="sched-card__name">${displayName}</div>
@@ -1594,7 +1691,13 @@ async function loadIntegrations() {
             const titleType = i.type === 'discord_webhook' ? 'Discord Webhook' : i.type === 'http_request' ? 'HTTP Request' : i.type;
 
             return `
-            <div class="item-card">
+            <div class="item-card" draggable="true"
+                 ondragstart="handleDragStart(event, 'integration', ${i.id})"
+                 ondragover="handleDragOver(event)"
+                 ondragleave="handleDragLeave(event)"
+                 ondrop="handleDrop(event, 'integration', ${i.id})"
+                 ondragend="handleDragEnd(event)">
+              <div class="drag-handle" title="Drag to reorder">⠿</div>
               <div class="item-info">
                 <div class="item-name" style="font-size:16px;">${integIcon(i.type)} ${i.name} ${metaChips}</div>
                 <div class="item-meta" style="font-size:12px;color:var(--text-muted)">${titleType} &nbsp;•&nbsp; Created on ${fmt(i.created_at)}</div>

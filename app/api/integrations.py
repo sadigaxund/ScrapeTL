@@ -41,7 +41,7 @@ def _integ_dict(i: Integration):
 
 @router.get("/api/integrations")
 def list_integrations(db: Session = Depends(get_db)):
-    return [_integ_dict(i) for i in db.query(Integration).order_by(Integration.created_at.desc()).all()]
+    return [_integ_dict(i) for i in db.query(Integration).order_by(Integration.position.asc(), Integration.created_at.desc()).all()]
 
 
 @router.post("/api/integrations")
@@ -53,10 +53,15 @@ def create_integration(payload: IntegrationCreate, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="discord_webhook requires 'webhook_url' in config.")
     if payload.type == "http_request" and not payload.config.get("url"):
         raise HTTPException(status_code=400, detail="http_request requires 'url' in config.")
+    # Determine position
+    max_pos = db.query(Integration).order_by(Integration.position.desc()).first()
+    new_pos = (max_pos.position + 1) if max_pos else 0
+
     integ = Integration(
         name=payload.name.strip(),
         type=payload.type,
         config=json.dumps(payload.config),
+        position=new_pos
     )
     db.add(integ)
     db.commit()
@@ -176,3 +181,9 @@ def remove_integration(scraper_id: int, integ_id: int, db: Session = Depends(get
         scraper.integrations.remove(integ)
         db.commit()
     return {"detail": "Integration removed."}
+@router.post("/api/integrations/reorder")
+def reorder_integrations(ids: list[int], db: Session = Depends(get_db)):
+    for index, integ_id in enumerate(ids):
+        db.query(Integration).filter(Integration.id == integ_id).update({"position": index})
+    db.commit()
+    return {"detail": "Integrations reordered."}

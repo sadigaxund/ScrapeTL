@@ -120,7 +120,7 @@ def _validate_code_string(text: str) -> None:
 
 @router.get("")
 def list_scrapers(db: Session = Depends(get_db)):
-    scrapers = db.query(Scraper).order_by(Scraper.created_at.desc()).all()
+    scrapers = db.query(Scraper).order_by(Scraper.position.asc(), Scraper.created_at.desc()).all()
     return [_scraper_dict(s) for s in scrapers]
 
 
@@ -188,6 +188,10 @@ async def register_scraper_wizard(
     homepage_url = _normalize_url(homepage_url)
     thumb_url = _normalize_url(thumbnail_url) if not local_thumb_path else None
 
+    # Determine position
+    max_pos = db.query(Scraper).order_by(Scraper.position.desc()).first()
+    new_pos = (max_pos.position + 1) if max_pos else 0
+
     # Create Scraper
     scraper = Scraper(
         name=name.strip(),
@@ -196,7 +200,8 @@ async def register_scraper_wizard(
         homepage_url=homepage_url,
         thumbnail_url=thumb_url,
         local_thumbnail_path=local_thumb_path,
-        thumbnail_data=t_contents
+        thumbnail_data=t_contents,
+        position=new_pos
     )
     db.add(scraper)
     db.commit()
@@ -307,6 +312,14 @@ def delete_scraper(scraper_id: int, db: Session = Depends(get_db)):
     db.delete(scraper)
     db.commit()
     return {"detail": "Deleted."}
+
+
+@router.post("/reorder")
+def reorder_scrapers(ids: list[int], db: Session = Depends(get_db)):
+    for index, scraper_id in enumerate(ids):
+        db.query(Scraper).filter(Scraper.id == scraper_id).update({"position": index})
+    db.commit()
+    return {"detail": "Scrapers reordered."}
 
 
 # ── Version History ───────────────────────────────────────────────────────────

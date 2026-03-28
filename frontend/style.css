@@ -513,6 +513,39 @@ select option {
   background: var(--bg-card-hover);
 }
 
+.drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  padding: 0 8px;
+  font-size: 16px;
+  color: var(--text-muted);
+  opacity: 0.35;
+  transition: all var(--transition);
+  user-select: none;
+  border-right: 1px solid var(--border);
+  margin-right: 12px;
+}
+
+.drag-handle:hover {
+  opacity: 0.8;
+  color: var(--accent);
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.dragging {
+  opacity: 0.4;
+  border: 1px dashed var(--accent);
+}
+
+.drag-over {
+  border-top: 3px solid var(--accent) !important;
+}
+
 .item-info {
   flex: 1;
   min-width: 0;

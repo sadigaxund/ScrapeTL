@@ -40,6 +40,7 @@ class Scraper(Base):
     thumbnail_data = Column(LargeBinary, nullable=True)
     enabled = Column(Boolean, default=True)
     health = Column(String, default="untested")  # "untested" | "ok" | "failing"
+    position = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     scraper_type = Column(String, default="python")  # "python" | "recipe"
     recipe = Column(Text, nullable=True)             # JSON recipe steps (recipe scrapers only)
@@ -61,6 +62,7 @@ class Schedule(Base):
     enabled = Column(Boolean, default=True)
     last_run = Column(DateTime, nullable=True)
     next_run = Column(DateTime, nullable=True)
+    position = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     input_values = Column(Text, nullable=True)         # JSON: runtime input params
     label = Column(String, nullable=True)              # optional custom name
@@ -145,6 +147,7 @@ class Integration(Base):
     type       = Column(String, nullable=False)   # e.g. "discord_webhook"
     config     = Column(Text,   nullable=False)   # JSON config blob
     thumbnail_data = Column(LargeBinary, nullable=True)
+    position   = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     scrapers = relationship("Scraper", secondary="scraper_integrations", back_populates="integrations")
