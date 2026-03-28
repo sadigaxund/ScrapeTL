@@ -8,7 +8,7 @@ import json
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting
+from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable
 from app.exceptions import ScrapeSkip
 
 
@@ -59,6 +59,23 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
     skip_message  = None
     _input_values  = input_values or {}
 
+    # 3. Load Global Variables for injection
+    global_vars = {}
+    db_vars = db.query(GlobalVariable).all()
+    for v in db_vars:
+        val = v.value
+        if v.value_type == "number":
+            try:
+                val = float(val) if "." in str(val) else int(val)
+            except: pass
+        elif v.value_type == "boolean":
+            val = str(val).lower() in ("true", "1", "yes")
+        elif v.value_type == "json":
+            try:
+                val = json.loads(val)
+            except: pass
+        global_vars[v.key] = val
+
     for attempt in range(max_retries + 1):
         try:
             scraper_type = getattr(scraper_record, "scraper_type", "python") or "python"
@@ -77,7 +94,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 from app.scrapers import load_scraper_class_from_code
                 scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
                 scraper_instance = scraper_cls(homepage_url=scraper_record.homepage_url)
-                episodes = scraper_instance.scrape(**_input_values)
+                episodes = scraper_instance.scrape(vars=global_vars, **_input_values)
 
             episode_count = len(episodes)
 

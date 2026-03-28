@@ -35,6 +35,9 @@
       <button class="nav-item" data-tab="integrations" id="nav-integrations">
         <span class="nav-icon">🔗</span> Integrations
       </button>
+      <button class="nav-item" data-tab="variables" id="nav-variables">
+        <span class="nav-icon">📦</span> Variables
+      </button>
       <button class="nav-item" data-tab="settings" id="nav-settings">
         <span class="nav-icon">⚙️</span> Settings
       </button>
@@ -496,6 +499,38 @@
         </div>
       </div>
     </section>
+
+    <!-- ── Variables Tab ────────────────────────────── -->
+    <section class="tab-panel" id="tab-variables">
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <h2 class="card-title">Variable Registry</h2>
+            <p style="color:var(--text-secondary);font-size:14px;margin-top:6px;">Global configuration constants accessible by all scrapers.</p>
+          </div>
+          <button class="btn btn-primary" onclick="addVariableRow()"
+            style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Variable</button>
+        </div>
+        
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th style="width:25%">Key</th>
+                <th style="width:15%">Type</th>
+                <th>Value</th>
+                <th style="width:80px; text-align:right">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="variables-list">
+              <!-- Dynamically populated -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+
 
     <!-- ── Settings Tab ──────────────────────────── -->
     <section class="tab-panel" id="tab-settings">

@@ -64,6 +64,14 @@ def _ensure_schema_columns():
             conn.commit()
             print("[DB] Added thumbnail_data to schedules")
 
+        # Check global_variables
+        res = conn.execute(text("PRAGMA table_info(global_variables)"))
+        cols = [r[1] for r in res]
+        if not cols:
+             # This will be handled by create_all normally, but let's be safe 
+             # if we ever add columns here later.
+             pass
+
 
 def _seed_defaults():
     """Seed default values into app_settings if they don't exist."""
