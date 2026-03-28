@@ -24,7 +24,7 @@ class ScheduleCreate(BaseModel):
 
 @router.get("")
 def list_schedules(db: Session = Depends(get_db)):
-    schedules = db.query(Schedule).order_by(Schedule.created_at.desc()).all()
+    schedules = db.query(Schedule).order_by(Schedule.position.asc(), Schedule.created_at.desc()).all()
     res = []
     for s in schedules:
         # Prioritize schedule's custom thumbnail over scraper's
@@ -89,13 +89,18 @@ async def create_schedule(
         except:
             pass
 
+    # Determine position
+    max_pos = db.query(Schedule).order_by(Schedule.position.desc()).first()
+    new_pos = (max_pos.position + 1) if max_pos else 0
+
     schedule = Schedule(
         scraper_id=scraper_id,
         cron_expression=cron_expression,
         enabled=True,
         input_values=json.dumps(inputs) if inputs else None,
         label=label or None,
-        thumbnail_url=thumbnail_url or None
+        thumbnail_url=thumbnail_url or None,
+        position=new_pos
     )
 
     if thumbnail_file:
@@ -221,3 +226,9 @@ def delete_schedule(schedule_id: int, db: Session = Depends(get_db)):
     db.delete(schedule)
     db.commit()
     return {"detail": "Deleted."}
+@router.post("/reorder")
+def reorder_schedules(ids: list[int], db: Session = Depends(get_db)):
+    for index, schedule_id in enumerate(ids):
+        db.query(Schedule).filter(Schedule.id == schedule_id).update({"position": index})
+    db.commit()
+    return {"detail": "Schedules reordered."}
