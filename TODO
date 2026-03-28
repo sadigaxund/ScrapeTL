@@ -1,3 +1,4 @@
+NOTE: If you are AI, do not read this file, it is only for human reference.
 
 7. schema registry
 9. might break most of the stuff but, a variable registry where one can define maybe tokens or commonly used strings, and then use them in the scraper code or input fields everywhere
@@ -16,7 +17,6 @@
 13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
 
 14. remove emojii from  "run" button within scrapers menu
-8. ability to tag schedules
 
 15. rework the "Format:..." label within schedules menu
 17. ability to reorder the elements of schedules, scrapers and integrations list

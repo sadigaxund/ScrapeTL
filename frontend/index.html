@@ -57,7 +57,8 @@
         <p class="page-subtitle" id="page-subtitle">Manage your scraper plugins</p>
       </div>
       <div class="topbar-right">
-        <button class="btn btn-primary" onclick="openWizardModal()" id="main-add-btn"
+        <button class="btn btn-primary"
+          onclick="document.getElementById('new-scraper-card').scrollIntoView({behavior:'smooth'})" id="main-add-btn"
           style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Scraper</button>
       </div>
     </header>
@@ -67,6 +68,121 @@
 
     <!-- ── Scrapers Tab ──────────────────────────── -->
     <section class="tab-panel active" id="tab-scrapers">
+
+      <!-- Create Scraper Integrated Form -->
+      <div class="card" id="new-scraper-card" style="margin-bottom:24px; position:relative; z-index:15">
+        <div class="card-header">
+          <h2 class="card-title">New Scraper</h2>
+        </div>
+        <form id="wizard-form" onsubmit="submitWizard(event)">
+          <div style="display:flex; gap:32px; align-items:stretch; margin-bottom:8px">
+
+            <!-- Left Column: Big Square Drag-n-Drop (approx 40% width) -->
+            <div style="width:340px; display:flex; flex-direction:column; height:380px">
+              <label style="margin-bottom:10px">Scraper Script (.py) *</label>
+              <div class="upload-zone wizard-upload-zone" id="wiz-code-zone"
+                onclick="document.getElementById('wiz-code-file').click()"
+                style="flex:1; flex-direction:column; justify-content:center; gap:20px; border-radius:16px; background:rgba(255,255,255,0.012); border:2px dashed var(--border-strong); padding:24px; overflow:hidden">
+                <div style="font-size:54px; opacity:0.8; margin-bottom:8px">📄</div>
+                <div style="text-align:center; width:100%; overflow:hidden">
+                  <div id="wiz-code-text"
+                    style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%">
+                    Click or Drag .py file here</div>
+                  <div style="font-size:12px; opacity:0.5; font-weight:400; line-height:1.5">must define BaseScraper
+                    class<br />and implement start_scrape()</div>
+                </div>
+                <input type="file" id="wiz-code-file" accept=".py" style="display:none"
+                  onchange="handleWizCodeFile(this)" />
+              </div>
+            </div>
+
+            <!-- Right Column: Metadata & Action (approx 60% width) -->
+            <div style="flex:1; display:flex; flex-direction:column; gap:20px">
+
+              <!-- Info Row 1: Name & Homepage -->
+              <div style="display:flex; gap:16px">
+                <div class="form-group" style="flex:1.4">
+                  <label>Scraper Name *</label>
+                  <input type="text" id="wiz-name" placeholder="My Scraper" required style="height:42px" />
+                </div>
+                <div class="form-group" style="flex:1">
+                  <label>Homepage URL</label>
+                  <input type="text" id="wiz-home" placeholder="youtube.com" style="height:42px" />
+                </div>
+              </div>
+
+              <!-- Info Row 2: Description (One line) -->
+              <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="wiz-desc" placeholder="What this scraper does" style="height:42px" />
+              </div>
+
+              <!-- Bottom Row: Thumb (Large Square) & Meta/Action -->
+              <div style="display:flex; gap:24px; margin-top:auto; align-items:stretch">
+
+                <!-- Left: Square Thumbnail Preview -->
+                <div style="display:flex; flex-direction:column; width:172px; flex-shrink:0">
+                  <label style="margin-bottom:8px; font-size:12px; font-weight:600; opacity:0.8">Thumbnail
+                    Preview</label>
+                  <div id="wiz-thumb-preview" class="thumb-preview"
+                    style="width:172px; height:172px; border-radius:18px; border:2px solid var(--border); background:rgba(0,0,0,0.3); overflow:hidden; position:relative">
+                    <img id="wiz-thumb-img" src="" alt=""
+                      style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:cover" />
+                    <div id="wiz-thumb-placeholder" class="thumb-placeholder"
+                      style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:68px; opacity:0.5">
+                      🎌</div>
+                  </div>
+                </div>
+
+                <!-- Right: Stretched Meta Inputs + Compact Button -->
+                <div style="flex:1; display:flex; flex-direction:column">
+
+                  <!-- Meta Inputs Container (STRETCHED) -->
+                  <div
+                    style="flex:1; display:flex; flex-direction:column; gap:12px; justify-content:space-between; margin-bottom:12px">
+                    <!-- Source Row -->
+                    <div class="form-group" style="flex:1; display:flex; flex-direction:column; justify-content:center">
+                      <label style="font-size:11px; opacity:0.5; margin-bottom:4px">Source Link / File</label>
+                      <div style="display:flex; gap:10px; align-items:center">
+                        <input type="text" id="wiz-thumb-url" placeholder="Paste image URL..."
+                          oninput="previewWizThumb(this.value)" style="height:40px; font-size:13px; flex:1" />
+                        <label for="wiz-thumb-file" class="btn btn-ghost"
+                          style="cursor:pointer; font-size:11px; height:40px; display:flex; align-items:center; gap:6px; padding:0 14px">
+                          📂 Upload...
+                        </label>
+                        <input type="file" id="wiz-thumb-file" accept="image/*" style="display:none"
+                          onchange="handleWizThumbFile(this)" />
+                      </div>
+                    </div>
+                    <!-- Notes Row -->
+                    <div class="form-group" style="flex:1; display:flex; flex-direction:column; justify-content:center">
+                      <label style="font-size:11px; opacity:0.5; margin-bottom:4px">Release Notes / Commit
+                        Message</label>
+                      <input type="text" id="wiz-commit" placeholder="e.g. Initial version"
+                        style="height:40px; font-size:13px" />
+                    </div>
+                  </div>
+
+                  <!-- Footer: Action Button (NOT STRETCHED) -->
+                  <div
+                    style="display:flex; justify-content:flex-end; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px">
+                    <button type="submit" class="btn btn-primary" id="wiz-submit-btn"
+                      style="height:44px; padding:0 42px; border-radius:10px; font-size:14px; font-weight:700; letter-spacing:0.02em; box-shadow:0 4px 12px rgba(99,102,241,0.25); border:none">Create
+                      Scraper</button>
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
+          <input type="hidden" id="wiz-ver-major" value="0" />
+          <input type="hidden" id="wiz-ver-minor" value="0" />
+          <input type="hidden" id="wiz-ver-patch" value="0" />
+        </form>
+      </div>
 
       <!-- Main Scrapers Card -->
       <div class="card" style="padding:0; overflow:hidden;">
@@ -101,76 +217,141 @@
 
     <!-- ── Schedules Tab ─────────────────────────── -->
     <section class="tab-panel" id="tab-schedules">
-      <div class="card" style="position: relative; z-index: 15;">
+
+      <!-- Create Schedule Integrated Form (Dashboard Style) -->
+      <div class="card" id="new-schedule-card" style="margin-bottom:24px; position:relative; z-index:15">
         <div class="card-header">
           <h2 class="card-title">New Schedule</h2>
         </div>
-        <div class="form-row" style="align-items: flex-end;">
-          <div class="form-group" style="position: relative; flex: 1;">
-            <label>Scraper</label>
-            <input type="hidden" id="sched-scraper" value="" />
-            <div class="custom-dropdown" id="dd-sched-scraper" onclick="toggleDropdown(event, 'dd-sched-scraper')"
-              style="width: 100%;">
-              <button class="tag-chip" id="summary-sched-scraper"
-                style="width: 100%; justify-content: space-between; height: 36px; border-radius: 6px; border: 1px solid var(--border-light); background: var(--surface-hover);">
-                <span>— Select —</span> <span style="font-size:10px;opacity:0.5">▼</span>
-              </button>
-              <div class="custom-dropdown-menu" id="sched-menu-scrapers" onclick="event.stopPropagation()"
-                style="width: 100%;"></div>
+        <div style="display:flex; gap:32px; align-items:stretch; margin-bottom:8px">
+
+          <!-- Left Column: Input Parameters Area (FIXED HEIGHT) -->
+          <div style="width:340px; display:flex; flex-direction:column; height:380px">
+            <label style="margin-bottom:10px; font-weight:600; opacity:0.8">Input Parameters</label>
+            <div id="sched-params-container"
+              style="flex:1; background:rgba(255,255,255,0.012); border:2px dashed var(--border-strong); border-radius:16px; padding:24px; overflow-y:auto; display:flex; flex-direction:column; gap:12px">
+              <div class="empty-state" style="padding:40px 0; opacity:0.3; font-size:13px">Select a scraper to view
+                available parameters.</div>
             </div>
           </div>
-          <div class="form-group" style="flex: 1;">
-            <label>Schedule Name <span style="color:var(--text-muted);font-weight:400;">(optional)</span></label>
-            <input type="text" id="sched-label" placeholder="e.g. Daily Chapter Check" style="height: 36px;" />
-          </div>
-          <div class="form-group" style="flex: 1;">
-            <label>Cron Expression</label>
-            <input type="text" id="sched-cron" placeholder="0 12 * * *" style="height: 36px;" />
-          </div>
-          <div class="form-group" style="position: relative; flex: 1;">
-            <label>Preset</label>
-            <div class="custom-dropdown" id="dd-sched-preset" onclick="toggleDropdown(event, 'dd-sched-preset')"
-              style="width: 100%;">
-              <button class="tag-chip" id="summary-sched-preset"
-                style="width: 100%; justify-content: space-between; height: 36px; border-radius: 6px; border: 1px solid var(--border-light); background: var(--surface-hover);">
-                <span>Custom</span> <span style="font-size:10px;opacity:0.5">▼</span>
-              </button>
-              <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width: 100%; right: 0;">
-                <div class="dropdown-scroll-area">
-                  <button class="dropdown-item"
-                    onclick="applyCronPreset('', 'Custom'); toggleDropdown(event, 'dd-sched-preset')">Custom</button>
-                  <button class="dropdown-item"
-                    onclick="applyCronPreset('0 12 * * *', 'Daily at noon'); toggleDropdown(event, 'dd-sched-preset')">Daily
-                    at noon</button>
-                  <button class="dropdown-item"
-                    onclick="applyCronPreset('0 0 * * *', 'Daily at midnight'); toggleDropdown(event, 'dd-sched-preset')">Daily
-                    at midnight</button>
-                  <button class="dropdown-item"
-                    onclick="applyCronPreset('0 9 * * 1', 'Weekly Monday 9am'); toggleDropdown(event, 'dd-sched-preset')">Weekly
-                    Monday 9am</button>
-                  <button class="dropdown-item"
-                    onclick="applyCronPreset('0 */6 * * *', 'Every 6 hours'); toggleDropdown(event, 'dd-sched-preset')">Every
-                    6 hours</button>
-                  <button class="dropdown-item"
-                    onclick="applyCronPreset('0 */12 * * *', 'Every 12 hours'); toggleDropdown(event, 'dd-sched-preset')">Every
-                    12 hours</button>
-                  <button class="dropdown-item"
-                    onclick="applyCronPreset('*/30 * * * *', 'Every 30 minutes'); toggleDropdown(event, 'dd-sched-preset')">Every
-                    30 minutes</button>
+
+          <!-- Right Column: Metadata & Action -->
+          <div style="flex:1; display:flex; flex-direction:column; gap:20px">
+
+            <!-- Info Row 1: Scraper & Label -->
+            <div style="display:flex; gap:16px">
+              <div class="form-group" style="flex:1.2; position:relative">
+                <label>Scraper Plugin *</label>
+                <input type="hidden" id="sched-scraper" value="" />
+                <div class="custom-dropdown" id="dd-sched-scraper" onclick="toggleDropdown(event, 'dd-sched-scraper')"
+                  style="width:100%">
+                  <button type="button" class="tag-chip" id="summary-sched-scraper"
+                    style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); font-size:14px; font-weight:500">
+                    <span>— Select —</span> <span style="font-size:10px; opacity:0.5">▼</span>
+                  </button>
+                  <div class="custom-dropdown-menu" id="sched-menu-scrapers" onclick="event.stopPropagation()"
+                    style="width:100%"></div>
                 </div>
               </div>
+              <div class="form-group" style="flex:1">
+                <label>Schedule Name (Optional)</label>
+                <input type="text" id="sched-label" placeholder="e.g. Daily Update" style="height:42px" />
+              </div>
             </div>
+
+            <!-- Info Row 2: Cron Expression (COMPACT) -->
+            <div class="form-group">
+              <label>Execution Cycle (Cron Expression) *</label>
+              <div style="display:flex; gap:12px; align-items:center">
+                <input type="text" id="sched-cron" placeholder="0 12 * * *"
+                  style="height:42px; width:180px; font-family:monospace; font-size:15px; letter-spacing:0.05em; background:var(--bg-input)" />
+
+                <!-- Cron Presets Dropdown -->
+                <div class="custom-dropdown" id="dd-sched-preset" onclick="toggleDropdown(event, 'dd-sched-preset')"
+                  style="width:160px">
+                  <button type="button" class="tag-chip" id="summary-sched-preset"
+                    style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:rgba(255,255,255,0.03); font-size:12px">
+                    <span>Presets</span> <span style="font-size:10px; opacity:0.5">▼</span>
+                  </button>
+                  <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%">
+                    <button type="button" class="dropdown-item"
+                      onclick="applyCronPreset('0 * * * *', 'Hourly'); toggleDropdown(event, 'dd-sched-preset')">Hourly</button>
+                    <button type="button" class="dropdown-item"
+                      onclick="applyCronPreset('0 0 * * *', 'Daily (Midnight)'); toggleDropdown(event, 'dd-sched-preset')">Daily
+                      (00:00)</button>
+                    <button type="button" class="dropdown-item"
+                      onclick="applyCronPreset('0 12 * * *', 'Daily (Noon)'); toggleDropdown(event, 'dd-sched-preset')">Daily
+                      (12:00)</button>
+                    <button type="button" class="dropdown-item"
+                      onclick="applyCronPreset('0 0 * * 0', 'Weekly'); toggleDropdown(event, 'dd-sched-preset')">Weekly</button>
+                    <button type="button" class="dropdown-item"
+                      onclick="applyCronPreset('0 0 1 * *', 'Monthly'); toggleDropdown(event, 'dd-sched-preset')">Monthly</button>
+                  </div>
+                </div>
+
+                <button type="button" class="btn btn-ghost" style="height:42px; padding:0 14px; font-size:11px"
+                  onclick="window.open('https://crontab.guru', '_blank')">❓ Crontab Help</button>
+              </div>
+            </div>
+
+            <!-- Info Row 3: Thumb (Large Square) & Meta/Action -->
+            <div style="display:flex; gap:24px; margin-top:auto; align-items:stretch">
+
+              <!-- Left: Square Thumbnail Preview -->
+              <div style="display:flex; flex-direction:column; width:172px; flex-shrink:0">
+                <label style="margin-bottom:8px; font-size:12px; font-weight:600; opacity:0.8">Thumbnail Preview</label>
+                <div id="sched-thumb-preview" class="thumb-preview"
+                  style="width:172px; height:172px; border-radius:18px; border:2px solid var(--border); background:rgba(0,0,0,0.3); overflow:hidden; position:relative">
+                  <img id="sched-thumb-img" src="" alt=""
+                    style="display:none; position:absolute; inset:0; width:100%; height:100%; object-fit:cover" />
+                  <div id="sched-thumb-placeholder" class="thumb-placeholder"
+                    style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:68px; opacity:0.5">
+                    📅</div>
+                </div>
+              </div>
+
+              <!-- Right: Stretched Meta Inputs + Action -->
+              <div style="flex:1; display:flex; flex-direction:column">
+
+                <!-- Meta Inputs Container (STRETCHED) -->
+                <div
+                  style="flex:1; display:flex; flex-direction:column; gap:12px; justify-content:space-between; margin-bottom:12px">
+                  <!-- Source Row -->
+                  <div class="form-group" style="flex:1; display:flex; flex-direction:column; justify-content:center">
+                    <label style="font-size:11px; opacity:0.5; margin-bottom:4px">Thumbnail URL Override</label>
+                    <div style="display:flex; gap:10px; align-items:center">
+                      <input type="text" id="sched-thumb-url" placeholder="Paste image URL..."
+                        oninput="previewSchedThumb(this.value)" style="height:40px; font-size:13px; flex:1" />
+                      <label for="sched-thumb-file" class="btn btn-ghost"
+                        style="cursor:pointer; font-size:11px; height:40px; display:flex; align-items:center; gap:6px; padding:0 14px">
+                        📂 Upload...
+                      </label>
+                      <input type="file" id="sched-thumb-file" accept="image/*" style="display:none"
+                        onchange="handleSchedThumbFile(this)" />
+                    </div>
+                  </div>
+                  <!-- Inheritance Info -->
+                  <div style="font-size:11px; opacity:0.5; line-height:1.4">
+                    🎌 Defaults to the parent scraper's thumbnail.<br />
+                    Change URL or upload a file to override specifically for this schedule.
+                  </div>
+                </div>
+
+                <!-- Footer: Action Button -->
+                <div
+                  style="display:flex; justify-content:flex-end; border-top:1px solid rgba(255,255,255,0.05); padding-top:12px">
+                  <button type="button" class="btn btn-primary" onclick="createSchedule()"
+                    style="height:44px; padding:0 42px; border-radius:10px; font-size:14px; font-weight:700; letter-spacing:0.02em; box-shadow:0 4px 12px rgba(99,102,241,0.25); border:none">Create
+                    Schedule</button>
+                </div>
+
+              </div>
+
+            </div>
+
           </div>
-          <div class="form-group form-group--action">
-            <button class="btn btn-primary" style="height: 36px;" onclick="createSchedule()">+ Schedule</button>
-          </div>
+
         </div>
-        <p class="payload-truncation-notice"
-          style="margin-top:20px; font-weight:400; font-size:13px; text-transform:none;">
-          ✨ Format: <code
-            style="color:#c4b5fd; background:rgba(0,0,0,0.2); padding:2px 6px; border-radius:4px;">minute hour day month weekday</code>
-          — times are in your <strong>configured timezone</strong>.
-        </p>
       </div>
 
       <div class="card" style="padding:0; overflow:hidden;">
@@ -178,9 +359,11 @@
         <div style="padding:16px 24px; border-bottom:1px solid var(--border); background:rgba(255,255,255,0.02);">
           <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px">
             <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
-              <span style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-right:4px">TAG:</span>
+              <span
+                style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-right:4px">TAG:</span>
               <div id="schedule-tag-filter-chips" style="display:flex;gap:6px;flex-wrap:wrap">
-                <button class="tag-chip tag-chip--active" data-tag-id="" onclick="filterSchedulesByTag(this, '')">All</button>
+                <button class="tag-chip tag-chip--active" data-tag-id=""
+                  onclick="filterSchedulesByTag(this, '')">All</button>
               </div>
             </div>
           </div>
@@ -340,106 +523,7 @@
 
   </main>
 
-  <!-- ── SETUP WIZARD MODAL ─────────────────────────────── -->
-  <div class="modal-overlay" id="wizard-modal" style="display:none" onclick="closeWizardModal(event)">
-    <div class="modal-box" style="max-width: 640px;">
-      <div class="modal-header">
-        <h2 class="card-title">🤖 Scraper Setup Wizard</h2>
-        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeWizardModal()">✕</button>
-      </div>
 
-      <form id="wizard-form" onsubmit="submitWizard(event)">
-        <div class="form-row" style="margin-bottom:14px">
-          <div class="form-group flex-2">
-            <label>Name *</label>
-            <input type="text" id="wiz-name" placeholder="My Scraper" required />
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom:14px">
-          <div class="form-group flex-2">
-            <label>Description</label>
-            <input type="text" id="wiz-desc" placeholder="Short description of what this scraper does" />
-          </div>
-        </div>
-
-        <div class="form-row" style="margin-bottom:14px">
-          <div class="form-group flex-2">
-            <label>Homepage URL</label>
-            <input type="text" id="wiz-home" placeholder="youtube.com or https://example.com" />
-          </div>
-        </div>
-
-        <div
-          style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
-          <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
-            <div class="form-group flex-2">
-              <label>Thumbnail Image <span
-                  style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-              <input type="text" id="wiz-thumb-url" placeholder="Paste URL here..."
-                oninput="previewWizThumb(this.value)" style="margin-bottom:8px;" />
-
-              <div style="display:flex; align-items:center; gap:8px;">
-                <label for="wiz-thumb-file" class="btn btn-ghost"
-                  style="cursor:pointer; font-size:12px; padding:4px 10px;">
-                  📁 Upload Photo...
-                </label>
-                <input type="file" id="wiz-thumb-file" accept="image/*" style="display:none"
-                  onchange="handleWizThumbFile(this)" />
-                <span id="wiz-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
-              </div>
-            </div>
-
-            <div id="wiz-thumb-preview" class="thumb-preview" style="width:84px; height:84px;">
-              <img id="wiz-thumb-img" src="" alt="" style="display:none" />
-              <span id="wiz-thumb-placeholder" class="thumb-placeholder" style="font-size:32px">🎌</span>
-            </div>
-          </div>
-        </div>
-
-        <div id="wiz-python-container" class="form-group" style="margin-bottom:24px;">
-          <label>Scraper Script (.py) * <span style="font-weight:400;color:var(--text-muted);text-transform:none">— must
-              define <code>class YourScraper(BaseScraper)</code> with <code>def scrape(self)</code></span></label>
-          <div class="upload-zone wizard-upload-zone" id="wiz-code-zone"
-            onclick="document.getElementById('wiz-code-file').click()">
-            <div style="font-size:24px; margin-bottom:8px;">📄</div>
-            <div id="wiz-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag & Drop your
-              .py file here</div>
-            <div style="font-size:12px; margin-top:4px;">or click to browse</div>
-            <input type="file" id="wiz-code-file" accept=".py" style="display:none"
-              onchange="handleWizCodeFile(this)" />
-          </div>
-        </div>
-
-
-
-        <!-- Version + Commit row -->
-        <input type="hidden" id="wiz-ver-major" value="0" />
-        <input type="hidden" id="wiz-ver-minor" value="0" />
-        <input type="hidden" id="wiz-ver-patch" value="0" />
-        <div class="form-row" style="margin-bottom:20px;gap:12px">
-          <div class="form-group" style="flex:0 0 auto">
-            <label>Initial Version</label>
-            <div
-              style="display:flex;gap:4px;align-items:center;padding:9px 12px;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text-muted);font-size:14px;user-select:none;cursor:not-allowed">
-              v0.0.0
-            </div>
-          </div>
-          <div class="form-group flex-2">
-            <label>Release Notes <span
-                style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-            <input type="text" id="wiz-commit" placeholder="Initial release" />
-          </div>
-        </div>
-
-        <div
-          style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
-          <button type="button" class="btn btn-ghost" onclick="closeWizardModal()">Cancel</button>
-          <button type="submit" class="btn btn-primary" id="wiz-submit-btn">✨ Build Scraper</button>
-        </div>
-      </form>
-    </div>
-  </div>
 
   <!-- ── Edit Scraper Modal ─────────────────────────────── -->
   <div class="modal-overlay" id="edit-modal" style="display:none" onclick="closeEditModal(event)">
@@ -638,7 +722,8 @@
         </div>
       </div>
 
-      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px" id="assign-tags-hint">Click a tag below to toggle its
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:12px" id="assign-tags-hint">Click a tag below
+        to toggle its
         assignment for this item.</p>
       <div id="assign-tags-list"
         style="display:flex;flex-wrap:wrap;gap:8px;max-height:300px;overflow-y:auto;padding:4px;"></div>
@@ -984,7 +1069,8 @@
     <div class="modal-box" style="max-width:460px">
       <div class="modal-header">
         <h2 class="modal-title" id="run-inputs-title">Run with Inputs</h2>
-        <button class="modal-close" onclick="document.getElementById('run-inputs-modal').style.display='none'">✕</button>
+        <button class="modal-close"
+          onclick="document.getElementById('run-inputs-modal').style.display='none'">✕</button>
       </div>
       <div class="modal-body">
         <p style="color:var(--text-secondary);font-size:13px;margin:0 0 18px">Fill in the parameters before running.
@@ -992,7 +1078,8 @@
         <div id="run-inputs-form"></div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="document.getElementById('run-inputs-modal').style.display='none'">Cancel</button>
+        <button class="btn btn-ghost"
+          onclick="document.getElementById('run-inputs-modal').style.display='none'">Cancel</button>
         <button class="btn btn-primary" id="run-inputs-submit-btn" onclick="submitRunInputs()">▶ Run</button>
       </div>
     </div>
@@ -1043,28 +1130,60 @@
 
       <div class="form-row" style="margin-bottom:14px">
         <div class="form-group flex-2">
-          <label>Schedule Name <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+          <label>Schedule Name <span
+              style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
           <input type="text" id="edit-sched-label" placeholder="e.g. Daily Check" />
         </div>
       </div>
 
       <div class="form-row" style="margin-bottom:14px">
         <div class="form-group flex-2">
-          <label>Cron Expression *</label>
-          <input type="text" id="edit-sched-cron" placeholder="0 12 * * *" />
+          <label>Execution Cycle (Cron Expression) *</label>
+          <div style="display:flex; gap:12px; align-items:center">
+            <input type="text" id="edit-sched-cron" placeholder="0 12 * * *"
+              style="height:42px; width:180px; font-family:monospace; font-size:15px; letter-spacing:0.05em; background:var(--bg-input)" />
+
+            <!-- Cron Presets Dropdown for Edit Modal -->
+            <div class="custom-dropdown" id="dd-edit-sched-preset"
+              onclick="toggleDropdown(event, 'dd-edit-sched-preset')" style="width:160px">
+              <button type="button" class="tag-chip" id="summary-edit-sched-preset"
+                style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:rgba(255,255,255,0.03); font-size:12px">
+                <span>Presets</span> <span style="font-size:10px; opacity:0.5">▼</span>
+              </button>
+              <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%">
+                <button type="button" class="dropdown-item"
+                  onclick="applyCronPreset('0 * * * *', 'Hourly', 'edit-sched-cron', 'summary-edit-sched-preset'); toggleDropdown(event, 'dd-edit-sched-preset')">Hourly</button>
+                <button type="button" class="dropdown-item"
+                  onclick="applyCronPreset('0 0 * * *', 'Daily (Midnight)', 'edit-sched-cron', 'summary-edit-sched-preset'); toggleDropdown(event, 'dd-edit-sched-preset')">Daily
+                  (00:00)</button>
+                <button type="button" class="dropdown-item"
+                  onclick="applyCronPreset('0 12 * * *', 'Daily (Noon)', 'edit-sched-cron', 'summary-edit-sched-preset'); toggleDropdown(event, 'dd-edit-sched-preset')">Daily
+                  (12:00)</button>
+                <button type="button" class="dropdown-item"
+                  onclick="applyCronPreset('0 0 * * 0', 'Weekly', 'edit-sched-cron', 'summary-edit-sched-preset'); toggleDropdown(event, 'dd-edit-sched-preset')">Weekly</button>
+                <button type="button" class="dropdown-item"
+                  onclick="applyCronPreset('0 0 1 * *', 'Monthly', 'edit-sched-cron', 'summary-edit-sched-preset'); toggleDropdown(event, 'dd-edit-sched-preset')">Monthly</button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+      <div
+        style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
         <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
           <div class="form-group flex-2">
-            <label>Thumbnail Override <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-            <input type="text" id="edit-sched-thumb-url" placeholder="Paste URL here..." oninput="previewEditSchedThumb(this.value)" style="margin-bottom:8px;" />
+            <label>Thumbnail Override <span
+                style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+            <input type="text" id="edit-sched-thumb-url" placeholder="Paste URL here..."
+              oninput="previewEditSchedThumb(this.value)" style="margin-bottom:8px;" />
             <div style="display:flex; align-items:center; gap:8px;">
-              <label for="edit-sched-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px;">
+              <label for="edit-sched-thumb-file" class="btn btn-ghost"
+                style="cursor:pointer; font-size:12px; padding:4px 10px;">
                 📁 Upload Photo...
               </label>
-              <input type="file" id="edit-sched-thumb-file" accept="image/*" style="display:none" onchange="handleEditSchedThumbFile(this)" />
+              <input type="file" id="edit-sched-thumb-file" accept="image/*" style="display:none"
+                onchange="handleEditSchedThumbFile(this)" />
               <span id="edit-sched-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
             </div>
           </div>
@@ -1077,12 +1196,14 @@
 
       <div class="form-group" style="margin-bottom:24px">
         <label>Input Parameters</label>
-        <div id="edit-sched-params-container" style="background:var(--bg-card); padding:12px; border:1px solid var(--border); border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:12px;">
+        <div id="edit-sched-params-container"
+          style="background:var(--bg-card); padding:12px; border:1px solid var(--border); border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:12px;">
           <span style="font-size:12px;color:var(--text-muted)">No parameters for this scraper.</span>
         </div>
       </div>
 
-      <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
+      <div
+        style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
         <button class="btn btn-ghost" onclick="closeEditScheduleModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveEditSchedule()">💾 Save Changes</button>
       </div>
