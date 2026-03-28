@@ -161,3 +161,18 @@ class AppSetting(Base):
     key        = Column(String, primary_key=True)
     value      = Column(Text,   nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ── GlobalVariable ─────────────────────────────────────────────────────────────
+
+class GlobalVariable(Base):
+    __tablename__ = "global_variables"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    key         = Column(String,  unique=True, nullable=False)
+    value       = Column(Text,    nullable=True)
+    value_type  = Column(String,  default="string")  # "string" | "number" | "boolean" | "json"
+    description = Column(Text,    nullable=True)
+    is_secret   = Column(Boolean, default=False)
+    created_at  = Column(DateTime, default=datetime.utcnow)
+    updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

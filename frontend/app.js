@@ -26,6 +26,7 @@ const API = {
     reorderScrapers: '/api/scrapers/reorder',
     reorderSchedules: '/api/schedules/reorder',
     reorderIntegrations: '/api/integrations/reorder',
+    variables: '/api/variables',
 };
 
 /* ── State ──────────────────────────────────────────── */
@@ -46,7 +47,8 @@ let state = {
     expandedLogs: new Set(),
     timezone: 'UTC',       // kept in sync with /api/settings
     queueTasks: [],
-    queueSort: { col: 'scheduled_for', order: 'asc' }
+    queueSort: { col: 'scheduled_for', order: 'asc' },
+    variables: []
 };
 
 
@@ -259,6 +261,7 @@ const TAB_META = {
     logs: { title: 'Logs', subtitle: 'Full history of all scrape runs' },
     queue: { title: 'Queue', subtitle: 'Catch-up tasks for missed scheduled runs' },
     integrations: { title: 'Integrations', subtitle: 'Manage notification integrations' },
+    variables: { title: 'Variables', subtitle: 'Manage global configuration registry' },
     settings: { title: 'Settings', subtitle: 'App-wide configuration' },
 };
 
@@ -289,6 +292,7 @@ function loadTab(tab) {
     if (tab === 'logs') loadLogs();
     if (tab === 'queue') loadQueue();
     if (tab === 'integrations') loadIntegrations();
+    if (tab === 'variables') loadVariables();
     if (tab === 'settings') loadSettings();
 }
 
@@ -2391,4 +2395,166 @@ function handleWizThumbFile(input) {
         };
         reader.readAsDataURL(file);
     }
+}
+
+/* ════════════════════════════════════════════════
+   VARIABLE REGISTRY
+   ════════════════════════════════════════════════ */
+async function loadVariables(force = false) {
+    // Skip auto-refresh if we are currently editing or adding a variable (unless forced)
+    if (!force && state.variables.some(v => v._editing || v._isNew)) return;
+    
+    try {
+        const vars = await apiFetch(API.variables);
+        state.variables = vars.map(v => ({ ...v, _editing: false }));
+        renderVariablesList();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function renderVariablesList() {
+    const list = document.getElementById('variables-list');
+    if (!list) return;
+    
+    if (!state.variables.length) {
+        list.innerHTML = '<tr><td colspan="4" class="empty-state">No variables defined yet.</td></tr>';
+        return;
+    }
+
+    list.innerHTML = state.variables.map((v, idx) => {
+        if (v._editing || v._isNew) {
+            return `
+            <tr>
+                <td><input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" ${v._editing && !v._isNew ? 'disabled' : ''} style="width:100%"></td>
+                <td>
+                    <select id="inline-var-type-${idx}" style="padding:4px">
+                        <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
+                        <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
+                        <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
+                        <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
+                    </select>
+                </td>
+                <td><input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Value..." style="width:100%"></td>
+                <td style="text-align:right">
+                    <div class="action-btn-group" style="justify-content:flex-end">
+                        <button class="icon-btn" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Make Public' : 'Make Secret'}">
+                            ${v.is_secret ? '👁️' : '🔒'}
+                        </button>
+                        <button class="icon-btn" onclick="saveInlineVariable(${idx})" title="Save">💾</button>
+                        <button class="icon-btn icon-btn-danger" onclick="cancelInlineEdit(${idx})" title="Cancel">✕</button>
+                    </div>
+                </td>
+            </tr>`;
+        }
+
+        return `
+        <tr>
+            <td><code class="var-key">${v.key}</code></td>
+            <td><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
+            <td class="var-value-cell">${renderVariableValue(v)}</td>
+            <td style="text-align:right">
+                <div class="action-btn-group" style="justify-content:flex-end">
+                    <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">
+                        ${v.is_secret ? '👁️' : '🔒'}
+                    </button>
+                    <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit">✏️</button>
+                    <button class="icon-btn icon-btn-danger" onclick="deleteVariable(${v.id})" title="Delete">✕</button>
+                </div>
+            </td>
+        </tr>`;
+    }).join('');
+}
+
+function renderVariableValue(v) {
+    if (v.is_secret) {
+        return `<span style="letter-spacing:0.3em;opacity:0.5;font-family:monospace">••••••••</span>`;
+    }
+    if (v.value_type === 'boolean') {
+        const isTrue = String(v.value).toLowerCase() === 'true' || v.value === '1';
+        return `<span class="status-badge ${isTrue ? 'badge-success' : 'badge-failure'}">${isTrue ? 'TRUE' : 'FALSE'}</span>`;
+    }
+    if (v.value_type === 'json') {
+        return `<code style="font-size:11px;opacity:0.7">{...}</code>`;
+    }
+    return `<span class="truncate-text" title="${v.value}">${v.value || '—'}</span>`;
+}
+
+function addVariableRow() {
+    // Check if we are already adding one
+    if (state.variables.some(v => v._isNew)) return;
+    
+    state.variables.unshift({
+        key: '',
+        value: '',
+        value_type: 'string',
+        description: '',
+        is_secret: false,
+        _editing: true,
+        _isNew: true
+    });
+    renderVariablesList();
+}
+
+function editInlineVariable(idx) {
+    state.variables[idx]._editing = true;
+    renderVariablesList();
+}
+
+function cancelInlineEdit(idx) {
+    if (state.variables[idx]._isNew) {
+        state.variables.splice(idx, 1);
+    } else {
+        state.variables[idx]._editing = false;
+    }
+    renderVariablesList();
+}
+
+async function toggleVariableSecret(idx) {
+    const v = state.variables[idx];
+    try {
+        await apiFetch(`${API.variables}/${v.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_secret: !v.is_secret })
+        });
+        loadVariables(true);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function toggleInlineVariableSecret(idx) {
+    state.variables[idx].is_secret = !state.variables[idx].is_secret;
+    renderVariablesList();
+}
+
+async function saveInlineVariable(idx) {
+    const v = state.variables[idx];
+    const key = document.getElementById(`inline-var-key-${idx}`).value.trim();
+    const type = document.getElementById(`inline-var-type-${idx}`).value;
+    const value = document.getElementById(`inline-var-value-${idx}`).value.trim();
+
+    if (!key) { toast('Key is required', 'error'); return; }
+
+    const payload = { value, value_type: type, is_secret: v.is_secret };
+    if (v._isNew) {
+        payload.key = key;
+    }
+
+    try {
+        const url = v._isNew ? API.variables : `${API.variables}/${v.id}`;
+        await apiFetch(url, {
+            method: v._isNew ? 'POST' : 'PATCH',
+            body: JSON.stringify(payload)
+        });
+        toast(v._isNew ? 'Variable created' : 'Variable updated', 'success');
+        v._editing = false;
+        v._isNew = false;
+        loadVariables(true); // Force refresh to get final state from DB
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteVariable(id) {
+    if (!confirm('Delete this variable?')) return;
+    try {
+        await apiFetch(`${API.variables}/${id}`, { method: 'DELETE' });
+        toast('Variable deleted.', 'info');
+        loadVariables();
+    } catch (e) { toast(e.message, 'error'); }
 }
