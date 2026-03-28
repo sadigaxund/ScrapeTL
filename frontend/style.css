@@ -248,7 +248,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 28px;
   flex-wrap: wrap;
   gap: 12px;
 }
@@ -689,9 +689,19 @@ select option {
 }
 
 .hint-label {
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-secondary);
   flex-shrink: 0;
+}
+
+/* Card header subtitle neutral style */
+.card-header .hint-label {
+  display: block;
+  font-size: 12px;
+  margin-top: 8px;
+  font-weight: 500;
+  opacity: 0.7;
 }
 
 .hint-value {
@@ -2317,11 +2327,11 @@ input:checked + .slider { background-color: var(--success); }
 }
 
 .log-running-msg {
-  padding: 12px;
-  background: rgba(245, 158, 11, 0.08);
-  border-left: 3px solid var(--warning);
-  color: var(--warning);
-  font-size: 13px;
+  padding: 8px 12px;
+  background: rgba(245, 158, 11, 0.04);
+  border-left: 2px solid rgba(245, 158, 11, 0.3);
+  color: var(--text-secondary);
+  font-size: 12px;
   border-radius: 4px;
   margin-bottom: 12px;
 }

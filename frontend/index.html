@@ -421,15 +421,13 @@
     <section class="tab-panel" id="tab-queue">
       <div class="card">
         <div class="card-header">
-          <div style="display:flex; justify-content:space-between; align-items:center; width:100%">
-            <div>
-              <h2 class="card-title">Task Queue</h2>
-              <span class="hint-label">Catch-up tasks and one-time executions</span>
-            </div>
-            <button class="btn btn-primary" onclick="openOneTimeModal()"
-              style="box-shadow: 0 4px 14px var(--accent-glow)">+ One-Time Task</button>
-          </div>
+          <h2 class="card-title">Task Queue</h2>
+          <button class="btn btn-primary" onclick="openOneTimeModal()"
+            style="box-shadow: 0 4px 14px var(--accent-glow)">+ One-Time Task</button>
         </div>
+        <p style="color:var(--text-secondary);font-size:14px;margin-bottom:24px;margin-top:-14px">
+          Catch-up tasks and one-time executions
+        </p>
         <div class="table-wrapper">
           <table class="data-table" id="queue-table">
             <thead>
