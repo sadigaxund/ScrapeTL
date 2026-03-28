@@ -1191,6 +1191,70 @@ select option {
   animation: fadeIn 0.2s ease;
 }
 
+.log-context-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm);
+  margin-top: 10px;
+  transition: background var(--transition);
+}
+
+.log-context-item:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.ctx-icon {
+  font-size: 20px;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+.ctx-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.ctx-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ctx-subtext {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.ctx-meta {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  opacity: 0.8;
+}
+
+.ctx-error-msg {
+  color: var(--failure);
+  font-size: 11px;
+  margin-left: 58px; /* icon width + gap */
+  margin-top: 4px;
+  font-family: var(--font-mono);
+  opacity: 0.9;
+}
+
 .log-error {
   color: var(--failure);
   font-size: 13px;
@@ -1685,84 +1749,7 @@ input:checked + .slider { background-color: var(--success); }
   transform: translateY(-1px);
 }
 
-/* ── Recipe Builder Wizard ───────────────────── */
-.recipe-step-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.recipe-step-card {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: relative;
-}
-
-.recipe-step-card:hover {
-  border-color: var(--border-strong);
-}
-
-.recipe-step-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.recipe-step-type-badge {
-  font-size: 11px;
-  font-weight: 700;
-  padding: 2px 8px;
-  border-radius: 4px;
-  background: var(--accent-glow);
-  color: #c4b5fd;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  flex-shrink: 0;
-}
-
-.recipe-step-remove {
-  margin-left: auto;
-  background: none;
-  border: none;
-  color: var(--text-muted);
-  cursor: pointer;
-  font-size: 16px;
-  padding: 0 4px;
-  transition: color var(--transition);
-}
-
-.recipe-step-remove:hover {
-  color: var(--failure);
-}
-
-.recipe-add-step-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-top: 4px;
-}
-
-.recipe-json-preview {
-  background: rgba(0,0,0,0.3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  padding: 12px;
-  font-family: monospace;
-  font-size: 11px;
-  color: #94a3b8;
-  white-space: pre-wrap;
-  word-break: break-all;
-  max-height: 200px;
-  overflow-y: auto;
-  margin-top: 12px;
-}
-
+/* ── Wizard Tab Switcher ───────────────────── */
 .wizard-tab-switcher {
   display: flex;
   gap: 0;
