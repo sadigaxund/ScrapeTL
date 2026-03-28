@@ -1237,7 +1237,7 @@ async function loadLogs(page = null) {
                 </div>
                 ${hasDetails ? `
                 <div class="log-details" id="${detailsId}" style="display:${isExpanded ? 'block' : 'none'}">
-                    ${isRunning ? `<div class="log-running-msg">⚡ This scraper is currently executing. Results will appear here once finished.</div>` : ''}
+                    ${isRunning ? `<div class="log-running-msg">Execution in progress. Results will be available after completion.</div>` : ''}
                     ${log.error_msg && !isRunning ? (log.status === 'skipped' ? `<div class="log-skipped-msg">⏭ ${log.error_msg}</div>` : `<div class="log-error">❌ ${log.error_msg}</div>`) : ''}
                     ${log.payload ? `
                     <div class="payload-download-bar">

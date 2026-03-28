@@ -84,14 +84,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             if episodes:
                 latest = episodes[0]
                 payload_dict = dict(latest)
-                # Always surface website_url from the scraper instance if episode doesn't have one
-                if "website_url" not in payload_dict:
-                    payload_dict["website_url"] = scraper_instance.website_url
-
                 payload_list = [dict(ep) for ep in episodes[:50]]
-                for ep_item in payload_list:
-                    if "website_url" not in ep_item:
-                        ep_item["website_url"] = scraper_instance.website_url
 
             status = "success"
             error_msg = None
@@ -185,16 +178,18 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
     integrations = scraper_record.integrations
     if not integrations:
         # Fallback: use the legacy .env webhook if no integrations configured
-        # Default to sending episodes for legacy
-        res = discord_notifier.send_notification(
-            scraper_name=scraper_record.name,
-            scraper_thumbnail=scraper_record.thumbnail_url,
-            status=status,
-            episodes=episodes_list if status == "success" else None,
-            error_msg=error_msg,
-            triggered_by=triggered_by,
-        )
-        if res: results.append(res)
+        # Only attempt if the environment variable is actually set to avoid noisy logs
+        import os
+        if os.getenv("DISCORD_WEBHOOK_URL"):
+            res = discord_notifier.send_notification(
+                scraper_name=scraper_record.name,
+                scraper_thumbnail=scraper_record.thumbnail_url,
+                status=status,
+                episodes=episodes_list if status == "success" else None,
+                error_msg=error_msg,
+                triggered_by=triggered_by,
+            )
+            if res: results.append(res)
         return results
 
     for integ in integrations:
