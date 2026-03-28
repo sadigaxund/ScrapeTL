@@ -2315,7 +2315,7 @@ async function submitOneTimeTask() {
             body: JSON.stringify({
                 scraper_id: parseInt(scraperId),
                 scheduled_for: scheduledFor || null,
-                input_values: Object.keys(inputValues).length ? inputValues : null,
+                input_values: inputValues,
                 note: note || null
             })
         });

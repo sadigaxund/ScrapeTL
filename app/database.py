@@ -71,8 +71,16 @@ def _seed_defaults():
     try:
         from app.models import AppSetting
         if not db.get(AppSetting, "timezone"):
-            db.add(AppSetting(key="timezone", value="UTC"))
+            # Detect local timezone
+            initial_tz = "UTC"
+            try:
+                import tzlocal
+                initial_tz = tzlocal.get_localzone_name()
+            except Exception:
+                pass
+            
+            db.add(AppSetting(key="timezone", value=initial_tz))
             db.commit()
-            print("[DB] Seeded default timezone = UTC")
+            print(f"[DB] Seeded default timezone = {initial_tz}")
     finally:
         db.close()

@@ -200,8 +200,8 @@ def get_queue(db: Session = Depends(get_db)):
 class QueueCreate(BaseModel):
     scraper_id: int
     scheduled_for: Optional[datetime] = None
-    input_values: dict = None
-    note: str = None
+    input_values: Optional[dict] = None
+    note: Optional[str] = None
 
 
 @router.post("/api/queue")
