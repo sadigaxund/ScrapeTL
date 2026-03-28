@@ -23,20 +23,56 @@ def get_logs(
     limit: int = Query(100, le=500),
     offset: int = Query(0),
 ):
+    # 1. Fetch currently running tasks (if on first page)
+    running_items = []
+    if offset == 0:
+        rq = db.query(TaskQueue).filter(TaskQueue.status == "running")
+        if scraper_id:
+            rq = rq.filter(TaskQueue.scraper_id == scraper_id)
+        if tag_id:
+            rq = rq.join(Scraper).filter(Scraper.tags.any(id=tag_id))
+        
+        # We don't filter running items by 'status' if status filter is something other than 'running'
+        # but if status search is "success" or "failure", we shouldn't show running items.
+        if status and status != "running":
+            rq = rq.filter(False) # No matches if searching specifically for a finished status
+        
+        running_tasks = rq.all()
+        for t in running_tasks:
+            running_items.append({
+                "id": f"run_{t.id}",
+                "scraper_id": t.scraper_id,
+                "scraper_name": t.scraper.name if t.scraper else f"Scraper #{t.scraper_id}",
+                "status": "running",
+                "payload": None,
+                "episode_count": 0,
+                "error_msg": t.note or "Running...",
+                "run_at": t.scheduled_for.isoformat() + "Z" if t.scheduled_for else datetime.utcnow().isoformat() + "Z",
+                "triggered_by": "manual" if "Manual" in (t.note or "") else ("scheduler" if "Scheduled" in (t.note or "") else "catchup"),
+                "schedule_id": None,
+                "schedule_name": None,
+                "retry_count": 0,
+                "integration_details": None,
+            })
+
+    # 2. Fetch completed logs
     q = db.query(ScrapeLog).order_by(ScrapeLog.run_at.desc())
     if scraper_id:
         q = q.filter(ScrapeLog.scraper_id == scraper_id)
     if tag_id:
         q = q.join(Scraper).filter(Scraper.tags.any(id=tag_id))
     if status:
+        if status == "running":
+            # If specifically looking for running, only return running_items
+            return {"total": len(running_items), "items": running_items}
         q = q.filter(ScrapeLog.status == status)
 
     total = q.count()
-    logs = q.offset(offset).limit(limit).all()
+    # Correct limit to account for running items
+    fetch_limit = limit - len(running_items) if offset == 0 else limit
+    logs = q.offset(offset).limit(max(0, fetch_limit)).all()
 
-    return {
-        "total": total,
-        "items": [
+    items = running_items + [
             {
                 "id": log.id,
                 "scraper_id": log.scraper_id,
@@ -53,7 +89,11 @@ def get_logs(
                 "integration_details": log.integration_details,
             }
             for log in logs
-        ],
+        ]
+
+    return {
+        "total": total + len(running_tasks) if offset == 0 else total,
+        "items": items,
     }
 
 

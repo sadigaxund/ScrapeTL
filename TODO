@@ -16,10 +16,7 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 12. somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. MAke sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain
 13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
 
-14. remove emojii from  "run" button within scrapers menu
-
-15. rework the "Format:..." label within schedules menu
-17. ability to reorder the elements of schedules, scrapers and integrations list
+14. in queue menu this text looks out of place: "Catch-up tasks and one-time executions"
 18. Display the schedule within logs menu in a better and more visible way and so that it does not look like it's appended to the scraper name
 19. When a scraper contains some new library thats not in the app's environment, scraper does not run, maybe a way of dynamically installing libraries.
 20. investigate why is there 2 retries when i manually ran the scraper, it should be applied only to the integration, where if and only if after the message is scraped, it retries the message sending process not the scraping process, which has to be idempotent unless stated otherwise.
@@ -28,4 +25,7 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 23. option to resend integ from logs
 24. option to format JSON
 25. catchup ignores inputs
-26. Rename Schedules to Routines
+
+
+14. rework the integration part to be similar to scraper/schedules creation part, but where at the top  [NOT SURE]
+26. Rename Schedules to Routines[NOT SURE]

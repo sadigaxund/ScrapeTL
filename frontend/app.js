@@ -189,10 +189,6 @@ async function handleDrop(e, type, targetId) {
     }
 }
 
-async function moveItem(type, id, direction) {
-    // legacy button-based reordering logic
-}
-
 /* ── URL helpers ────────────────────────────────────── */
 function ensureHttps(url) {
     if (!url || !url.trim()) return '';
@@ -1108,7 +1104,13 @@ function renderLogFilters() {
     // Get active item instances
     const aScrap = state.scrapers.find(s => String(s.id) === state.logFilters.scraperId);
     const aTag = state.tags.find(t => String(t.id) === state.logFilters.tagId);
-    const statuses = [{ id: '', label: 'All' }, { id: 'success', label: '✅ Success' }, { id: 'failure', label: '❌ Failure' }, { id: 'skipped', label: '⏭ Skipped' }];
+    const statuses = [
+        { id: '', label: 'All' },
+        { id: 'running', label: '⚡ Running' },
+        { id: 'success', label: '✅ Success' },
+        { id: 'failure', label: '❌ Failure' },
+        { id: 'skipped', label: '⏭ Skipped' }
+    ];
     const aStat = statuses.find(st => st.id === state.logFilters.status);
 
     // Render summaries WITH clear buttons
@@ -1210,20 +1212,24 @@ async function loadLogs(page = null) {
 
         container.innerHTML = data.items.map((log, idx) => {
             const detailsId = `log-details-${log.id}`;
-            const hasDetails = log.payload || log.error_msg;
+            const isRunning = log.status === 'running';
+            const hasDetails = log.payload || log.error_msg || isRunning;
             const isExpanded = state.expandedLogs.has(detailsId);
             const retryBadge = (log.retry_count && log.retry_count > 0)
                 ? `<span class="status-badge badge-pending" title="Retried ${log.retry_count}x">🔄 ${log.retry_count} retr${log.retry_count === 1 ? 'y' : 'ies'}</span>`
                 : '';
+            
             return `
-            <div class="log-card" data-status="${log.status}">
+            <div class="log-card ${isRunning ? 'log-card--running' : ''}" data-status="${log.status}">
                 <div class="log-card-header" ${hasDetails ? `onclick="toggleLogDetails('${detailsId}')"` : ''} style="${hasDetails ? 'cursor:pointer' : ''}">
                     <div class="log-col-status">${statusBadge(log.status)}</div>
                     <div class="log-col-scraper">
                         <strong>${log.scraper_name || 'N/A'}</strong>
                         ${log.schedule_name ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📅 ${log.schedule_name}</div>` : ''}
                     </div>
-                    <div class="log-col-eps"><span class="log-epcount" style="display: ${log.episode_count ? 'inline-flex' : 'none'}">${log.episode_count} found</span></div>
+                    <div class="log-col-eps">
+                        <span class="log-epcount" style="display: ${log.episode_count ? 'inline-flex' : 'none'}">${log.episode_count} found</span>
+                    </div>
                     <div class="log-col-retry" style="display:flex; justify-content:center;">${retryBadge}</div>
                     <div class="log-col-trigger">${statusBadge(log.triggered_by)}</div>
                     <div class="log-col-time"><span class="log-time">${fmt(log.run_at)}</span></div>
@@ -1231,7 +1237,8 @@ async function loadLogs(page = null) {
                 </div>
                 ${hasDetails ? `
                 <div class="log-details" id="${detailsId}" style="display:${isExpanded ? 'block' : 'none'}">
-                    ${log.error_msg ? (log.status === 'skipped' ? `<div class="log-skipped-msg">⏭ ${log.error_msg}</div>` : `<div class="log-error">❌ ${log.error_msg}</div>`) : ''}
+                    ${isRunning ? `<div class="log-running-msg">⚡ This scraper is currently executing. Results will appear here once finished.</div>` : ''}
+                    ${log.error_msg && !isRunning ? (log.status === 'skipped' ? `<div class="log-skipped-msg">⏭ ${log.error_msg}</div>` : `<div class="log-error">❌ ${log.error_msg}</div>`) : ''}
                     ${log.payload ? `
                     <div class="payload-download-bar">
                         <span class="payload-download-label">Download payload:</span>

@@ -24,12 +24,26 @@ def manual_run(scraper_id: int, payload: RunPayload = None, db: Session = Depend
         raise HTTPException(status_code=400, detail="Scraper is disabled.")
 
     input_values = (payload.input_values or {}) if payload else {}
+    from app.models import TaskQueue
+    from datetime import datetime
+    import json
+
+    task = TaskQueue(
+        scraper_id=scraper_id,
+        scheduled_for=datetime.utcnow(),
+        status="running",
+        input_values=json.dumps(input_values) if input_values else None,
+        note="Manual Run"
+    )
+    db.add(task)
+    db.commit()
+    task_id = task.id
 
     def _run():
         from app.database import SessionLocal
         session = SessionLocal()
         try:
-            run_scraper(session, scraper_id, triggered_by="manual", input_values=input_values)
+            run_scraper(session, scraper_id, triggered_by="manual", input_values=input_values, queue_task_id=task_id)
         finally:
             session.close()
 
