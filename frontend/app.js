@@ -1229,7 +1229,6 @@ async function loadLogs(page = null) {
                     <div class="log-col-status">${statusBadge(log.status)}</div>
                     <div class="log-col-scraper">
                         <strong>${log.scraper_name || 'N/A'}</strong>
-                        ${log.schedule_name ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">📅 ${log.schedule_name}</div>` : ''}
                     </div>
                     <div class="log-col-eps">
                         <span class="log-epcount" style="display: ${log.episode_count ? 'inline-flex' : 'none'}">${log.episode_count} found</span>
@@ -1250,7 +1249,7 @@ async function loadLogs(page = null) {
                         <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'csv')" title="Download CSV">⬇ CSV</button>
                     </div>
                     ${renderPayload(log.payload, log.episode_count)}` : ''}
-                    ${log.integration_details ? renderIntegrationDetails(log.integration_details) : ''}
+                    ${renderLogContext(log)}
                 </div>` : ''}
             </div>`;
         }).join('');
@@ -1316,26 +1315,53 @@ function renderPayload(payload, episodeCount = 0) {
     return `<div class="payload-grid">${rows.join('')}</div>`;
 }
 
-function renderIntegrationDetails(detailsStr) {
-    try {
-        const details = JSON.parse(detailsStr);
-        if (!details || !Array.isArray(details) || details.length === 0) return '';
-        const rows = details.map(d => {
-            let color = d.success ? 'var(--success)' : 'var(--failure)';
-            let icon = d.success ? '✅' : '❌';
-            return `
-            <div style="font-size:12px; margin-top:8px; padding:8px; background:rgba(255,255,255,0.03); border-radius:4px; border-left:3px solid ${color};">
-                <strong>${icon} ${d.name}</strong> • ${d.attempts} attempt(s)
-                ${d.error ? `<div style="color:var(--failure);margin-top:4px;">Error: ${d.error}</div>` : ''}
-            </div>`;
-        });
-        return `<div style="margin-top:16px;">
-            <div style="font-size:11px;color:var(--text-muted);font-weight:600;letter-spacing:0.05em;">INTEGRATIONS</div>
-            ${rows.join('')}
-        </div>`;
-    } catch {
-        return '';
+function renderLogContext(log) {
+    let html = '';
+    
+    // 1. Trigger Info (Standardized item 1)
+    const trigMap = {
+        'scheduler': { icon: '📅', title: 'Schedule', color: 'var(--accent)', label: log.schedule_name || 'Untitled Schedule' },
+        'manual':    { icon: '👤', title: 'Manual',   color: 'var(--accent)', label: 'Direct Trigger' },
+        'one-time':  { icon: '⏳', title: 'Task',     color: 'var(--accent)', label: log.schedule_name || 'One-time Run' },
+        'catchup':   { icon: '🔄', title: 'Catch-up', color: 'var(--accent)', label: log.schedule_name || 'System Re-run' }
+    };
+
+    const t = trigMap[log.triggered_by] || trigMap['manual'];
+    html += `
+    <div class="log-context-item" style="border-left: 4px solid ${t.color};">
+        <div class="ctx-icon">${t.icon}</div>
+        <div class="ctx-main">
+            <div class="ctx-label">${t.label}</div>
+            <div class="ctx-subtext">Executed by ${t.title} Trigger</div>
+        </div>
+        <div class="ctx-meta">Active</div>
+    </div>`;
+
+    // 2. Integration Details (Standardized items 2+)
+    if (log.integration_details) {
+        try {
+            const details = JSON.parse(log.integration_details);
+            if (Array.isArray(details) && details.length > 0) {
+                details.forEach(d => {
+                    const color = d.success ? 'var(--success)' : 'var(--failure)';
+                    const icon = d.success ? '✅' : '❌';
+                    const statusText = d.success ? 'Delivered' : 'Failed';
+                    html += `
+                    <div class="log-context-item" style="border-left: 4px solid ${color};">
+                        <div class="ctx-icon">${icon}</div>
+                        <div class="ctx-main">
+                            <div class="ctx-label">${d.name}</div>
+                            <div class="ctx-subtext">Integration Hub ${statusText}</div>
+                        </div>
+                        <div class="ctx-meta">${d.attempts > 1 ? `${d.attempts} attempts` : '1 attempt'}</div>
+                    </div>
+                    ${d.error ? `<div class="ctx-error-msg">⚠️ ${d.error}</div>` : ''}`;
+                });
+            }
+        } catch(e) { console.error("Error parsing integration details:", e); }
     }
+
+    return html ? `<div class="log-footer-context">${html}</div>` : '';
 }
 
 function downloadLogPayload(logId, format) {

@@ -78,23 +78,13 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
     for attempt in range(max_retries + 1):
         try:
-            scraper_type = getattr(scraper_record, "scraper_type", "python") or "python"
-
-            if scraper_type == "recipe":
-                # ── Recipe (low-code) path ──────────────────────────────────
-                if not scraper_record.recipe:
-                    raise ValueError("No recipe defined for this recipe scraper.")
-                from app.recipe_runner import run_recipe
-                episodes = run_recipe(scraper_record.recipe, homepage_url=scraper_record.homepage_url)
-
-            else:
-                # ── Python (BaseScraper) path ────────────────────────────────
-                if not scraper_record.versions:
-                    raise ValueError("No code version found for this scraper.")
-                from app.scrapers import load_scraper_class_from_code
-                scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
-                scraper_instance = scraper_cls(homepage_url=scraper_record.homepage_url)
-                episodes = scraper_instance.scrape(vars=global_vars, **_input_values)
+            # ── Python (BaseScraper) path ────────────────────────────────
+            if not scraper_record.versions:
+                raise ValueError("No code version found for this scraper.")
+            from app.scrapers import load_scraper_class_from_code
+            scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
+            scraper_instance = scraper_cls(homepage_url=scraper_record.homepage_url)
+            episodes = scraper_instance.scrape(vars=global_vars, **_input_values)
 
             episode_count = len(episodes)
 
@@ -127,28 +117,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             else:
                 print(f"[Runner] ❌ {scraper_record.name} failed after {attempt + 1} attempt(s): {error_msg}")
 
-    # Duplicate detection — avoid spamming integrations
-    if status == "success" and latest and triggered_by != "manual":
-        last_log = (
-            db.query(ScrapeLog)
-            .filter(ScrapeLog.scraper_id == scraper_id, ScrapeLog.status == "success")
-            .order_by(ScrapeLog.run_at.desc())
-            .first()
-        )
-        if last_log and last_log.payload:
-            try:
-                loaded_payload = json.loads(last_log.payload)
-                last_payload = loaded_payload[0] if isinstance(loaded_payload, list) and len(loaded_payload) > 0 else loaded_payload
-                cur_url   = payload_dict.get("website_url")
-                cur_title = payload_dict.get("title")
-                if last_payload.get("website_url") == cur_url:
-                    should_notify = False
-                    print(f"[Runner] ℹ️ {scraper_record.name} — No new episodes (URL matched last log).")
-                elif last_payload.get("title") == cur_title:
-                    should_notify = False
-                    print(f"[Runner] ℹ️ {scraper_record.name} — No new episodes (Title matched last log).")
-            except Exception:
-                pass
+    # Scraper health updated automatically below.
 
     # Update scraper health based on run outcome
     scraper_record.health = "ok" if status in ("success", "skipped") else "failing"
@@ -174,15 +143,10 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
     # Fire all assigned integrations (skipped status now supported if trigger set)
     if status in ("success", "failure", "skipped"):
-        # For success, we still respect should_notify to avoid spamming if no new episodes found,
-        # UNLESS it's a manual run or similar (already handled by should_notify logic above).
-        if status == "success" and not should_notify:
-            pass
-        else:
-            results = _fire_integrations(scraper_record, status, episodes, error_msg, triggered_by)
-            if results:
-                log.integration_details = json.dumps(results)
-                db.commit()
+        results = _fire_integrations(scraper_record, status, episodes, error_msg, triggered_by)
+        if results:
+            log.integration_details = json.dumps(results)
+            db.commit()
 
     return status
 

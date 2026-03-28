@@ -42,8 +42,6 @@ class Scraper(Base):
     health = Column(String, default="untested")  # "untested" | "ok" | "failing"
     position = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
-    scraper_type = Column(String, default="python")  # "python" | "recipe"
-    recipe = Column(Text, nullable=True)             # JSON recipe steps (recipe scrapers only)
 
     schedules     = relationship("Schedule",       back_populates="scraper", cascade="all, delete-orphan")
     logs          = relationship("ScrapeLog",      back_populates="scraper", cascade="all, delete-orphan")
