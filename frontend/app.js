@@ -50,7 +50,19 @@ let state = {
     queueTasks: [],
     queueSort: { col: 'scheduled_for', order: 'asc' },
     variables: [],
-    functions: []
+    functions: [],
+    builder: {
+        x: -2000,
+        y: -2000,
+        isDragging: false,
+        activeTool: 'pan',
+        snapToGrid: true,
+        nodes: [],
+        startX: 0,
+        startY: 0,
+        draggedNode: null,
+        zoom: 1.0
+    }
 };
 
 
@@ -264,6 +276,7 @@ const TAB_META = {
     queue: { title: 'Queue', subtitle: 'Catch-up tasks for missed scheduled runs' },
     integrations: { title: 'Integrations', subtitle: 'Manage notification integrations' },
     variables: { title: 'Variables', subtitle: 'Manage global configuration registry' },
+    builder: { title: 'Builder', subtitle: 'No-code scraper editor' },
     settings: { title: 'Settings', subtitle: 'App-wide configuration' },
 };
 
@@ -296,7 +309,199 @@ function loadTab(tab) {
     if (tab === 'integrations') loadIntegrations();
     if (tab === 'variables') loadVariables();
     if (tab === 'settings') loadSettings();
+    if (tab === 'builder') initBuilder();
 }
+
+/* ── Builder Logic ─────────────────────────────────── */
+function initBuilder() {
+    const viewport = document.getElementById('builder-viewport');
+    const canvas = document.getElementById('builder-canvas');
+    if (!viewport || !canvas) return;
+
+    // Apply saved offset
+    canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px)`;
+
+    // Only attach events once
+    if (viewport.dataset.initialized) return;
+    viewport.dataset.initialized = "true";
+
+    viewport.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // Left click only
+        state.builder.isDragging = true;
+        state.builder.startX = e.clientX - state.builder.x;
+        state.builder.startY = e.clientY - state.builder.y;
+        viewport.style.cursor = 'grabbing';
+    });
+
+    window.addEventListener('mousemove', (e) => {
+        if (!state.builder.isDragging) return;
+        state.builder.x = e.clientX - state.builder.startX;
+        state.builder.y = e.clientY - state.builder.startY;
+        canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+    });
+
+    window.addEventListener('mouseup', () => {
+        state.builder.isDragging = false;
+        state.builder.draggedNode = null;
+        document.querySelectorAll('.builder-node').forEach(n => n.classList.remove('dragging'));
+        viewport.style.cursor = state.builder.activeTool === 'pan' ? 'grab' : 'crosshair';
+    });
+
+    // Zooming logic (Ctrl + Scroll)
+    viewport.addEventListener('wheel', (e) => {
+        if (e.ctrlKey) {
+            e.preventDefault();
+            const delta = -e.deltaY;
+            const factor = 1.1;
+            const oldZoom = state.builder.zoom;
+            const newZoom = delta > 0 ? oldZoom * factor : oldZoom / factor;
+            
+            // Limit zoom
+            state.builder.zoom = Math.min(Math.max(newZoom, 0.2), 3.0);
+            
+            // Note: For true "zoom to mouse", we'd need to shift X/Y too. 
+            // For now, simpler zoom is fine.
+            canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+            updateZoomHUD();
+        }
+    }, { passive: false });
+
+    // Node Placement (Click on Viewport)
+    viewport.addEventListener('click', (e) => {
+        if (state.builder.activeTool !== 'placeholder') return;
+        if (e.target !== viewport && e.target !== canvas) return; // Only if clicking background
+
+        const rect = canvas.getBoundingClientRect();
+        // Adjust for zoom: Screen pos to Canvas pos
+        let x = (e.clientX - rect.left) / state.builder.zoom;
+        let y = (e.clientY - rect.top) / state.builder.zoom;
+
+        if (state.builder.snapToGrid) {
+            x = Math.round(x / 30) * 30;
+            y = Math.round(y / 30) * 30;
+        }
+
+        const newNode = {
+            id: Date.now(),
+            x: x - 60,
+            y: y - 40,
+        };
+
+        state.builder.nodes.push(newNode);
+        renderBuilderNodes();
+    });
+}
+
+function updateZoomHUD() {
+    const el = document.getElementById('zoom-value');
+    if (el) el.textContent = `${Math.round(state.builder.zoom * 100)}%`;
+}
+
+function resetBuilderZoom() {
+    state.builder.zoom = 1.0;
+    const canvas = document.getElementById('builder-canvas');
+    if (canvas) canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(1)`;
+    updateZoomHUD();
+}
+
+function setBuilderTool(tool) {
+    state.builder.activeTool = tool;
+    document.querySelectorAll('.builder-tool-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`tool-${tool}`).classList.add('active');
+    
+    const viewport = document.getElementById('builder-viewport');
+    if (viewport) {
+        viewport.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+    }
+
+    // UX Improvement: Drop a node in center if switching to placeholder
+    if (tool === 'placeholder') {
+        const vw = viewport.clientWidth || 800;
+        const vh = viewport.clientHeight || 600;
+        
+        // Correct transform mapping: CanvasPos = (ScreenPos - Translate) / Zoom
+        // ScreenPos here is (vw/2, vh/2)
+        let x = ((vw / 2) - state.builder.x) / state.builder.zoom;
+        let y = ((vh / 2) - state.builder.y) / state.builder.zoom;
+
+        if (state.builder.snapToGrid) {
+            x = Math.round(x / 30) * 30;
+            y = Math.round(y / 30) * 30;
+        }
+
+        const newNode = {
+            id: Date.now(),
+            x: x - 60,
+            y: y - 40,
+        };
+        state.builder.nodes.push(newNode);
+        renderBuilderNodes();
+        toast('New placeholder added to center', 'success');
+    }
+}
+
+function renderBuilderNodes() {
+    const canvas = document.getElementById('builder-canvas');
+    if (!canvas) return;
+
+    // Remove existing nodes
+    canvas.querySelectorAll('.builder-node').forEach(n => n.remove());
+
+    state.builder.nodes.forEach(node => {
+        const el = document.createElement('div');
+        el.className = 'builder-node';
+        el.id = `node-${node.id}`;
+        el.style.left = `${node.x}px`;
+        el.style.top = `${node.y}px`;
+        el.textContent = 'Placeholder';
+        
+        el.addEventListener('mousedown', (e) => {
+            if (state.builder.activeTool === 'placeholder') return;
+
+            e.stopPropagation();
+            state.builder.draggedNode = node;
+            
+            // Calculate mouse position in canvas-space
+            const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
+            const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
+            
+            // Store offset relative to node top-left in canvas-space
+            state.builder.startX = mouseCanvasX - node.x;
+            state.builder.startY = mouseCanvasY - node.y;
+            
+            el.classList.add('dragging');
+        });
+
+        canvas.appendChild(el);
+    });
+}
+
+// Global mousemove for node dragging (updates state + DOM)
+window.addEventListener('mousemove', (e) => {
+    if (!state.builder.draggedNode) return;
+    
+    // Mouse canvas-space position
+    const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
+    const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
+
+    let nextX = mouseCanvasX - state.builder.startX;
+    let nextY = mouseCanvasY - state.builder.startY;
+
+    if (state.builder.snapToGrid) {
+        nextX = Math.round(nextX / 30) * 30;
+        nextY = Math.round(nextY / 30) * 30;
+    }
+
+    state.builder.draggedNode.x = nextX;
+    state.builder.draggedNode.y = nextY;
+    
+    // Update DOM directly for smooth movement
+    const el = document.getElementById(`node-${state.builder.draggedNode.id}`);
+    if (el) {
+        el.style.left = `${nextX}px`;
+        el.style.top = `${nextY}px`;
+    }
+});
 
 /* ════════════════════════════════════════════════
    SCRAPERS
