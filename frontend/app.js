@@ -58,10 +58,12 @@ let state = {
         activeTool: 'pan',
         snapToGrid: true,
         nodes: [],
+        edges: [],
         startX: 0,
         startY: 0,
         draggedNode: null,
-        zoom: 1.0
+        zoom: 1.0,
+        activeConnection: null  // { fromId, fromPortType, mouseX, mouseY }
     }
 };
 
@@ -312,6 +314,23 @@ function loadTab(tab) {
     if (tab === 'builder') initBuilder();
 }
 
+const NODE_PRESETS = {
+    input: {
+        external: { title: 'External Trigger', inputs: [], outputs: ['Input Data'] },
+        variable: { title: 'Variable / Func', inputs: ['Source'], outputs: ['Internal Value'] },
+    },
+    node: {
+        node1: { title: 'Processor 1', inputs: ['In'], outputs: ['Out'] },
+        node2: { title: 'Splitter', inputs: ['Source'], outputs: ['Path A', 'Path B'] },
+        node3: { title: 'Merger', inputs: ['Val 1', 'Val 2'], outputs: ['Result'] },
+        transformer: { title: 'GPT Agent', inputs: ['Prompt', 'Data'], outputs: ['Response'] },
+    },
+    output: {
+        external: { title: 'External Sink', inputs: ['Output Point'], outputs: [] },
+        terminal: { title: 'Debug Log', inputs: ['Log'], outputs: [] },
+    }
+};
+
 /* ── Builder Logic ─────────────────────────────────── */
 function initBuilder() {
     const viewport = document.getElementById('builder-viewport');
@@ -367,12 +386,11 @@ function initBuilder() {
     }, { passive: false });
 
     // Node Placement (Click on Viewport)
-    viewport.addEventListener('click', (e) => {
-        if (state.builder.activeTool !== 'placeholder') return;
+    viewport.addEventListener('mousedown', (e) => {
+        if (state.builder.activeTool === 'pan') return;
         if (e.target !== viewport && e.target !== canvas) return; // Only if clicking background
 
         const rect = canvas.getBoundingClientRect();
-        // Adjust for zoom: Screen pos to Canvas pos
         let x = (e.clientX - rect.left) / state.builder.zoom;
         let y = (e.clientY - rect.top) / state.builder.zoom;
 
@@ -383,12 +401,21 @@ function initBuilder() {
 
         const newNode = {
             id: Date.now(),
-            x: x - 60,
-            y: y - 40,
+            x: x - 80,
+            y: y - 50,
+            type: state.builder.activeTool.type,
+            preset: state.builder.activeTool.preset
         };
 
         state.builder.nodes.push(newNode);
         renderBuilderNodes();
+    });
+
+    // Close dropdowns on outside click
+    window.addEventListener('click', (e) => {
+        if (!e.target.closest('.bt-dropdown')) {
+            document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
+        }
     });
 }
 
@@ -405,67 +432,115 @@ function resetBuilderZoom() {
 }
 
 function setBuilderTool(tool) {
-    state.builder.activeTool = tool;
+    state.builder.activeTool = typeof tool === 'string' ? tool : state.builder.activeTool;
     document.querySelectorAll('.builder-tool-btn').forEach(b => b.classList.remove('active'));
-    document.getElementById(`tool-${tool}`).classList.add('active');
+    
+    // If it's just 'pan'
+    if (tool === 'pan') {
+        document.getElementById('tool-pan').classList.add('active');
+    }
     
     const viewport = document.getElementById('builder-viewport');
     if (viewport) {
         viewport.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
     }
+}
 
-    // UX Improvement: Drop a node in center if switching to placeholder
-    if (tool === 'placeholder') {
-        const vw = viewport.clientWidth || 800;
-        const vh = viewport.clientHeight || 600;
-        
-        // Correct transform mapping: CanvasPos = (ScreenPos - Translate) / Zoom
-        // ScreenPos here is (vw/2, vh/2)
-        let x = ((vw / 2) - state.builder.x) / state.builder.zoom;
-        let y = ((vh / 2) - state.builder.y) / state.builder.zoom;
-
-        if (state.builder.snapToGrid) {
-            x = Math.round(x / 30) * 30;
-            y = Math.round(y / 30) * 30;
-        }
-
-        const newNode = {
-            id: Date.now(),
-            x: x - 60,
-            y: y - 40,
-        };
-        state.builder.nodes.push(newNode);
-        renderBuilderNodes();
-        toast('New placeholder added to center', 'success');
+function toggleBuilderToolDropdown(e, toolId) {
+    if (e) e.stopPropagation();
+    const dropdown = document.getElementById(`dropdown-${toolId}`);
+    const isOpen = dropdown.classList.contains('open');
+    
+    // Close other dropdowns
+    document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
+    
+    // Toggle current
+    if (!isOpen) {
+        dropdown.classList.add('open');
     }
+}
+
+function selectBuilderPreset(type, presetKey) {
+    state.builder.activeTool = { type, preset: presetKey };
+    document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
+    document.querySelectorAll('.builder-tool-btn').forEach(btn => btn.classList.remove('active'));
+    
+    const toolBtn = document.getElementById(`tool-${type}`);
+    if (toolBtn) {
+        toolBtn.classList.add('active');
+    }
+    
+    setBuilderTool({ type, preset: presetKey });
 }
 
 function renderBuilderNodes() {
     const canvas = document.getElementById('builder-canvas');
     if (!canvas) return;
 
-    // Remove existing nodes
     canvas.querySelectorAll('.builder-node').forEach(n => n.remove());
 
     state.builder.nodes.forEach(node => {
+        const preset = NODE_PRESETS[node.type][node.preset];
         const el = document.createElement('div');
-        el.className = 'builder-node';
+        el.className = `builder-node builder-node--${node.type}`;
         el.id = `node-${node.id}`;
         el.style.left = `${node.x}px`;
         el.style.top = `${node.y}px`;
-        el.textContent = 'Placeholder';
+
+        // Title
+        const title = document.createElement('div');
+        title.className = 'builder-node__title';
+        title.textContent = preset.title;
+        el.appendChild(title);
+
+        // Inputs (Left)
+        preset.inputs.forEach((label, idx) => {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--input';
+            
+            const port = document.createElement('div');
+            port.className = 'node-port node-port--input';
+            port.id = `node-${node.id}-input-${idx}`;
+            port.onmousedown = (e) => startConnection(e, node.id, 'input', idx);
+            
+            const lbl = document.createElement('span');
+            lbl.className = 'node-port-label';
+            lbl.textContent = label;
+            
+            row.appendChild(port);
+            row.appendChild(lbl);
+            el.appendChild(row);
+        });
+
+        // Outputs (Right)
+        preset.outputs.forEach((label, idx) => {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--output';
+            
+            const port = document.createElement('div');
+            port.className = 'node-port node-port--output';
+            port.id = `node-${node.id}-output-${idx}`;
+            port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
+            
+            const lbl = document.createElement('span');
+            lbl.className = 'node-port-label';
+            lbl.textContent = label;
+            
+            row.appendChild(lbl);
+            row.appendChild(port);
+            el.appendChild(row);
+        });
         
         el.addEventListener('mousedown', (e) => {
-            if (state.builder.activeTool === 'placeholder') return;
+            if (e.target.classList.contains('node-port')) return;
+            if (state.builder.activeTool !== 'pan') return;
 
             e.stopPropagation();
             state.builder.draggedNode = node;
             
-            // Calculate mouse position in canvas-space
             const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
             const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
             
-            // Store offset relative to node top-left in canvas-space
             state.builder.startX = mouseCanvasX - node.x;
             state.builder.startY = mouseCanvasY - node.y;
             
@@ -474,6 +549,8 @@ function renderBuilderNodes() {
 
         canvas.appendChild(el);
     });
+    
+    renderConnections();
 }
 
 // Global mousemove for node dragging (updates state + DOM)
@@ -501,7 +578,217 @@ window.addEventListener('mousemove', (e) => {
         el.style.left = `${nextX}px`;
         el.style.top = `${nextY}px`;
     }
+
+    // Refresh connections while dragging
+    renderConnections();
 });
+
+// ── Graph Connectivity Logic ────────────────────────
+function startConnection(e, fromId, portType, portIdx) {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const canvas = document.getElementById('builder-canvas');
+    const rect = canvas.getBoundingClientRect();
+    const mouseX = (e.clientX - rect.left) / state.builder.zoom;
+    const mouseY = (e.clientY - rect.top) / state.builder.zoom;
+
+    state.builder.activeConnection = {
+        fromId,
+        fromType: portType,
+        fromPortIdx: portIdx,
+        mouseX,
+        mouseY
+    };
+
+    const onMouseMove = (moveEvent) => {
+        const mx = (moveEvent.clientX - rect.left) / state.builder.zoom;
+        const my = (moveEvent.clientY - rect.top) / state.builder.zoom;
+        state.builder.activeConnection.mouseX = mx;
+        state.builder.activeConnection.mouseY = my;
+        renderConnections();
+    };
+
+    const onMouseUp = (upEvent) => {
+        window.removeEventListener('mousemove', onMouseMove);
+        window.removeEventListener('mouseup', onMouseUp);
+
+        // Check if we dropped on a port
+        const targetPort = upEvent.target.closest('.node-port');
+        if (targetPort) {
+            const targetNodeEl = targetPort.closest('.builder-node');
+            const targetId = parseInt(targetNodeEl.id.replace('node-', ''));
+            const isTargetInput = targetPort.classList.contains('node-port--input');
+            const targetType = isTargetInput ? 'input' : 'output';
+            
+            // Find target port index
+            const portRows = Array.from(targetNodeEl.querySelectorAll('.node-port-row'));
+            const filteredRows = portRows.filter(r => r.classList.contains(`node-port-row--${targetType}`));
+            const targetPortIdx = filteredRows.indexOf(targetPort.parentElement);
+
+            // Valid connection: Output to Input
+            if (state.builder.activeConnection.fromType !== targetType) {
+                const conn = state.builder.activeConnection;
+                const fromId = conn.fromId;
+                
+                const outNodeId = conn.fromType === 'output' ? fromId : targetId;
+                const outPortIdx = conn.fromType === 'output' ? conn.fromPortIdx : targetPortIdx;
+                
+                const inNodeId = conn.fromType === 'input' ? fromId : targetId;
+                const inPortIdx = conn.fromType === 'input' ? conn.fromPortIdx : targetPortIdx;
+
+                // Prevent duplicates
+                const exists = state.builder.edges.some(edge => 
+                    edge.from === outNodeId && edge.fromIdx === outPortIdx && 
+                    edge.to === inNodeId && edge.toIdx === inPortIdx
+                );
+
+                if (!exists && outNodeId !== inNodeId) {
+                    state.builder.edges.push({ 
+                        from: outNodeId, fromIdx: outPortIdx,
+                        to: inNodeId, toIdx: inPortIdx 
+                    });
+                    toast('Connection created', 'success');
+                }
+            }
+        }
+
+        state.builder.activeConnection = null;
+        renderConnections();
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+}
+
+function getPortPos(nodeId, type, portIdx) {
+    const portEl = document.getElementById(`node-${nodeId}-${type}-${portIdx}`);
+    if (!portEl) {
+        // Fallback to estimation if DOM not ready (e.g. initial load)
+        const node = state.builder.nodes.find(n => n.id === nodeId);
+        if (!node) return { x: 0, y: 0 };
+        const x = type === 'input' ? node.x : node.x + 160;
+        const y = node.y + 30 + (portIdx * 24) + 12;
+        return { x, y };
+    }
+    
+    const rect = portEl.getBoundingClientRect();
+    const canvas = document.getElementById('builder-canvas');
+    const canvasRect = canvas.getBoundingClientRect();
+    
+    // Center of the port in viewport space
+    const viewCenterX = rect.left + rect.width / 2;
+    const viewCenterY = rect.top + rect.height / 2;
+    
+    // Convert to canvas space (account for zoom and translation)
+    return {
+        x: (viewCenterX - canvasRect.left) / state.builder.zoom,
+        y: (viewCenterY - canvasRect.top) / state.builder.zoom
+    };
+}
+
+function renderConnections() {
+    const svg = document.getElementById('builder-svg-layer');
+    if (!svg) return;
+    svg.innerHTML = '';
+
+    // Draw existing edges
+    state.builder.edges.forEach((edge, index) => {
+        const fromPos = getPortPos(edge.from, 'output', edge.fromIdx);
+        const toPos = getPortPos(edge.to, 'input', edge.toIdx);
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('class', 'connection-path');
+        path.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
+        
+        path.oncontextmenu = (e) => {
+            e.preventDefault();
+            state.builder.edges.splice(index, 1);
+            renderConnections();
+        };
+
+        svg.appendChild(path);
+    });
+
+    // Draw active connection (preview)
+    if (state.builder.activeConnection) {
+        const conn = state.builder.activeConnection;
+        const startPos = getPortPos(conn.fromId, conn.fromType, conn.fromPortIdx);
+        
+        const x1 = startPos.x;
+        const y1 = startPos.y;
+        const x2 = conn.mouseX;
+        const y2 = conn.mouseY;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        path.setAttribute('class', 'connection-path active-connection-path');
+        
+        // Ensure directionality in preview (Output to Input)
+        if (conn.fromType === 'output') {
+            path.setAttribute('d', getBezierPath(x1, y1, x2, y2));
+        } else {
+            path.setAttribute('d', getBezierPath(x2, y2, x1, y1));
+        }
+        svg.appendChild(path);
+    }
+}
+
+function getBezierPath(x1, y1, x2, y2) {
+    const dx = Math.abs(x1 - x2) * 0.5;
+    return `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`;
+}
+
+// ── Persistence Logic ────────────────────────────────
+function openSaveFlowModal() {
+    if (state.builder.nodes.length === 0) {
+        toast('Cannot save an empty flow.', 'error');
+        return;
+    }
+    document.getElementById('save-flow-modal').style.display = 'flex';
+}
+
+function closeSaveFlowModal(e) {
+    if (e && e.target !== document.getElementById('save-flow-modal')) return;
+    document.getElementById('save-flow-modal').style.display = 'none';
+}
+
+async function saveFlow() {
+    const name = document.getElementById('flow-name').value.trim();
+    const desc = document.getElementById('flow-desc').value.trim();
+    if (!name) { toast('Please enter a name for your scraper.', 'error'); return; }
+
+    const btn = document.getElementById('save-flow-btn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+
+    const flowData = JSON.stringify({
+        nodes: state.builder.nodes,
+        edges: state.builder.edges,
+        config: {
+            viewport: { x: state.builder.x, y: state.builder.y, zoom: state.builder.zoom }
+        }
+    });
+
+    const formData = new FormData();
+    formData.append('name', name);
+    formData.append('description', desc);
+    formData.append('flow_data', flowData);
+    
+    const scraperId = document.getElementById('flow-scraper-id').value;
+    if (scraperId) formData.append('scraper_id', scraperId);
+
+    try {
+        await apiFetch('/api/scrapers/builder', { method: 'POST', body: formData });
+        toast('Flow saved successfully as a Scraper!', 'success');
+        closeSaveFlowModal();
+        loadScrapers(); // Refresh scrapers list
+    } catch (e) {
+        toast(e.message, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 Confirm & Save';
+    }
+}
 
 /* ════════════════════════════════════════════════
    SCRAPERS
@@ -612,6 +899,10 @@ function renderScrapersList(scrapers) {
             untested: { icon: '\u2699\ufe0f', label: 'Untested', cls: 'badge-pending' },
         }[s.health || 'untested'];
 
+        const typeBadge = s.scraper_type === 'builder' 
+            ? `<span class="status-badge" style="background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2)">🏗️ Builder</span>`
+            : `<span class="status-badge" style="background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.2)">🐍 Python</span>`;
+
         return `
         <div class="item-card item-card--with-thumb" draggable="true"
              ondragstart="handleDragStart(event, 'scraper', ${s.id})"
@@ -629,6 +920,7 @@ function renderScrapersList(scrapers) {
             ${s.description ? `<div class="item-meta" style="color:var(--text-secondary);margin-top:2px">${s.description}</div>` : ''}
             
             <div class="item-meta-group">
+              ${typeBadge}
               <span class="status-badge ${healthInfo.cls}" title="Health">${healthInfo.icon} ${healthInfo.label}</span>
               <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '\u25cf Active' : '\u25cb Disabled'}</span>
               ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsHtml}</div>` : ''}

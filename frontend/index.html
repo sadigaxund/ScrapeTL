@@ -8,7 +8,7 @@
   <meta name="description" content="Manage, schedule, and monitor scrapers with integrations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=10" />
+  <link rel="stylesheet" href="/static/style.css?v=15" />
 </head>
 
 <body>
@@ -596,23 +596,67 @@
     <!-- ── Builder Tab ────────────────────────────── -->
     <section class="tab-panel" id="tab-builder" style="padding:0; height:calc(100vh - 110px); overflow:hidden; position:relative;">
       <!-- Builder Toolbar -->
-      <div class="builder-toolbar" style="position:fixed; top:110px; left:calc(var(--sidebar-w) + (100% - var(--sidebar-w))/2); transform:translateX(-50%); z-index:1000; display:flex; gap:12px; padding:8px; background:rgba(23,23,23,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:12px; backdrop-filter:blur(12px); box-shadow:0 10px 40px rgba(0,0,0,0.6);">
-        <button class="btn btn-ghost builder-tool-btn active" id="tool-pan" onclick="setBuilderTool('pan')" style="padding:8px 16px; font-size:13px; display:flex; align-items:center; gap:8px;">
-          <span>🖐️</span> Pan
+      <div class="builder-toolbar">
+        <button class="btn btn-ghost builder-tool-btn active" id="tool-pan" onclick="setBuilderTool('pan')" title="Pan (Spacebar)">
+          <span>🖐️</span>
         </button>
-        <button class="btn btn-ghost builder-tool-btn" id="tool-placeholder" onclick="setBuilderTool('placeholder')" style="padding:8px 16px; font-size:13px; display:flex; align-items:center; gap:8px;">
-          <span>📦</span> Placeholder
-        </button>
+
         <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
+
+        <!-- Input Menu -->
+        <div class="bt-dropdown" id="dropdown-input">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'input')" id="tool-input">
+            <span>📐</span> Input <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+          </button>
+          <div class="bt-menu">
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">⚡ External Trigger</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'variable')">📦 Variable / Function</button>
+          </div>
+        </div>
+
+        <div class="bt-dropdown" id="dropdown-node">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'node')" id="tool-node">
+            <span>📦</span> Node <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+          </button>
+          <div class="bt-menu">
+            <button class="menu-item" onclick="selectBuilderPreset('node', 'node1')">📦 Node 1 (1:1)</button>
+            <button class="menu-item" onclick="selectBuilderPreset('node', 'node2')">🌿 Node 2 (Splitter)</button>
+            <button class="menu-item" onclick="selectBuilderPreset('node', 'node3')">🔀 Node 3 (Merger)</button>
+            <div style="height:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
+            <button class="menu-item" onclick="selectBuilderPreset('node', 'transformer')">✨ GPT Transformer</button>
+          </div>
+        </div>
+
+        <div class="bt-dropdown" id="dropdown-output">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'output')" id="tool-output">
+            <span>🏁</span> Output <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+          </button>
+          <div class="bt-menu">
+            <button class="menu-item" onclick="selectBuilderPreset('output', 'external')">⚡ External Sink</button>
+            <button class="menu-item" onclick="selectBuilderPreset('output', 'terminal')">💻 Debug Log</button>
+          </div>
+        </div>
+
+        <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
+
+        <button class="btn btn-primary" onclick="openSaveFlowModal()" style="height:36px; padding:0 16px; font-size:12px; font-weight:700; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 15px rgba(16,185,129,0.3);">
+          💾 Save Flow
+        </button>
+
+        <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
+
         <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-secondary); padding:0 8px;">
           <input type="checkbox" id="builder-snap" checked onchange="state.builder.snapToGrid = this.checked" />
-          Snap to Grid
+          Snap
         </label>
       </div>
 
       <div class="builder-viewport" id="builder-viewport" style="width:100%; height:100%; cursor:grab; overflow:hidden; position:relative;">
         <div class="builder-canvas no-drag-transition" id="builder-canvas" style="width:8000px; height:8000px; background-image:radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px); background-size:30px 30px; position:absolute; top:0; left:0; transform:translate(-2000px, -2000px) scale(1);">
-          <!-- Draggable workspace -->
+          <svg class="builder-svg-layer" id="builder-svg-layer">
+            <!-- Connection lines drawn here -->
+          </svg>
+          <!-- Draggable nodes -->
         </div>
       </div>
 
@@ -1388,6 +1432,28 @@
   </div>
 
   <script src="/static/app.js?v=18"></script>
+  <!-- ── Save Flow Modal ─────────────────────────────── -->
+  <div class="modal-overlay" id="save-flow-modal" style="display:none" onclick="closeSaveFlowModal(event)">
+    <div class="modal-box" style="max-width:500px">
+      <div class="modal-header">
+        <h2 class="card-title">💾 Save Builder Flow</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeSaveFlowModal()">✕</button>
+      </div>
+      <input type="hidden" id="flow-scraper-id" />
+      <div class="form-group" style="margin-bottom:16px">
+        <label>Scraper Name *</label>
+        <input type="text" id="flow-name" placeholder="My Builder Scraper" required />
+      </div>
+      <div class="form-group" style="margin-bottom:20px">
+        <label>Description</label>
+        <textarea id="flow-desc" placeholder="What this scraper does..." style="height:100px; resize:none"></textarea>
+      </div>
+      <div style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
+        <button class="btn btn-ghost" onclick="closeSaveFlowModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn">💾 Confirm & Save</button>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>
