@@ -8,8 +8,9 @@ import json
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable
+from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable, UserFunction
 from app.exceptions import ScrapeSkip
+from app.expressions import resolve_expressions
 
 
 def _get_retry_settings(db: Session) -> tuple[int, float]:
@@ -75,6 +76,10 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 val = json.loads(val)
             except: pass
         global_vars[v.key] = val
+        
+    # 3.5 Resolve Expressions in Input Values using current variables
+    custom_funcs = {f.name: f.code for f in db.query(UserFunction).all()}
+    _input_values = resolve_expressions(_input_values, global_vars, custom_funcs)
 
     for attempt in range(max_retries + 1):
         try:

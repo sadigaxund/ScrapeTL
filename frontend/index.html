@@ -8,7 +8,7 @@
   <meta name="description" content="Manage, schedule, and monitor scrapers with integrations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=6" />
+  <link rel="stylesheet" href="/static/style.css?v=10" />
 </head>
 
 <body>
@@ -36,7 +36,7 @@
         <span class="nav-icon">🔗</span> Integrations
       </button>
       <button class="nav-item" data-tab="variables" id="nav-variables">
-        <span class="nav-icon">📦</span> Variables
+        <span class="nav-icon">🧩</span> Context Registry
       </button>
       <button class="nav-item" data-tab="settings" id="nav-settings">
         <span class="nav-icon">⚙️</span> Settings
@@ -505,27 +505,87 @@
       <div class="card">
         <div class="card-header">
           <div>
-            <h2 class="card-title">Variable Registry</h2>
-            <p style="color:var(--text-secondary);font-size:14px;margin-top:6px;">Global configuration constants accessible by all scrapers.</p>
+            <h2 class="card-title">Context Registry</h2>
+            <p style="color:var(--text-secondary);font-size:14px;margin-top:6px;">Shared values and dynamic expressions accessible by all scrapers.</p>
           </div>
-          <button class="btn btn-primary" onclick="addVariableRow()"
+          <button class="btn btn-primary" onclick="openVarCreateModal()"
             style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Variable</button>
         </div>
+
+        <!-- ── Context Tabs ────────────────────────── -->
+        <div class="context-tabs">
+          <button class="ctx-tab-btn active" onclick="switchContextTab('vars', this)">
+            <span class="ctx-tab-icon">📦</span> Shared Variables
+          </button>
+          <button class="ctx-tab-btn" onclick="switchContextTab('funcs', this)">
+            <span class="ctx-tab-icon">ƒ</span> Expressive Functions
+          </button>
+        </div>
         
-        <div class="table-wrapper">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th style="width:25%">Key</th>
-                <th style="width:15%">Type</th>
-                <th>Value</th>
-                <th style="width:80px; text-align:right">Actions</th>
-              </tr>
-            </thead>
-            <tbody id="variables-list">
-              <!-- Dynamically populated -->
-            </tbody>
-          </table>
+        <!-- ── Variables View ────────────────────────────── -->
+        <div id="ctx-vars-view" style="padding: 16px 0;">
+          <div id="variables-list" class="item-list">
+            <!-- Rendered as item-cards -->
+          </div>
+        </div>
+
+        <!-- ── Functions View ────────────────────────────── -->
+        <div id="ctx-funcs-view" style="display:none; padding:20px;">
+          
+          <!-- Redesigned Import Function Card (Matches Scraper Wizard Dimensions) -->
+          <div class="card" id="import-func-card" style="margin-bottom:24px; position:relative;">
+            <div class="card-header">
+              <h2 class="card-title" style="font-size:16px;">➕ Import Custom Function</h2>
+            </div>
+            <form id="func-import-form" onsubmit="submitFuncImport(event)" style="padding:28px;">
+              <div style="display:flex; gap:32px; align-items:stretch;">
+                
+                <!-- Left Column: Matches Scraper Wizard (340px x 380px) -->
+                <div style="width:340px; display:flex; flex-direction:column; height:380px">
+                  <label style="margin-bottom:10px; font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Python Script (.py) *</label>
+                  <div class="upload-zone" id="func-code-zone" onclick="document.getElementById('func-code-file').click()"
+                    style="display:flex; flex:1; flex-direction:column; justify-content:center; align-items:center; gap:20px; border-radius:16px; background:rgba(255,255,255,0.012); border:2px dashed var(--border-strong); padding:24px;">
+                    <div style="font-size:54px; opacity:0.8; margin-bottom:8px">📄</div>
+                    <div style="text-align:center; width:100%; overflow:hidden">
+                      <div id="func-code-text"
+                        style="font-size:15px; font-weight:700; color:var(--text-primary); margin-bottom:6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%">
+                        Click or Drag .py file here</div>
+                      <div style="font-size:12px; opacity:0.5; font-weight:400; line-height:1.5">must define independent<br />Python functions</div>
+                    </div>
+                    <input type="file" id="func-code-file" accept=".py" style="display:none" onchange="handleFuncFile(this)" />
+                  </div>
+                </div>
+
+                <!-- Right Column: Metadata & Documentation -->
+                <div style="flex:1; display:flex; flex-direction:column; gap:16px;">
+                  <div style="display:flex; gap:16px">
+                    <div class="form-group" style="flex:1">
+                      <label>Function Name (Slug) *</label>
+                      <input type="text" id="func-name" placeholder="e.g. format_price" required style="height:42px;" />
+                    </div>
+                    <div class="form-group" style="flex:1.5">
+                      <label>Short Description</label>
+                      <input type="text" id="func-desc" placeholder="What does this function do?" style="height:42px;" />
+                    </div>
+                  </div>
+
+                  <div class="form-group" style="flex:1; display:flex; flex-direction:column;">
+                    <label>Documentation (Markdown)</label>
+                    <textarea id="func-doc-md" style="flex:1; height:180px; font-family:var(--font-mono); font-size:12px; line-height:1.6; padding:12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-input); resize:none" 
+                        placeholder="Usage, parameters, and return types..."></textarea>
+                  </div>
+                  
+                  <div style="display:flex; justify-content:flex-end; margin-top:8px;">
+                    <button type="submit" class="btn btn-primary" id="func-import-btn" style="padding:12px 40px; font-weight:600; box-shadow:0 4px 14px var(--accent-glow);">✨ Register Function</button>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div id="functions-list" class="item-list">
+             <!-- Built-in and Custom functions documentation -->
+          </div>
         </div>
       </div>
     </section>
@@ -1243,7 +1303,59 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=13"></script>
+  <!-- ── Global Side Drawer ────────────────────────── -->
+  <div class="drawer-backdrop" id="ctx-drawer-backdrop" onclick="closeContextDrawer()"></div>
+  <div class="side-drawer" id="ctx-drawer">
+    <div class="drawer-header">
+      <div style="display:flex; flex-direction:column; gap:4px">
+        <h3 class="drawer-title" id="drawer-title">Documentation</h3>
+        <p class="drawer-subtitle" id="drawer-subtitle">Expression Reference</p>
+      </div>
+    </div>
+    <div class="drawer-body" id="drawer-body">
+      <!-- Dynamic Content -->
+    </div>
+    <div class="drawer-footer">
+      <button class="btn btn-primary" style="width:100%" onclick="closeContextDrawer()">Close</button>
+    </div>
+  </div>
+
+  <!-- ── Edit Function Modal ────────────────────────────── -->
+  <div class="modal-overlay" id="edit-func-modal" style="display:none" onclick="closeEditFuncModal(event)">
+    <div class="modal-box" style="max-width:700px">
+      <div class="modal-header">
+        <h2 class="card-title" style="font-size:16px;">✏️ Edit Function Metadata</h2>
+        <button class="btn btn-ghost" style="padding:4px 8px" onclick="closeEditFuncModal()">✕</button>
+      </div>
+      <input type="hidden" id="edit-func-id" />
+      
+      <div style="padding:20px; display:flex; flex-direction:column; gap:20px;">
+        <div class="form-row" style="margin-bottom:0">
+          <div class="form-group flex-2">
+            <label style="font-size:11px; margin-bottom:6px;">Name (Slug) *</label>
+            <input type="text" id="edit-func-name" required style="height:40px;" />
+          </div>
+          <div class="form-group flex-3">
+            <label style="font-size:11px; margin-bottom:6px;">Short Description</label>
+            <input type="text" id="edit-func-desc" style="height:40px;" />
+          </div>
+        </div>
+        
+        <div class="form-group">
+          <label style="font-size:11px; margin-bottom:6px;">Documentation (Markdown)</label>
+          <textarea id="edit-func-doc" style="height:280px; font-family:var(--font-mono); font-size:13px; line-height:1.6; padding:12px; resize:vertical; background:var(--bg-input); border:1px solid var(--border);" placeholder="Describe parameters, examples, and return type..."></textarea>
+          <p style="font-size:11px; color:var(--text-muted); margin-top:8px;">Supports Markdown. This content appears in the Expression side-drawer.</p>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:12px; padding-top:16px; border-top:1px solid var(--border-light);">
+          <button class="btn btn-ghost" onclick="closeEditFuncModal()">Cancel</button>
+          <button class="btn btn-primary" onclick="saveEditFunc()" style="padding:10px 24px; font-weight:600;">💾 Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=18"></script>
 </body>
 
 </html>

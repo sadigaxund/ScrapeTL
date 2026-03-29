@@ -14,6 +14,7 @@ class VariableBase(BaseModel):
     value_type: str = "string"
     description: Optional[str] = None
     is_secret: bool = False
+    doc_md: Optional[str] = None
 
 class VariableCreate(VariableBase):
     pass
@@ -23,6 +24,7 @@ class VariableUpdate(BaseModel):
     value_type: Optional[str] = None
     description: Optional[str] = None
     is_secret: Optional[bool] = None
+    doc_md: Optional[str] = None
 
 class VariableResponse(VariableBase):
     id: int
@@ -50,7 +52,8 @@ def create_variable(payload: VariableCreate, db: Session = Depends(get_db)):
         value=payload.value,
         value_type=payload.value_type,
         description=payload.description,
-        is_secret=payload.is_secret
+        is_secret=payload.is_secret,
+        doc_md=payload.doc_md
     )
     db.add(var)
     db.commit()
@@ -72,6 +75,8 @@ def update_variable(var_id: int, payload: VariableUpdate, db: Session = Depends(
         var.description = payload.description
     if payload.is_secret is not None:
         var.is_secret = payload.is_secret
+    if payload.doc_md is not None:
+        var.doc_md = payload.doc_md
     
     db.commit()
     db.refresh(var)

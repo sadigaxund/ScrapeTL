@@ -174,3 +174,18 @@ class GlobalVariable(Base):
     is_secret   = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    doc_md      = Column(Text, nullable=True)   # Markdown documentation
+
+
+# ── UserFunction ──────────────────────────────────────────────────────────────
+
+class UserFunction(Base):
+    __tablename__ = "user_functions"
+
+    id          = Column(Integer, primary_key=True, index=True)
+    name        = Column(String,  unique=True, nullable=False) # Function slug (e.g. calculate_date)
+    description = Column(Text,    nullable=True)
+    code        = Column(Text,    nullable=True)  # The Python source code
+    doc_md      = Column(Text,    nullable=True)  # Markdown handbook/docs
+    created_at  = Column(DateTime, default=datetime.utcnow)
+    updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
