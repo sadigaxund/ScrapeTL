@@ -2504,4 +2504,49 @@ input:checked + .slider { background-color: var(--success); }
 .ctx-tab-btn.active .ctx-tab-icon {
   opacity: 1;
 }
+
+/* ── Builder Styles ────────────────────────── */
+.builder-tool-btn.active {
+  background: var(--accent-glow) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--accent) !important;
+}
+
+.builder-node {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  backdrop-filter: blur(5px);
+  padding: 16px;
+  cursor: grab;
+  user-select: none;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  transition: border-color 0.2s, box-shadow 0.2s;
+  min-width: 120px;
+  min-height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  z-index: 10;
+}
+
+.builder-node:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.builder-node.dragging {
+  cursor: grabbing;
+  z-index: 1000;
+  border-color: var(--accent);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 10px var(--accent-glow);
+}
+
+.no-drag-transition {
+  transition: none !important;
+}
 
