@@ -32,7 +32,7 @@ class Scraper(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    module_path = Column(String, nullable=False, unique=True)
+    module_path = Column(String, nullable=True, unique=True)
     description = Column(Text, default="")
     homepage_url = Column(String, nullable=True)
     thumbnail_url = Column(String, nullable=True)
@@ -40,6 +40,8 @@ class Scraper(Base):
     thumbnail_data = Column(LargeBinary, nullable=True)
     enabled = Column(Boolean, default=True)
     health = Column(String, default="untested")  # "untested" | "ok" | "failing"
+    scraper_type = Column(String, default="python")  # "python" | "builder"
+    flow_data = Column(Text, nullable=True)         # JSON encoded graph (nodes, edges)
     position = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
 

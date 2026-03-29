@@ -76,6 +76,8 @@ def _scraper_dict(s: Scraper):
         "version_count": len(s.versions) if s.versions else 0,
         "latest_version": s.versions[0].version_label if s.versions else None,
         "inputs": scraper_inputs,
+        "scraper_type": s.scraper_type,
+        "flow_data": json.loads(s.flow_data) if s.flow_data else None,
     }
 
 
@@ -219,6 +221,57 @@ async def register_scraper_wizard(
             scraper.thumbnail_data = dl_bytes
             db.commit()
 
+    return _scraper_dict(scraper)
+
+
+@router.post("/builder")
+async def save_builder_flow(
+    name: str = Form(...),
+    description: str = Form(""),
+    flow_data: str = Form(...),  # JSON string
+    scraper_id: Optional[int] = Form(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Save or update a builder-generated scraper flow.
+    """
+    if not name.strip():
+        raise HTTPException(status_code=400, detail="Name is required.")
+
+    # Validate flow_data is valid JSON
+    try:
+        json.loads(flow_data)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid flow data JSON.")
+
+    scraper = None
+    if scraper_id:
+        scraper = db.get(Scraper, scraper_id)
+        if not scraper:
+            raise HTTPException(status_code=404, detail="Scraper not found.")
+    
+    if scraper:
+        scraper.name = name.strip()
+        scraper.description = description.strip()
+        scraper.flow_data = flow_data
+        scraper.scraper_type = "builder"
+    else:
+        # Determine position
+        max_pos = db.query(Scraper).order_by(Scraper.position.desc()).first()
+        new_pos = (max_pos.position + 1) if max_pos else 0
+
+        scraper = Scraper(
+            name=name.strip(),
+            description=description.strip(),
+            flow_data=flow_data,
+            scraper_type="builder",
+            position=new_pos,
+            enabled=True
+        )
+        db.add(scraper)
+    
+    db.commit()
+    db.refresh(scraper)
     return _scraper_dict(scraper)
 
 
