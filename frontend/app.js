@@ -27,6 +27,7 @@ const API = {
     reorderSchedules: '/api/schedules/reorder',
     reorderIntegrations: '/api/integrations/reorder',
     variables: '/api/variables',
+    functions: '/api/functions',
 };
 
 /* ── State ──────────────────────────────────────────── */
@@ -48,7 +49,8 @@ let state = {
     timezone: 'UTC',       // kept in sync with /api/settings
     queueTasks: [],
     queueSort: { col: 'scheduled_for', order: 'asc' },
-    variables: []
+    variables: [],
+    functions: []
 };
 
 
@@ -2142,7 +2144,14 @@ function closeVersionsModal(e) {
 ════════════════════════════════════════════════ */
 function refreshAll() {
     const activeTab = document.querySelector('.tab-panel.active')?.id.replace('tab-', '');
-    if (activeTab) loadTab(activeTab);
+    if (activeTab === 'scrapers') loadScrapers();
+    else if (activeTab === 'schedules') loadSchedules();
+    else if (activeTab === 'logs') loadLogs();
+    else if (activeTab === 'queue') loadQueue();
+    else if (activeTab === 'integrations') loadIntegrations();
+    else if (activeTab === 'variables') loadVariables();
+    else if (activeTab === 'funcs') loadFunctions();
+    else if (activeTab === 'settings') loadSettings();
     apiFetch(API.queue).then(tasks => {
         const pending = tasks.filter(t => t.status === 'pending' || t.status === 'running').length;
         const badge = document.getElementById('queue-badge');
@@ -2374,6 +2383,8 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
         loadScrapers();
         loadQueue();
+        loadVariables();
+        loadFunctions();
     } catch (e) {
         console.error("[App] Initialization error during load:", e);
     }
@@ -2385,6 +2396,7 @@ window.addEventListener('DOMContentLoaded', () => {
     try {
         _setupCodeDropZone('wiz-code-zone', 'wiz-code-file', 'wiz-code-text');
         _setupCodeDropZone('edit-code-zone', 'edit-code-file', 'edit-code-text');
+        _setupCodeDropZone('func-code-zone', 'func-code-file', 'func-code-text');
     } catch (e) {
         console.error("[App] Failed to setup dropzones:", e);
     }
@@ -2424,17 +2436,30 @@ function handleWizThumbFile(input) {
 }
 
 /* ════════════════════════════════════════════════
-   VARIABLE REGISTRY
+   CONTEXT REGISTRY (Variables & Functions)
    ════════════════════════════════════════════════ */
-async function loadVariables(force = false) {
-    // Skip auto-refresh if we are currently editing or adding a variable (unless forced)
-    if (!force && state.variables.some(v => v._editing || v._isNew)) return;
+function switchContextTab(tab, btn) {
+    document.getElementById('ctx-vars-view').style.display = tab === 'vars' ? 'block' : 'none';
+    document.getElementById('ctx-funcs-view').style.display = tab === 'funcs' ? 'block' : 'none';
+    
+    const nav = btn.parentElement;
+    nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    if (tab === 'funcs') renderFunctionsList();
+}
+
+async function loadVariables(silent = false) {
+    // Skip if editing/adding to avoid clearing local state
+    if (state.variables && state.variables.some(v => v._editing || v._isNew)) return;
     
     try {
         const vars = await apiFetch(API.variables);
         state.variables = vars.map(v => ({ ...v, _editing: false }));
         renderVariablesList();
-    } catch (e) { toast(e.message, 'error'); }
+    } catch (e) { 
+        if (!silent) toast(e.message, 'error');
+    }
 }
 
 function renderVariablesList() {
@@ -2442,51 +2467,59 @@ function renderVariablesList() {
     if (!list) return;
     
     if (!state.variables.length) {
-        list.innerHTML = '<tr><td colspan="4" class="empty-state">No variables defined yet.</td></tr>';
+        list.innerHTML = '<div class="empty-state">No variables defined yet.</div>';
         return;
     }
 
     list.innerHTML = state.variables.map((v, idx) => {
         if (v._editing || v._isNew) {
             return `
-            <tr>
-                <td><input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" ${v._editing && !v._isNew ? 'disabled' : ''} style="width:100%"></td>
-                <td>
-                    <select id="inline-var-type-${idx}" style="padding:4px">
-                        <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
-                        <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
-                        <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
-                        <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
-                    </select>
-                </td>
-                <td><input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Value..." style="width:100%"></td>
-                <td style="text-align:right">
-                    <div class="action-btn-group" style="justify-content:flex-end">
-                        <button class="icon-btn" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Make Public' : 'Make Secret'}">
-                            ${v.is_secret ? '👁️' : '🔒'}
-                        </button>
-                        <button class="icon-btn" onclick="saveInlineVariable(${idx})" title="Save">💾</button>
-                        <button class="icon-btn icon-btn-danger" onclick="cancelInlineEdit(${idx})" title="Cancel">✕</button>
+            <div class="item-card item-card--editing" style="padding:16px; gap:12px; border-color:var(--accent); background:rgba(99,102,241,0.03)">
+                <div style="flex:1; display:flex; gap:12px; align-items:center;">
+                    <div style="width:180px">
+                        <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" ${v._editing && !v._isNew ? 'disabled' : ''} style="width:100%; height:38px">
                     </div>
-                </td>
-            </tr>`;
+                    <div style="width:120px">
+                        <select id="inline-var-type-${idx}" style="width:100%; height:38px;">
+                            <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
+                            <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
+                            <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
+                            <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
+                        </select>
+                    </div>
+                    <div style="flex:1">
+                        <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." style="width:100%; height:38px">
+                    </div>
+                    <div style="flex:1.2">
+                        <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Simple description (visible in logs)..." style="width:100%; height:38px">
+                    </div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                    <button class="btn btn-ghost btn-sm" onclick="toggleInlineVariableSecret(${idx})" style="padding:0 10px">
+                        ${v.is_secret ? '🔒' : '👁️'}
+                    </button>
+                    <button class="btn btn-primary btn-sm" onclick="saveInlineVariable(${idx})" style="min-width:64px">💾 Save</button>
+                    <button class="btn btn-ghost btn-sm" style="color:var(--failure)" onclick="cancelInlineEdit(${idx})">✕</button>
+                </div>
+            </div>`;
         }
 
         return `
-        <tr>
-            <td><code class="var-key">${v.key}</code></td>
-            <td><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
-            <td class="var-value-cell">${renderVariableValue(v)}</td>
-            <td style="text-align:right">
-                <div class="action-btn-group" style="justify-content:flex-end">
-                    <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">
-                        ${v.is_secret ? '👁️' : '🔒'}
-                    </button>
-                    <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit">✏️</button>
+        <div class="item-card" style="padding:12px 16px; align-items:center;">
+            <div style="flex:1; display:flex; align-items:center; gap:16px; min-width:0">
+                <div style="width:180px; font-family:var(--font-mono); font-weight:700; color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.key}</div>
+                <div style="width:100px"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></div>
+                <div style="width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary)">${renderVariableValue(v)}</div>
+                <div style="flex:1; color:var(--text-muted); opacity:0.8; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || ''}</div>
+            </div>
+            <div class="item-actions">
+                <div class="action-btn-group">
+                    <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
+                    <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit Inline">✏️</button>
                     <button class="icon-btn icon-btn-danger" onclick="deleteVariable(${v.id})" title="Delete">✕</button>
                 </div>
-            </td>
-        </tr>`;
+            </div>
+        </div>`;
     }).join('');
 }
 
@@ -2555,10 +2588,11 @@ async function saveInlineVariable(idx) {
     const key = document.getElementById(`inline-var-key-${idx}`).value.trim();
     const type = document.getElementById(`inline-var-type-${idx}`).value;
     const value = document.getElementById(`inline-var-value-${idx}`).value.trim();
+    const description = document.getElementById(`inline-var-desc-${idx}`).value.trim();
 
     if (!key) { toast('Key is required', 'error'); return; }
 
-    const payload = { value, value_type: type, is_secret: v.is_secret };
+    const payload = { value, value_type: type, is_secret: v.is_secret, description };
     if (v._isNew) {
         payload.key = key;
     }
@@ -2583,4 +2617,258 @@ async function deleteVariable(id) {
         toast('Variable deleted.', 'info');
         loadVariables();
     } catch (e) { toast(e.message, 'error'); }
+}
+
+async function loadFunctions(silent=false) {
+    try {
+        state.functions = await apiFetch(API.functions);
+        renderFunctionsList();
+    } catch (e) { 
+        if (!silent) toast('Failed to load functions', 'error');
+        console.error(e);
+    }
+}
+
+let funcCodeText = null;
+function handleFuncFile(input) {
+    const file = input.files[0];
+    if (!file) return;
+    document.getElementById('func-code-text').textContent = file.name;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        funcCodeText = e.target.result; 
+    };
+    reader.readAsText(file);
+}
+
+async function submitFuncImport(event) {
+    event.preventDefault();
+    const name = document.getElementById('func-name').value.trim();
+    const desc = document.getElementById('func-desc').value.trim();
+    const doc_md = document.getElementById('func-doc-md').value.trim();
+    if (!name || !funcCodeText) {
+        toast('Name and file are required', 'error');
+        return;
+    }
+
+    try {
+        await apiFetch(API.functions, {
+            method: 'POST',
+            body: JSON.stringify({
+                name,
+                description: desc,
+                code: funcCodeText,
+                doc_md: doc_md
+            })
+        });
+        toast('Function imported successfully', 'success');
+        event.target.reset();
+        document.getElementById('func-code-text').textContent = 'Click to Import .py';
+        funcCodeText = null;
+        loadFunctions();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function deleteFunction(id) {
+    if (!confirm('Delete this custom function?')) return;
+    try {
+        await apiFetch(`${API.functions}/${id}`, { method: 'DELETE' });
+        toast('Function deleted', 'info');
+        loadFunctions();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function openEditFuncModal(id) {
+    const f = state.functions.find(x => x.id === id);
+    if (!f) return;
+    document.getElementById('edit-func-id').value = id;
+    document.getElementById('edit-func-name').value = f.name;
+    document.getElementById('edit-func-desc').value = f.description || '';
+    document.getElementById('edit-func-doc').value = f.doc_md || '';
+    document.getElementById('edit-func-modal').style.display = 'flex';
+}
+
+function closeEditFuncModal(e) {
+    if (e && e.target !== document.getElementById('edit-func-modal')) return;
+    document.getElementById('edit-func-modal').style.display = 'none';
+}
+
+async function saveEditFunc() {
+    const id = document.getElementById('edit-func-id').value;
+    const name = document.getElementById('edit-func-name').value.trim();
+    const description = document.getElementById('edit-func-desc').value.trim();
+    const doc_md = document.getElementById('edit-func-doc').value.trim();
+
+    if (!name) { toast('Name is required', 'error'); return; }
+
+    try {
+        await apiFetch(`${API.functions}/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name, description, doc_md })
+        });
+        toast('Function metadata updated', 'success');
+        document.getElementById('edit-func-modal').style.display = 'none';
+        loadFunctions();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function openVarCreateModal() {
+    state.variables.unshift({
+        key: '',
+        value: '',
+        value_type: 'string',
+        is_secret: false,
+        doc_md: '',
+        _editing: true,
+        _isNew: true
+    });
+    renderVariablesList();
+}
+
+function renderFunctionsList() {
+    const list = document.getElementById('functions-list');
+    if (!list) return;
+
+    const builtins = [
+        { name: 'today', desc: 'Current date (YYYY-MM-DD)', example: '{{today}}' },
+        { name: 'now', desc: 'Current timestamp', example: '{{now}}' },
+        { name: 'yesterday', desc: 'Yesterday\'s date', example: '{{yesterday}}' },
+        { name: 'env', desc: 'Access an environment variable', example: '{{env("VAR")}}' },
+        { name: 'random', desc: 'Random number between min/max', example: '{{random(1, 100)}}' },
+        { name: 'uuid', desc: 'Generate a unique UUID v4', example: '{{uuid()}}' },
+        { name: 'json', desc: 'Serialize object to JSON string', example: '{{json({"id": 1})}}' },
+        { name: 'upper', desc: 'Convert string to UPPERCASE', example: '{{upper("hello")}}' },
+        { name: 'lower', desc: 'Convert string to lowercase', example: '{{lower("HELLO")}}' },
+        { name: 'strip', desc: 'Remove surrounding whitespace', example: '{{strip("  txt  ")}}' }
+    ];
+
+    let html = `
+    <div style="margin-bottom:32px;">
+        <h3 style="font-size:12px; color:var(--text-muted); margin-bottom:16px; letter-spacing:0.05em; text-transform:uppercase; font-weight:700;">Built-in Expressions</h3>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+            ${builtins.map(f => {
+                const safeDesc = f.desc.replace(/'/g, "\\'");
+                const safeExample = f.example.replace(/'/g, "\\'");
+                return `
+                <div class="ctx-item-card" onclick="openContextDrawer('builtin', '${f.name}')" style="cursor:pointer">
+                    <div class="ctx-item-header" style="margin:0">
+                        <div>
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="font-size:18px; color:var(--accent)">ƒ</span>
+                                <code class="var-key" style="font-size:14px">${f.name}</code>
+                            </div>
+                            <div class="ctx-subtext" style="margin-top:4px">${f.desc}</div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('')}
+        </div>
+    </div>`;
+
+    if (state.functions && state.functions.length > 0) {
+        html += `
+        <div>
+            <h3 style="font-size:12px; color:var(--text-muted); margin-bottom:16px; letter-spacing:0.05em; text-transform:uppercase; font-weight:700;">Custom User Functions</h3>
+            <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
+                ${state.functions.map(f => {
+                    const safeDesc = (f.description || '').replace(/'/g, "\\'");
+                    return `
+                    <div class="ctx-item-card">
+                        <div class="ctx-item-header" style="margin:0; display:flex; align-items:center;">
+                            <div style="flex:1; cursor:pointer;" onclick="openContextDrawer('func', ${f.id})">
+                                <div style="display:flex; align-items:center; gap:8px">
+                                    <span style="font-size:18px; color:var(--success)">ƒ</span>
+                                    <code class="var-key" style="font-size:14px">${f.name}</code>
+                                </div>
+                                <div class="ctx-subtext" style="margin-top:4px">${f.description || 'No description.'}</div>
+                            </div>
+                            <div class="item-actions">
+                                <div class="action-btn-group">
+                                    <button class="icon-btn" onclick="openEditFuncModal(${f.id})" title="Edit Metadata & Docs">✏️</button>
+                                    <button class="icon-btn" onclick="document.getElementById('func-name').value='${f.name}'; document.getElementById('func-code-file').click();" title="Replace Python Code">📄</button>
+                                    <button class="icon-btn icon-btn-danger" onclick="deleteFunction(${f.id})" title="Delete Function">✕</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('')}
+            </div>
+        </div>`;
+    } else {
+        html += `
+        <div style="padding:48px; border:2px dashed var(--border); border-radius:12px; text-align:center; background:rgba(255,255,255,0.01);">
+             <div style="font-size:24px; opacity:0.3; margin-bottom:12px;">🛠️</div>
+             <p style="color:var(--text-muted); font-size:14px; font-weight:500;">No custom functions yet.</p>
+             <p style="color:var(--text-muted); font-size:12px; opacity:0.6; margin-top:4px;">Import your first .py function using the form above.</p>
+        </div>`;
+    }
+
+    list.innerHTML = html;
+}
+
+function openContextDrawer(type, id) {
+    const drawer = document.getElementById('ctx-drawer');
+    const backdrop = document.getElementById('ctx-drawer-backdrop');
+    
+    let title = '', subtitle = '', md = '';
+    
+    if (type === 'func') {
+        const f = state.functions.find(x => x.id === id);
+        if (!f) return;
+        title = f.name;
+        subtitle = 'Custom UDF';
+        md = f.doc_md || 'No documentation provided.';
+    } else if (type === 'builtin') {
+        const builtins = [
+            { name: 'today', desc: 'Returns current local date in **YYYY-MM-DD** format.', example: '{{today}}' },
+            { name: 'now', desc: 'Returns current timestamp in **YYYY-MM-DD HH:MM:SS** format.', example: '{{now}}' },
+            { name: 'yesterday', desc: "Returns yesterday's date in **YYYY-MM-DD** format.", example: '{{yesterday}}' },
+            { name: 'env', desc: 'Accesses an environment variable from the host system.', example: '{{env("DB_PASS")}}' },
+            { name: 'random', desc: 'Generates a random integer between the provided min and max values (inclusive).', example: '{{random(1, 50)}}' },
+            { name: 'uuid', desc: 'Generates a unique version 4 UUID string.', example: '{{uuid()}}' },
+            { name: 'json', desc: 'Converts a Python object into a JSON-formatted string.', example: '{{json({"key": "val"})}}' },
+            { name: 'upper', desc: 'Transforms input text into all uppercase letters.', example: '{{upper("hi")}}' },
+            { name: 'lower', desc: 'Transforms input text into all lowercase letters.', example: '{{lower("HI")}}' },
+            { name: 'strip', desc: 'Removes all leading and trailing whitespace from the provided text.', example: '{{strip("  padded  ")}}' }
+        ];
+        const b = builtins.find(x => x.name === id);
+        if (!b) return;
+        title = b.name;
+        subtitle = 'Built-in Function';
+        md = `${b.desc}\n\n**Example:**\n\`${b.example}\``;
+    }
+
+    document.getElementById('drawer-title').textContent = title;
+    document.getElementById('drawer-subtitle').textContent = subtitle;
+    
+    const content = (md || '').trim();
+    if (!content) {
+        document.getElementById('drawer-body').innerHTML = '<div class="empty-state" style="opacity:0.5; font-style:italic">No documentation provided.</div>';
+    } else {
+        // More robust MD-to-HTML conversion
+        let html = content
+            .replace(/^# (.*$)/gim, '<h1 style="font-size:20px; margin-bottom:12px; border-bottom:1px solid var(--border-light); padding-bottom:8px">$1</h1>')
+            .replace(/^## (.*$)/gim, '<h2 style="font-size:17px; margin-top:20px; margin-bottom:10px; color:var(--accent-light)">$1</h2>')
+            .replace(/^### (.*$)/gim, '<h3 style="font-size:15px; margin-top:16px; margin-bottom:8px; font-weight:700">$1</h3>')
+            .replace(/^\* (.*$)/gim, '<li style="margin-left:20px; margin-bottom:6px; list-style-type:disc">$1</li>')
+            .replace(/^- (.*$)/gim, '<li style="margin-left:20px; margin-bottom:6px; list-style-type:circle">$1</li>')
+            .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--text-primary)">$1</strong>')
+            .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:4px; font-family:var(--font-mono); font-size:0.9em; color:var(--accent-light); border:1px solid rgba(255,255,255,0.05)">$1</code>');
+            
+        // Final line break processing (only for non-tag lines)
+        html = html.split('\n').map(line => {
+            if (line.trim().startsWith('<')) return line;
+            return line + '<br>';
+        }).join('\n');
+
+        document.getElementById('drawer-body').innerHTML = html;
+    }
+    
+    drawer.classList.add('active');
+    backdrop.classList.add('active');
+}
+
+function closeContextDrawer() {
+    document.getElementById('ctx-drawer').classList.remove('active');
+    document.getElementById('ctx-drawer-backdrop').classList.remove('active');
 }

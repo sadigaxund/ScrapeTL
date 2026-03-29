@@ -6,7 +6,7 @@ import threading
 
 from app.database import init_db
 from app.api import scrapers, schedules, logs, run
-from app.api import settings, tags, integrations, variables
+from app.api import settings, tags, integrations, variables, functions
 
 app = FastAPI(title="Anime Scraper Registry", version="2.0.0")
 
@@ -19,6 +19,7 @@ app.include_router(settings.router)
 app.include_router(tags.router)
 app.include_router(integrations.router)
 app.include_router(variables.router)
+app.include_router(functions.router)
 
 # Serve frontend static files
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
