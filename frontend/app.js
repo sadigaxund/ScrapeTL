@@ -3328,28 +3328,56 @@ function _setupCodeDropZone(zoneId, inputId, textId) {
    ONE-TIME TASK
    ════════════════════════════════════════════════ */
 function openOneTimeModal() {
-    console.log("[OneTime] Opening modal, state.scrapers:", state.scrapers);
     const sel = document.getElementById('ot-scraper');
-    if (!sel) {
-        console.error("[OneTime] ot-scraper element not found!");
-        return;
+    const menu = document.getElementById('ot-menu-scrapers');
+    const summary = document.getElementById('summary-ot-scraper');
+
+    if (!state.scrapers.length) {
+        menu.innerHTML = '<div style="padding:12px;color:var(--text-muted)">No scrapers found</div>';
+    } else {
+        menu.innerHTML = `
+            <div class="dropdown-search">
+                <input type="text" placeholder="Search scrapers..." onkeyup="filterDropdownConfig(this)" onclick="event.stopPropagation()" />
+            </div>
+            <div class="dropdown-scroll-area">
+                ${state.scrapers.map(s => `
+                    <button class="dropdown-item" onclick="selectOneTimeScraper(${s.id}, '${s.name.replace(/'/g, "\\'")}')">${s.name}</button>
+                `).join('')}
+            </div>
+        `;
+        
+        // Use existing selection or default to first scraper
+        const currentSid = sel.value;
+        const activeScraper = state.scrapers.find(s => String(s.id) === String(currentSid)) || state.scrapers[0];
+        
+        if (activeScraper) {
+            selectOneTimeScraper(activeScraper.id, activeScraper.name);
+        }
     }
-    sel.innerHTML = state.scrapers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
-    document.getElementById('ot-strategy').value = 'custom';
+    
     document.getElementById('ot-time').value = '';
     document.getElementById('ot-note').value = '';
-    toggleOtTimeInput();
-    try {
-        renderOneTimeParams();
-    } catch (e) {
-        console.error("[OneTime] renderOneTimeParams failed:", e);
-    }
+    
     const modal = document.getElementById('one-time-modal');
-    if (modal) {
-        modal.style.display = 'flex';
-    } else {
-        console.error("[OneTime] one-time-modal element not found!");
-    }
+    if (modal) modal.style.display = 'flex';
+}
+
+function selectOneTimeScraper(id, name) {
+    const sel = document.getElementById('ot-scraper');
+    const summary = document.getElementById('summary-ot-scraper');
+    
+    sel.value = id;
+    summary.innerHTML = `<span>${name}</span> <span style="font-size:10px; opacity:0.5">▼</span>`;
+    
+    document.querySelectorAll('#ot-menu-scrapers .dropdown-item').forEach(item => {
+        item.classList.toggle('dropdown-item--active', item.textContent === name);
+    });
+    
+    // Close dropdown
+    document.getElementById('dd-ot-scraper').classList.remove('open');
+    
+    // Trigger params render
+    renderOneTimeParams();
 }
 
 function closeOneTimeModal(e) {
@@ -3357,12 +3385,6 @@ function closeOneTimeModal(e) {
     document.getElementById('one-time-modal').style.display = 'none';
 }
 
-function toggleOtTimeInput() {
-    const strategy = document.getElementById('ot-strategy').value;
-    const timeGroup = document.getElementById('ot-time-group');
-    if (!timeGroup) return;
-    timeGroup.style.display = strategy === 'now' ? 'none' : 'block';
-}
 
 function renderOneTimeParams() {
     const sid = document.getElementById('ot-scraper').value;
@@ -3395,17 +3417,8 @@ function renderOneTimeParams() {
 
 async function submitOneTimeTask() {
     const scraperId = document.getElementById('ot-scraper').value;
-    const strategy = document.getElementById('ot-strategy').value;
-    let scheduledFor = document.getElementById('ot-time').value;
+    const scheduledFor = document.getElementById('ot-time').value;
     const note = document.getElementById('ot-note').value.trim();
-
-    if (strategy === 'now') {
-        const d = new Date();
-        d.setSeconds(d.getSeconds() + 5);
-        // Backend expects ISO-like or datetime-local format?
-        // Usually ISO is safest for APIs.
-        scheduledFor = d.toISOString();
-    }
 
     const inputValues = {};
     const scraper = state.scrapers.find(s => String(s.id) === String(scraperId));

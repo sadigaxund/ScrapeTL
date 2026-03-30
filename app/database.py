@@ -47,6 +47,10 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE task_queue ADD COLUMN note TEXT"))
             conn.commit()
             print("[DB] Added note to task_queue")
+        if "schedule_id" not in cols:
+            conn.execute(text("ALTER TABLE task_queue ADD COLUMN schedule_id INTEGER REFERENCES schedules(id)"))
+            conn.commit()
+            print("[DB] Added schedule_id to task_queue")
 
         # Check schedules
         res = conn.execute(text("PRAGMA table_info(schedules)"))

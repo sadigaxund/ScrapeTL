@@ -74,6 +74,7 @@ def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: 
         # Create temporary task for tracking
         task = TaskQueue(
             scraper_id=scraper_id,
+            schedule_id=schedule_id,
             scheduled_for=datetime.utcnow(),
             status="running",
             input_values=_json.dumps(input_values) if input_values else None,
@@ -127,8 +128,14 @@ def process_catchup_queue():
             db.commit()
             import json as _json
             iv = _json.loads(task.input_values) if task.input_values else None
-            triggered_by = "one-time" if task.note else "catchup"
-            run_scraper(db, task.scraper_id, triggered_by=triggered_by, queue_task_id=task.id, input_values=iv)
+            # If it has a schedule_id, it is a scheduled catch-up run.
+            # If not, but has a note, it was likely manual or one-time.
+            if task.schedule_id:
+                triggered_by = "catchup"
+            else:
+                triggered_by = "one-time" if task.note else "catchup"
+
+            run_scraper(db, task.scraper_id, triggered_by=triggered_by, queue_task_id=task.id, input_values=iv, schedule_id=task.schedule_id)
     finally:
         db.close()
 
@@ -166,7 +173,13 @@ def enqueue_missed_runs(db, schedule, scraper_id: int):
             .first()
         )
         if not existing:
-            db.add(TaskQueue(scraper_id=scraper_id, scheduled_for=missed_time, status="pending"))
+            db.add(TaskQueue(
+                scraper_id=scraper_id,
+                schedule_id=schedule.id,
+                scheduled_for=missed_time,
+                status="pending",
+                input_values=schedule.input_values
+            ))
     db.commit()
 
 
