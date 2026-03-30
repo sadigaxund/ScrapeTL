@@ -2528,6 +2528,7 @@ input:checked + .slider { background-color: var(--success); }
   flex-direction: column;
   color: var(--text-primary);
   z-index: 10;
+  pointer-events: auto; /* Required as parent #nodes-container is pointer-events: none */
 }
 
 .builder-node__title {
