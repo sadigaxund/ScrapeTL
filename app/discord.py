@@ -103,13 +103,13 @@ def _build_embed(ep: dict, scraper_name: str, thumb_url) -> dict:
     date = ep.get("release_date")
     url_ep = ep.get("website_url")
 
-    fields = [{"name": "📑 Episode Title", "value": title, "inline": False}]
+    fields = [{"name": "📑 Title", "value": title, "inline": False}]
     if ep_num:
-        fields.append({"name": "🔢 Episode Number", "value": f"#{ep_num}", "inline": True})
+        fields.append({"name": "🔢 Number/ID", "value": f"#{ep_num}", "inline": True})
     if date:
         fields.append({"name": "🗓️ Last Updated on", "value": date, "inline": True})
     if url_ep:
-        fields.append({"name": "🔗 Episode URL", "value": f"[Read Chapter]({url_ep})", "inline": False})
+        fields.append({"name": "🔗 URL", "value": f"[Link]({url_ep})", "inline": False})
 
     known = {"title", "episode_number", "release_date", "website_url", "thumbnail"}
     for key, val in ep.items():
@@ -216,7 +216,7 @@ def send_notification(
                 "title":  f"🎌 {scraper_name}",
                 "color":  color,
                 "fields": fields,
-                "footer": {"text": f"Anime Scraper Registry • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"},
+                "footer": {"text": f"ScrapeTL • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"},
             }]
         }
         post({"url": url, "json": payload})

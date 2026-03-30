@@ -641,28 +641,26 @@
           </div>
         </div>
 
-        <div class="bt-dropdown" id="dropdown-node">
-          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'node')"
-            id="tool-node">
-            <span>📦</span> Node <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+        <div class="bt-dropdown" id="dropdown-action">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'action')"
+            id="tool-action">
+            <span>⚙️</span> Action <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('node', 'node1')">📦 Node 1 (1:1)</button>
-            <button class="menu-item" onclick="selectBuilderPreset('node', 'node2')">🌿 Node 2 (Splitter)</button>
-            <button class="menu-item" onclick="selectBuilderPreset('node', 'node3')">🔀 Node 3 (Merger)</button>
-            <div style="height:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
-            <button class="menu-item" onclick="selectBuilderPreset('node', 'transformer')">✨ GPT Transformer</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'fetch_url')">🌐 Fetch HTML</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'fetch_playwright')">🎭 Playwright Fetch</button>
           </div>
         </div>
 
-        <div class="bt-dropdown" id="dropdown-output">
-          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'output')"
-            id="tool-output">
-            <span>🏁</span> Output <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+        <div class="bt-dropdown" id="dropdown-sink">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'sink')"
+            id="tool-sink">
+            <span>🏁</span> Sink <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('output', 'external')">⚡ External Sink</button>
-            <button class="menu-item" onclick="selectBuilderPreset('output', 'terminal')">💻 Debug Log</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'system_output')">🏁 System Output</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'context')">🧩 Context Registry</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'debug')">🐛 Debug Sink</button>
           </div>
         </div>
 
@@ -1504,6 +1502,20 @@
         style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
         <button class="btn btn-ghost" onclick="closeSaveFlowModal()">Cancel</button>
         <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn">💾 Confirm & Save</button>
+      </div>
+    </div>
+  </div>
+  <!-- ── Log Context / HTML Preview Modal ────────────────────────── -->
+  <div class="modal-overlay" id="log-context-modal" style="display:none" onclick="if(event.target===this) this.style.display='none'">
+    <div class="modal-box" style="max-width:85vw; width:1200px;">
+      <div class="modal-header">
+        <h2 class="card-title" id="log-context-title">Log Details</h2>
+        <button class="btn btn-ghost" style="padding:6px 10px" onclick="document.getElementById('log-context-modal').style.display='none'">✕</button>
+      </div>
+      <div id="log-context-body" style="padding:20px; overflow:auto; max-height:80vh;">
+      </div>
+      <div class="modal-footer" style="padding:16px; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end;">
+        <button class="btn btn-primary" onclick="document.getElementById('log-context-modal').style.display='none'">Close</button>
       </div>
     </div>
   </div>
