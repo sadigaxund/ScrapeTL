@@ -364,7 +364,10 @@ function initBuilder() {
     viewport.dataset.initialized = "true";
 
     viewport.addEventListener('mousedown', (e) => {
-        if (e.button !== 0) return; // Left click only
+        // Ignore if clicking a node or port
+        if (e.target.closest('.builder-node') || e.target.closest('.node-port')) return;
+        
+        if (e.button !== 0) return; // Left click only (panning)
         state.builder.isDragging = true;
         state.builder.startX = e.clientX - state.builder.x;
         state.builder.startY = e.clientY - state.builder.y;
@@ -372,10 +375,26 @@ function initBuilder() {
     });
 
     window.addEventListener('mousemove', (e) => {
-        if (!state.builder.isDragging) return;
-        state.builder.x = e.clientX - state.builder.startX;
-        state.builder.y = e.clientY - state.builder.startY;
-        canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+        if (state.builder.isDragging) {
+            state.builder.x = e.clientX - state.builder.startX;
+            state.builder.y = e.clientY - state.builder.startY;
+            canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+        } else if (state.builder.draggedNode) {
+            const canvasRect = canvas.getBoundingClientRect();
+            let x = (e.clientX - canvasRect.left) / state.builder.zoom - state.builder.dragStartX;
+            let y = (e.clientY - canvasRect.top) / state.builder.zoom - state.builder.dragStartY;
+
+            if (state.builder.snapToGrid) {
+                x = Math.round(x / 30) * 30;
+                y = Math.round(y / 30) * 30;
+            }
+
+            state.builder.draggedNode.x = x;
+            state.builder.draggedNode.y = y;
+
+            renderBuilderNodes();
+            renderConnections();
+        }
     });
 
     window.addEventListener('mouseup', () => {
@@ -584,15 +603,22 @@ function renderBuilderNodes() {
             el.classList.add('selected');
         }
 
-        el.addEventListener('click', (e) => {
+        el.addEventListener('mousedown', (e) => {
             // Prevent if clicking port or input
             if (e.target.classList.contains('node-port') || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.classList.contains('btn-node-action')) return;
             
             e.stopPropagation();
+            const canvasRect = document.getElementById('builder-canvas').getBoundingClientRect();
+            
+            state.builder.draggedNode = node;
+            state.builder.dragStartX = (e.clientX - canvasRect.left) / state.builder.zoom - node.x;
+            state.builder.dragStartY = (e.clientY - canvasRect.top) / state.builder.zoom - node.y;
+
+            el.classList.add('dragging');
+            
             deselectAll();
             state.builder.selected = { type: 'node', id: node.id };
-            el.classList.add('selected');
-            // Re-render connections to make sure selection logic is fresh if we clicked an edge before
+            renderBuilderNodes();
             renderConnections();
         });
         
@@ -1084,12 +1110,25 @@ function closeSaveFlowModal(e) {
 
 function updateBuilderContextUI() {
     const nameDisplay = document.getElementById('builder-current-name');
-    const bar = document.getElementById('builder-context-bar');
-    if (!nameDisplay || !bar) return;
+    const typeLabel = document.getElementById('builder-context-type');
+    const dot = document.getElementById('builder-context-dot');
+    if (!nameDisplay || !typeLabel) return;
 
     if (state.builder.currentScraperId) {
-        nameDisplay.textContent = `Editing: ${state.builder.currentScraperName}`;
+        typeLabel.textContent = 'EDITING';
+        typeLabel.style.color = '#34d399'; // Emerald/Green for editing
+        if (dot) {
+            dot.style.background = '#34d399';
+            dot.style.boxShadow = '0 0 10px #34d399';
+        }
+        nameDisplay.textContent = state.builder.currentScraperName;
     } else {
+        typeLabel.textContent = 'NEW';
+        typeLabel.style.color = 'var(--primary)'; // Blue/Theme for new
+        if (dot) {
+            dot.style.background = 'var(--primary)';
+            dot.style.boxShadow = '0 0 10px var(--primary)';
+        }
         nameDisplay.textContent = 'New Scraper Flow';
     }
 }
