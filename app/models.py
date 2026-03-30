@@ -98,6 +98,7 @@ class TaskQueue(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     scraper_id = Column(Integer, ForeignKey("scrapers.id"), nullable=False)
+    schedule_id = Column(Integer, ForeignKey("schedules.id"), nullable=True) # link back if it is catchup/scheduled
     scheduled_for = Column(DateTime, nullable=False)   # when it *should* have run
     status = Column(String, default="pending")         # "pending" | "running" | "done" | "failed"
     input_values = Column(Text, nullable=True)         # JSON inputs for one-time tasks
@@ -106,6 +107,7 @@ class TaskQueue(Base):
     processed_at = Column(DateTime, nullable=True)
 
     scraper = relationship("Scraper", back_populates="queue_tasks")
+    schedule = relationship("Schedule")
 
 
 # ── ScraperVersion ───────────────────────────────────────────────────────────

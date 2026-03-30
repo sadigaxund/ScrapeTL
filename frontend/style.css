@@ -1082,7 +1082,7 @@ select option {
 
 /* ── Tag Filter Chips ────────────────────────── */
 .tag-chip {
-  padding: 4px 12px;
+  padding: 4px 16px;
   border-radius: 99px;
   font-size: 12px;
   font-weight: 600;
@@ -1634,21 +1634,23 @@ select option {
   font-family: 'Inter', sans-serif;
   font-size: 13px;
   text-align: left;
-  padding: 8px 12px;
+  padding: 10px 14px;
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.1s ease;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
 }
+
 .dropdown-item:hover {
-  background: var(--bg-input);
+  background: var(--bg-card-hover);
   color: var(--text-primary);
 }
+
 .dropdown-item--active {
-  background: rgba(99,102,241,0.1) !important;
-  color: var(--accent) !important;
+  background: rgba(124, 106, 247, 0.15) !important;
+  color: #c4b5fd !important;
   font-weight: 600;
 }
 

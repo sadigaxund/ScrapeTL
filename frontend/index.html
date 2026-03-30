@@ -252,7 +252,7 @@
                 <div class="custom-dropdown" id="dd-sched-scraper" onclick="toggleDropdown(event, 'dd-sched-scraper')"
                   style="width:100%">
                   <button type="button" class="tag-chip" id="summary-sched-scraper"
-                    style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); font-size:14px; font-weight:500">
+                    style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); font-size:14px; font-weight:500; padding: 0 16px;">
                     <span>— Select —</span> <span style="font-size:10px; opacity:0.5">▼</span>
                   </button>
                   <div class="custom-dropdown-menu" id="sched-menu-scrapers" onclick="event.stopPropagation()"
@@ -276,7 +276,7 @@
                 <div class="custom-dropdown" id="dd-sched-preset" onclick="toggleDropdown(event, 'dd-sched-preset')"
                   style="width:160px">
                   <button type="button" class="tag-chip" id="summary-sched-preset"
-                    style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:rgba(255,255,255,0.03); font-size:12px">
+                    style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:rgba(255,255,255,0.03); font-size:12px; padding: 0 16px;">
                     <span>Presets</span> <span style="font-size:10px; opacity:0.5">▼</span>
                   </button>
                   <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%">
@@ -400,19 +400,19 @@
           style="padding:0 0 16px 0; border-bottom:1px solid var(--border-light); display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
 
           <div class="custom-dropdown" id="dd-scraper" onclick="toggleDropdown(event, 'dd-scraper')">
-            <button class="tag-chip" id="summary-scraper">Scraper: <b style="margin-left:4px">All</b> <span
+            <button class="tag-chip" id="summary-scraper" style="padding: 0 16px;">Scraper: <b style="margin-left:4px">All</b> <span
                 style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-scrapers" onclick="event.stopPropagation()"></div>
           </div>
 
           <div class="custom-dropdown" id="dd-tag" onclick="toggleDropdown(event, 'dd-tag')">
-            <button class="tag-chip" id="summary-tag">Tag: <b style="margin-left:4px">All</b> <span
+            <button class="tag-chip" id="summary-tag" style="padding: 0 16px;">Tag: <b style="margin-left:4px">All</b> <span
                 style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-tags" onclick="event.stopPropagation()"></div>
           </div>
 
           <div class="custom-dropdown" id="dd-status" onclick="toggleDropdown(event, 'dd-status')">
-            <button class="tag-chip" id="summary-status">Status: <b style="margin-left:4px">All</b> <span
+            <button class="tag-chip" id="summary-status" style="padding: 0 16px;">Status: <b style="margin-left:4px">All</b> <span
                 style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-statuses" onclick="event.stopPropagation()"></div>
           </div>
@@ -1020,7 +1020,7 @@
               <div class="custom-dropdown" id="dd-disc-dispatch" onclick="toggleDropdown(event, 'dd-disc-dispatch')"
                 style="width:100%;">
                 <button type="button" class="tag-chip" id="summary-disc-dispatch"
-                  style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
+                  style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500; padding: 0 16px;">
                   <span>All at Once</span> <span style="font-size:10px; opacity:0.5;">▼</span>
                 </button>
                 <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
@@ -1049,7 +1049,7 @@
               <div class="custom-dropdown" id="dd-disc-style" onclick="toggleDropdown(event, 'dd-disc-style')"
                 style="width:100%;">
                 <button type="button" class="tag-chip" id="summary-disc-style"
-                  style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
+                  style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500; padding: 0 16px;">
                   <span>Rich Embed</span> <span style="font-size:10px; opacity:0.5;">▼</span>
                 </button>
                 <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
@@ -1145,7 +1145,7 @@
             <div class="custom-dropdown" id="dd-http-method" onclick="toggleDropdown(event, 'dd-http-method')"
               style="width:100%;">
               <button type="button" class="tag-chip" id="summary-http-method"
-                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:600;">
+                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:600; padding: 0 16px;">
                 <span>POST</span> <span style="font-size:10px; opacity:0.5;">▼</span>
               </button>
               <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
@@ -1199,7 +1199,7 @@
             <div class="custom-dropdown" id="dd-http-dispatch" onclick="toggleDropdown(event, 'dd-http-dispatch')"
               style="width:100%;">
               <button type="button" class="tag-chip" id="summary-http-dispatch"
-                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500;">
+                style="width:100%; justify-content:space-between; height:42px; border-radius:var(--radius-sm); border:1px solid var(--border-strong); background:var(--bg-input); font-size:13px; font-weight:500; padding: 0 16px;">
                 <span>All at Once</span> <span style="font-size:10px; opacity:0.5;">▼</span>
               </button>
               <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%;">
@@ -1302,18 +1302,18 @@
       </div>
       <div class="form-group" style="margin-bottom:16px;">
         <label>Scraper *</label>
-        <select id="ot-scraper" class="form-control" onchange="renderOneTimeParams()"
-          style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px;"></select>
+        <div class="custom-dropdown" id="dd-ot-scraper" style="width:100%">
+          <input type="hidden" id="ot-scraper" onchange="renderOneTimeParams()">
+          <button class="tag-chip" id="summary-ot-scraper" onclick="toggleDropdown(event, 'dd-ot-scraper')" 
+                  style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); font-size:14px; font-weight:500; padding: 0 16px;">
+            <span>— Select —</span> <span style="font-size:10px; opacity:0.5">▼</span>
+          </button>
+          <div class="custom-dropdown-menu" id="ot-menu-scrapers" style="width:100%">
+            <!-- Populated via app.js -->
+          </div>
+        </div>
       </div>
       <div id="ot-params-wrapper" style="margin-bottom:16px;"></div>
-      <div class="form-group" style="margin-bottom:16px;">
-        <label>Execution Strategy</label>
-        <select id="ot-strategy" class="form-control" onchange="toggleOtTimeInput()"
-          style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px;">
-          <option value="custom">Custom Time</option>
-          <option value="now">Run Now (+5s)</option>
-        </select>
-      </div>
 
       <div id="ot-time-group" class="form-group" style="margin-bottom:16px;">
         <label>Scheduled For *</label>
