@@ -565,12 +565,12 @@ function selectBuilderPreset(type, presetKey) {
     
     setBuilderTool({ type, preset: presetKey });
 }
-
 function renderBuilderNodes() {
-    const canvas = document.getElementById('builder-canvas');
-    if (!canvas) return;
+    const container = document.getElementById('nodes-container');
+    if (!container) return;
 
-    canvas.querySelectorAll('.builder-node').forEach(n => n.remove());
+    // Clear existing nodes
+    container.innerHTML = '';
 
     state.builder.nodes.forEach(node => {
         const preset = NODE_PRESETS[node.type][node.preset];
@@ -733,7 +733,7 @@ function renderBuilderNodes() {
             el.classList.add('dragging');
         });
 
-        canvas.appendChild(el);
+        container.appendChild(el);
     });
     
     renderConnections();
@@ -1099,7 +1099,7 @@ function createNewFlow() {
         return;
     }
 
-    // Reset state
+    // Reset state variables
     deselectAll();
     state.builder.nodes = [];
     state.builder.edges = [];
@@ -1111,29 +1111,45 @@ function createNewFlow() {
     state.builder.activeConnection = null;
 
     // Reset hidden inputs
-    document.getElementById('flow-scraper-id').value = '';
-    document.getElementById('flow-name').value = '';
-    document.getElementById('flow-desc').value = '';
+    const scraperIdInput = document.getElementById('flow-scraper-id');
+    const nameInput = document.getElementById('flow-name');
+    const descInput = document.getElementById('flow-desc');
+    if (scraperIdInput) scraperIdInput.value = '';
+    if (nameInput) nameInput.value = '';
+    if (descInput) descInput.value = '';
 
-    // Reset Canvas Transform
     const canvas = document.getElementById('builder-canvas');
-    if (canvas) {
-        canvas.style.transform = `translate(-2000px, -2000px) scale(1)`;
-        updateBuilderZoomHUD();
-    }
+    const nodesContainer = document.getElementById('nodes-container');
+    const svgLayer = document.getElementById('builder-svg-layer');
 
-    // Small delay to ensure browser reflow after native confirm() dialog
-    setTimeout(() => {
-        renderBuilderNodes();
-        renderConnections();
-        updateBuilderContextUI();
+    // 1. Brute force DOM clearing
+    if (nodesContainer) nodesContainer.innerHTML = '';
+    if (svgLayer) svgLayer.innerHTML = '';
+
+    if (canvas) {
+        // 2. Break GPU optimization by slightly changing the transform
+        canvas.style.transform = `translate(-1999.9px, -1999.9px) scale(1)`;
         
-        // Close any floating context menus
-        const menu = document.querySelector('.builder-add-menu');
-        if (menu) menu.remove();
-        
-        toast('Workspace reset. Start building your new scraper!', 'info');
-    }, 50);
+        // 3. Force layout reflow
+        void canvas.offsetHeight; 
+
+        // 4. Update in next animation frame
+        requestAnimationFrame(() => {
+            canvas.style.transform = `translate(-2000px, -2000px) scale(1)`;
+            
+            // Final render pass (with empty arrays)
+            renderBuilderNodes();
+            renderConnections();
+            updateBuilderContextUI();
+            updateBuilderZoomHUD();
+
+            // Clear any lingering floating menus
+            const menu = document.querySelector('.builder-add-menu');
+            if (menu) menu.remove();
+
+            toast('Workspace reset. Start building your new scraper!', 'info');
+        });
+    }
 }
 
 async function saveFlow() {
