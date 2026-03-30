@@ -1123,13 +1123,15 @@ async function editInBuilder(id) {
     if (!s || s.scraper_type !== 'builder') return;
 
     try {
-        const flowData = s.flow_data ? JSON.parse(s.flow_data) : null;
+        // Handle both string and already-parsed object (from API)
+        const flowData = s.flow_data ? (typeof s.flow_data === 'string' ? JSON.parse(s.flow_data) : s.flow_data) : null;
         if (!flowData) {
             toast('No flow data found for this scraper.', 'error');
             return;
         }
 
         // Hydrate state
+        deselectAll();
         state.builder.nodes = flowData.nodes || [];
         state.builder.edges = flowData.edges || [];
         
@@ -1153,7 +1155,13 @@ async function editInBuilder(id) {
         setTimeout(() => {
             renderBuilderNodes();
             renderConnections();
-        }, 50);
+            
+            // Re-apply viewport to canvas DOM specifically for the first frame
+            const canvas = document.getElementById('builder-canvas');
+            if (canvas) {
+                canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+            }
+        }, 80);
 
         toast(`Loaded "${s.name}" into Builder`, 'info');
     } catch (e) {
