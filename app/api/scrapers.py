@@ -68,9 +68,9 @@ def _scraper_dict(s: Scraper):
         "description": s.description,
         "homepage_url": s.homepage_url,
         "thumbnail_url": f"/thumbnails/{s.local_thumbnail_path}" if s.local_thumbnail_path else s.thumbnail_url,
-        "enabled": s.enabled,
         "health": s.health or "untested",
         "created_at": s.created_at.isoformat() if s.created_at else None,
+        "updated_at": s.updated_at.isoformat() if s.updated_at else None,
         "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in s.tags],
         "integrations": [{"id": i.id, "name": i.name, "type": i.type} for i in s.integrations],
         "version_count": len(s.versions) if s.versions else 0,
@@ -78,6 +78,7 @@ def _scraper_dict(s: Scraper):
         "inputs": scraper_inputs,
         "scraper_type": s.scraper_type,
         "flow_data": json.loads(s.flow_data) if s.flow_data else None,
+        "last_run": s.logs[0].run_at.isoformat() if s.logs else None,
     }
 
 
@@ -266,7 +267,6 @@ async def save_builder_flow(
             flow_data=flow_data,
             scraper_type="builder",
             position=new_pos,
-            enabled=True
         )
         db.add(scraper)
     
@@ -345,16 +345,6 @@ async def update_scraper(
     db.commit()
     db.refresh(scraper)
     return _scraper_dict(scraper)
-
-
-@router.patch("/{scraper_id}/toggle")
-def toggle_scraper(scraper_id: int, db: Session = Depends(get_db)):
-    scraper = db.get(Scraper, scraper_id)
-    if not scraper:
-        raise HTTPException(status_code=404, detail="Scraper not found.")
-    scraper.enabled = not scraper.enabled
-    db.commit()
-    return {"id": scraper.id, "enabled": scraper.enabled}
 
 
 @router.delete("/{scraper_id}")

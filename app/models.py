@@ -38,15 +38,15 @@ class Scraper(Base):
     thumbnail_url = Column(String, nullable=True)
     local_thumbnail_path = Column(String, nullable=True)
     thumbnail_data = Column(LargeBinary, nullable=True)
-    enabled = Column(Boolean, default=True)
     health = Column(String, default="untested")  # "untested" | "ok" | "failing"
     scraper_type = Column(String, default="python")  # "python" | "builder"
     flow_data = Column(Text, nullable=True)         # JSON encoded graph (nodes, edges)
     position = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     schedules     = relationship("Schedule",       back_populates="scraper", cascade="all, delete-orphan")
-    logs          = relationship("ScrapeLog",      back_populates="scraper", cascade="all, delete-orphan")
+    logs          = relationship("ScrapeLog",      back_populates="scraper", cascade="all, delete-orphan", order_by="desc(ScrapeLog.run_at)")
     queue_tasks   = relationship("TaskQueue",      back_populates="scraper", cascade="all, delete-orphan")
     versions      = relationship("ScraperVersion", back_populates="scraper", cascade="all, delete-orphan", order_by="desc(ScraperVersion.created_at)")
     tags          = relationship("Tag",            secondary="scraper_tags",         back_populates="scrapers")
