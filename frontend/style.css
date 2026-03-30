@@ -1145,7 +1145,7 @@ select option {
 
 .log-card-header {
   display: grid;
-  grid-template-columns: 110px minmax(140px, 1fr) 90px 110px 110px 110px 30px;
+  grid-template-columns: 110px minmax(140px, 1fr) 90px 110px 110px 160px 30px;
   align-items: center;
   padding: 10px 14px;
   gap: 12px;
@@ -2179,13 +2179,14 @@ input:checked + .slider { background-color: var(--success); }
 .sched-card__next-col {
   display: flex;
   align-items: center;
-  justify-content: center; /* Center badges within the fixed-width columns */
-  flex: 0 0 180px;
+  justify-content: center;
+  flex: 0 0 260px;
+  min-width: 0;
 }
 .sched-badge {
-  padding: 5px 12px;
+  padding: 4px 10px;
   border-radius: 20px;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   letter-spacing: 0.01em;
@@ -2193,7 +2194,8 @@ input:checked + .slider { background-color: var(--success); }
   align-items: center;
   justify-content: center; /* Center text within the badge */
   gap: 6px;
-  width: 170px; /* Increased slightly to fit date/time better */
+  width: 250px; /* Increased further to prevent clipping */
+  min-width: 100%;
 }
 
 .sched-badge--next {
