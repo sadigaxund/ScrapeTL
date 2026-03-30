@@ -109,11 +109,47 @@ function formatDate(isoStr) {
     if (!isoStr) return '—';
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return '—';
+    return d.toLocaleString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+    });
+}
+
+function formatDateOnly(isoStr) {
+    if (!isoStr) return '—';
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
         day: 'numeric'
     });
+}
+
+function formatRelativeDate(isoStr) {
+    if (!isoStr) return '—';
+    const d = new Date(isoStr);
+    const now = new Date();
+    if (isNaN(d.getTime())) return '—';
+
+    const diffMs = now - d;
+    if (diffMs < 0) return formatDate(isoStr); // Future date
+
+    const seconds = Math.floor(diffMs / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+
+    if (seconds < 60) return 'Just now';
+    if (minutes < 60) return `${minutes}m ago`;
+    if (hours < 24) return `${hours}h ago`;
+    if (days < 7) return `${days}d ago`;
+    
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
 function statusBadge(status) {
@@ -1428,9 +1464,9 @@ function renderScrapersList(scrapers) {
                     <span class="status-badge ${healthInfo.cls}" style="width:fit-content">${healthInfo.icon} ${healthInfo.label}</span>
                 </div>
             </td>
-            <td style="color:var(--text-secondary); white-space:nowrap">${formatDate(s.created_at)}</td>
-            <td style="color:var(--text-secondary); white-space:nowrap">${formatDate(s.updated_at)}</td>
-            <td style="color:var(--text-secondary); white-space:nowrap">${formatDate(s.last_run)}</td>
+            <td style="color:var(--text-secondary); white-space:nowrap"><span title="${formatDate(s.created_at)}">${formatDateOnly(s.created_at)}</span></td>
+            <td style="color:var(--text-secondary); white-space:nowrap"><span title="${formatDate(s.updated_at)}">${formatDateOnly(s.updated_at)}</span></td>
+            <td style="color:var(--text-secondary); white-space:nowrap"><span title="${formatDate(s.last_run)}">${formatRelativeDate(s.last_run)}</span></td>
             <td class="action-cell">
                 <div style="display:flex; align-items:center; gap:8px">
                     <div class="action-btn-group">
@@ -1455,10 +1491,10 @@ function renderScrapersList(scrapers) {
                     <th style="width:80px">Photo</th>
                     <th>Scraper Plugin</th>
                     <th style="width:100px">Type</th>
-                    <th style="width:140px">Status</th>
-                    <th style="width:120px">Created</th>
-                    <th style="width:120px">Modified</th>
-                    <th style="width:120px">Last Run</th>
+                    <th style="width:100px">Status</th>
+                    <th style="width:100px">Created</th>
+                    <th style="width:100px">Updated</th>
+                    <th style="width:100px">Last Run</th>
                     <th class="action-cell">Actions</th>
                 </tr>
             </thead>
@@ -2237,8 +2273,9 @@ async function loadLogs(page = null) {
             const isRunning = log.status === 'running';
             const hasDetails = log.payload || log.error_msg || isRunning;
             const isExpanded = state.expandedLogs.has(detailsId);
-            const retryBadge = (log.retry_count && log.retry_count > 0)
-                ? `<span class="status-badge badge-pending" title="Retried ${log.retry_count}x">🔄 ${log.retry_count} retr${log.retry_count === 1 ? 'y' : 'ies'}</span>`
+            const attempts = (log.retry_count || 0) + 1;
+            const retryBadge = (attempts > 1)
+                ? `<span class="status-badge badge-pending" title="${attempts} total execution attempts">🔄 ${attempts} attempts</span>`
                 : '';
 
             return `
@@ -3298,8 +3335,10 @@ function openOneTimeModal() {
         return;
     }
     sel.innerHTML = state.scrapers.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+    document.getElementById('ot-strategy').value = 'custom';
     document.getElementById('ot-time').value = '';
     document.getElementById('ot-note').value = '';
+    toggleOtTimeInput();
     try {
         renderOneTimeParams();
     } catch (e) {
@@ -3316,6 +3355,13 @@ function openOneTimeModal() {
 function closeOneTimeModal(e) {
     if (e && e.target !== document.getElementById('one-time-modal')) return;
     document.getElementById('one-time-modal').style.display = 'none';
+}
+
+function toggleOtTimeInput() {
+    const strategy = document.getElementById('ot-strategy').value;
+    const timeGroup = document.getElementById('ot-time-group');
+    if (!timeGroup) return;
+    timeGroup.style.display = strategy === 'now' ? 'none' : 'block';
 }
 
 function renderOneTimeParams() {
@@ -3349,8 +3395,17 @@ function renderOneTimeParams() {
 
 async function submitOneTimeTask() {
     const scraperId = document.getElementById('ot-scraper').value;
-    const scheduledFor = document.getElementById('ot-time').value;
+    const strategy = document.getElementById('ot-strategy').value;
+    let scheduledFor = document.getElementById('ot-time').value;
     const note = document.getElementById('ot-note').value.trim();
+
+    if (strategy === 'now') {
+        const d = new Date();
+        d.setSeconds(d.getSeconds() + 5);
+        // Backend expects ISO-like or datetime-local format?
+        // Usually ISO is safest for APIs.
+        scheduledFor = d.toISOString();
+    }
 
     const inputValues = {};
     const scraper = state.scrapers.find(s => String(s.id) === String(scraperId));
