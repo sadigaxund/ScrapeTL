@@ -63,7 +63,9 @@ let state = {
         startY: 0,
         draggedNode: null,
         zoom: 1.0,
-        activeConnection: null  // { fromId, fromPortType, mouseX, mouseY }
+        activeConnection: null,  // { fromId, fromPortType, mouseX, mouseY }
+        selected: null,          // { type: 'node'|'edge', id: any }
+        copyBuffer: null         // node data
     }
 };
 
@@ -316,8 +318,23 @@ function loadTab(tab) {
 
 const NODE_PRESETS = {
     input: {
-        external: { title: 'External Trigger', inputs: [], outputs: ['Input Data'] },
-        variable: { title: 'Variable / Func', inputs: ['Source'], outputs: ['Internal Value'] },
+        external: { 
+            title: 'External Parameter', 
+            inputs: [], 
+            outputs: ['Data Out'],
+            configs: [
+                { key: 'name', type: 'text', label: 'Var Name', placeholder: 'my_param' },
+                { key: 'dataType', type: 'select', label: 'Type', options: ['string', 'number', 'bool', 'json'] }
+            ]
+        },
+        expression: { 
+            title: 'Expression', 
+            inputs: [], 
+            outputs: ['Val Out'],
+            configs: [
+                { key: 'value', type: 'expression', label: 'Value / Registry' }
+            ]
+        },
     },
     node: {
         node1: { title: 'Processor 1', inputs: ['In'], outputs: ['Out'] },
@@ -404,11 +421,59 @@ function initBuilder() {
             x: x - 80,
             y: y - 50,
             type: state.builder.activeTool.type,
-            preset: state.builder.activeTool.preset
+            preset: state.builder.activeTool.preset,
+            config: {}
         };
 
         state.builder.nodes.push(newNode);
         renderBuilderNodes();
+        
+        // Auto-switch back to pan after placement
+        setBuilderTool('pan');
+    });
+
+    // Deselect on background click
+    viewport.addEventListener('mousedown', (e) => {
+        if (e.target === viewport || e.target === canvas) {
+            deselectAll();
+            renderBuilderNodes();
+            renderConnections();
+        }
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+        const isEditingInput = e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true';
+        if (isEditingInput) return;
+
+        // DELETE
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            deleteSelected();
+        }
+
+        // CTRL+C (Copy)
+        if (e.ctrlKey && e.key === 'c') {
+            if (state.builder.selected && state.builder.selected.type === 'node') {
+                const node = state.builder.nodes.find(n => n.id === state.builder.selected.id);
+                if (node) {
+                    state.builder.copyBuffer = JSON.parse(JSON.stringify(node));
+                    toast('Node copied', 'info');
+                }
+            }
+        }
+
+        // CTRL+V (Paste)
+        if (e.ctrlKey && e.key === 'v') {
+            if (state.builder.copyBuffer) {
+                const newNode = JSON.parse(JSON.stringify(state.builder.copyBuffer));
+                newNode.id = Date.now();
+                newNode.x += 40; // Offset pasted node
+                newNode.y += 40;
+                state.builder.nodes.push(newNode);
+                renderBuilderNodes();
+                toast('Node pasted', 'info');
+            }
+        }
     });
 
     // Close dropdowns on outside click
@@ -431,13 +496,39 @@ function resetBuilderZoom() {
     updateZoomHUD();
 }
 
+function deselectAll() {
+    state.builder.selected = null;
+    document.querySelectorAll('.builder-node').forEach(n => n.classList.remove('selected'));
+    document.querySelectorAll('.connection-path').forEach(p => p.classList.remove('selected'));
+}
+
+function deleteSelected() {
+    if (!state.builder.selected) return;
+    const { type, id } = state.builder.selected;
+
+    if (type === 'node') {
+        state.builder.nodes = state.builder.nodes.filter(n => n.id !== id);
+        // Cascading delete for edges connected to this node
+        state.builder.edges = state.builder.edges.filter(e => e.from !== id && e.to !== id);
+        toast('Node deleted', 'info');
+    } else if (type === 'edge') {
+        state.builder.edges.splice(id, 1);
+        toast('Connection deleted', 'info');
+    }
+
+    state.builder.selected = null;
+    renderBuilderNodes();
+    renderConnections();
+}
+
 function setBuilderTool(tool) {
     state.builder.activeTool = typeof tool === 'string' ? tool : state.builder.activeTool;
     document.querySelectorAll('.builder-tool-btn').forEach(b => b.classList.remove('active'));
     
     // If it's just 'pan'
     if (tool === 'pan') {
-        document.getElementById('tool-pan').classList.add('active');
+        const panBtn = document.getElementById('tool-pan');
+        if (panBtn) panBtn.classList.add('active');
     }
     
     const viewport = document.getElementById('builder-viewport');
@@ -486,12 +577,105 @@ function renderBuilderNodes() {
         el.id = `node-${node.id}`;
         el.style.left = `${node.x}px`;
         el.style.top = `${node.y}px`;
+        
+        if (state.builder.selected && state.builder.selected.type === 'node' && state.builder.selected.id === node.id) {
+            el.classList.add('selected');
+        }
+
+        el.addEventListener('click', (e) => {
+            // Prevent if clicking port or input
+            if (e.target.classList.contains('node-port') || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.classList.contains('btn-node-action')) return;
+            
+            e.stopPropagation();
+            deselectAll();
+            state.builder.selected = { type: 'node', id: node.id };
+            el.classList.add('selected');
+            // Re-render connections to make sure selection logic is fresh if we clicked an edge before
+            renderConnections();
+        });
+        
+        // Ensure config exists
+        node.config = node.config || {};
 
         // Title
         const title = document.createElement('div');
         title.className = 'builder-node__title';
         title.textContent = preset.title;
         el.appendChild(title);
+
+        // Universal Node Label (NEW) - Processors only
+        if (node.type === 'node') {
+            const nameGroup = document.createElement('div');
+            nameGroup.className = 'node-label-container';
+            const nameInput = document.createElement('input');
+            nameInput.className = 'node-label-input';
+            nameInput.placeholder = 'Custom Label...';
+            nameInput.value = node.config.internalLabel || '';
+            nameInput.oninput = (e) => updateNodeConfig(node.id, 'internalLabel', e.target.value);
+            nameGroup.appendChild(nameInput);
+            el.appendChild(nameGroup);
+        }
+
+        // Configuration UI (NEW)
+        if (preset.configs) {
+            const configContainer = document.createElement('div');
+            configContainer.className = 'node-config-container';
+            
+            preset.configs.forEach(cfg => {
+                const group = document.createElement('div');
+                group.className = 'node-config-group';
+                
+                const label = document.createElement('label');
+                label.className = 'node-config-label';
+                label.textContent = cfg.label;
+                group.appendChild(label);
+                
+                if (cfg.type === 'text') {
+                    const input = document.createElement('input');
+                    input.className = 'node-input';
+                    input.value = node.config[cfg.key] || '';
+                    input.placeholder = cfg.placeholder || '';
+                    input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                    group.appendChild(input);
+                } else if (cfg.type === 'select') {
+                    const select = document.createElement('select');
+                    select.className = 'node-select';
+                    cfg.options.forEach(opt => {
+                        const o = document.createElement('option');
+                        o.value = opt;
+                        o.textContent = opt;
+                        if ((node.config[cfg.key] || cfg.options[0]) === opt) o.selected = true;
+                        select.appendChild(o);
+                    });
+                    select.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                    group.appendChild(select);
+                } else if (cfg.type === 'expression') {
+                    const row = document.createElement('div');
+                    row.className = 'node-config-row';
+                    
+                    const input = document.createElement('input');
+                    input.className = 'node-input';
+                    input.style.flex = '1';
+                    input.value = node.config[cfg.key] || '';
+                    input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                    
+                    const pickBtn = document.createElement('button');
+                    pickBtn.className = 'btn-node-action';
+                    pickBtn.textContent = 'Pick';
+                    pickBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        openContextRegistry(node.id, cfg.key, input);
+                    };
+                    
+                    row.appendChild(input);
+                    row.appendChild(pickBtn);
+                    group.appendChild(row);
+                }
+                
+                configContainer.appendChild(group);
+            });
+            el.appendChild(configContainer);
+        }
 
         // Inputs (Left)
         preset.inputs.forEach((label, idx) => {
@@ -582,6 +766,132 @@ window.addEventListener('mousemove', (e) => {
     // Refresh connections while dragging
     renderConnections();
 });
+
+
+/* ── Node Config Helpers ────────────────────────── */
+function updateNodeConfig(nodeId, key, value) {
+    const node = state.builder.nodes.find(n => n.id === nodeId);
+    if (node) {
+        node.config[key] = value;
+    }
+}
+
+function openContextRegistry(nodeId, configKey, inputEl) {
+    // Remove any existing menu
+    const existing = document.querySelector('.context-registry-menu');
+    if (existing) existing.remove();
+
+    const canvas = document.getElementById('builder-canvas');
+    if (!canvas) return;
+
+    const menu = document.createElement('div');
+    menu.className = 'context-registry-menu';
+    
+    // Position near the button in canvas-space
+    const canvasRect = canvas.getBoundingClientRect();
+    const inputRect = inputEl.getBoundingClientRect();
+    
+    // Canvas-space coords = (Viewport-space Rect - Canvas Origin) / Zoom
+    const top = (inputRect.bottom - canvasRect.top) / state.builder.zoom;
+    const left = (inputRect.left - canvasRect.left) / state.builder.zoom;
+    
+    menu.style.top = `${top + 5}px`;
+    menu.style.left = `${left}px`;
+    
+    // Header
+    const head = document.createElement('div');
+    head.style = 'font-size:10px; font-weight:700; color:var(--accent); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:4px;';
+    head.textContent = 'Context Registry';
+    menu.appendChild(head);
+
+    // 1. External Params defined in this flow
+    state.builder.nodes.forEach(n => {
+        if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
+            const item = document.createElement('div');
+            item.className = 'context-item';
+            const dtype = n.config.dataType ? `<small style="opacity:0.4; margin-left:8px">(${n.config.dataType})</small>` : '';
+            item.innerHTML = `<b>{{${n.config.name}}}</b> ${dtype}`;
+            item.onclick = () => {
+                inputEl.value += `{{${n.config.name}}}`;
+                updateNodeConfig(nodeId, configKey, inputEl.value);
+                menu.remove();
+            };
+            menu.appendChild(item);
+        }
+    });
+
+    // 2. Global Variables
+    state.variables.forEach(v => {
+        const item = document.createElement('div');
+        item.className = 'context-item';
+        const valPreview = v.value ? `<small style="opacity:0.4; margin-left:auto; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.value}</small>` : '';
+        item.innerHTML = `<b>{{${v.key}}}</b> ${valPreview}`;
+        item.onclick = () => {
+            inputEl.value += `{{${v.key}}}`;
+            updateNodeConfig(nodeId, configKey, inputEl.value);
+            menu.remove();
+        };
+        menu.appendChild(item);
+    });
+
+    // 3. Global Functions (UDfs)
+    state.functions.forEach(f => {
+        const item = document.createElement('div');
+        item.className = 'context-item';
+        item.innerHTML = `<b>${f.name}()</b> <small style="margin-left:auto; opacity:0.5">${f.description || ''}</small>`;
+        item.onclick = () => {
+            inputEl.value += `${f.name}()`;
+            updateNodeConfig(nodeId, configKey, inputEl.value);
+            menu.remove();
+        };
+        menu.appendChild(item);
+    });
+
+    // 4. Built-in Functions
+    const builtins = [
+        { name: 'now', desc: 'Current timestamp' },
+        { name: 'today', desc: 'Current date' },
+        { name: 'random', desc: 'Random number' },
+        { name: 'str', desc: 'Convert to string' },
+        { name: 'int', desc: 'Convert to int' },
+        { name: 'json', desc: 'Parse/Stringify JSON' }
+    ];
+
+    const builtinHead = document.createElement('div');
+    builtinHead.style = 'font-size:10px; font-weight:700; color:var(--text-muted); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin:8px 0 4px 0;';
+    builtinHead.textContent = 'Built-in Functions';
+    menu.appendChild(builtinHead);
+
+    builtins.forEach(b => {
+        const item = document.createElement('div');
+        item.className = 'context-item';
+        item.innerHTML = `<b>${b.name}()</b> <small style="margin-left:auto; opacity:0.5">${b.desc}</small>`;
+        item.onclick = () => {
+            inputEl.value += `${b.name}()`;
+            updateNodeConfig(nodeId, configKey, inputEl.value);
+            menu.remove();
+        };
+        menu.appendChild(item);
+    });
+
+    if (menu.children.length === 1) {
+        const none = document.createElement('div');
+        none.style = 'padding:12px; font-size:11px; color:var(--text-muted); text-align:center;';
+        none.textContent = 'No registry items available.';
+        menu.appendChild(none);
+    }
+
+    canvas.appendChild(menu);
+
+    // Global click listener to close it
+    const closer = (e) => {
+        if (!menu.contains(e.target)) {
+            menu.remove();
+            document.removeEventListener('mousedown', closer);
+        }
+    };
+    setTimeout(() => document.addEventListener('mousedown', closer), 10);
+}
 
 // ── Graph Connectivity Logic ────────────────────────
 function startConnection(e, fromId, portType, portIdx) {
@@ -706,7 +1016,25 @@ function renderConnections() {
             state.builder.edges.splice(index, 1);
             renderConnections();
         };
+        
+        if (state.builder.selected && state.builder.selected.type === 'edge' && state.builder.selected.id === index) {
+            path.classList.add('selected');
+        }
 
+        // Invisible fat hit-area for easier selection
+        const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        hitArea.setAttribute('class', 'connection-hit-area');
+        hitArea.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
+        
+        hitArea.onclick = (e) => {
+            e.stopPropagation();
+            deselectAll();
+            state.builder.selected = { type: 'edge', id: index };
+            path.classList.add('selected');
+            renderBuilderNodes(); // Refresh nodes to clear node selection UI
+        };
+
+        svg.appendChild(hitArea);
         svg.appendChild(path);
     });
 
@@ -788,6 +1116,74 @@ async function saveFlow() {
         btn.disabled = false;
         btn.textContent = '💾 Confirm & Save';
     }
+}
+
+async function editInBuilder(id) {
+    const s = state.scrapers.find(x => x.id === id);
+    if (!s || s.scraper_type !== 'builder') return;
+
+    try {
+        const flowData = s.flow_data ? JSON.parse(s.flow_data) : null;
+        if (!flowData) {
+            toast('No flow data found for this scraper.', 'error');
+            return;
+        }
+
+        // Hydrate state
+        state.builder.nodes = flowData.nodes || [];
+        state.builder.edges = flowData.edges || [];
+        
+        // Restore viewport if available
+        if (flowData.config && flowData.config.viewport) {
+            state.builder.x = flowData.config.viewport.x;
+            state.builder.y = flowData.config.viewport.y;
+            state.builder.zoom = flowData.config.viewport.zoom;
+        }
+
+        // Setup save fields for updating
+        document.getElementById('flow-scraper-id').value = s.id;
+        document.getElementById('flow-name').value = s.name;
+        document.getElementById('flow-desc').value = s.description || '';
+
+        // Switch Tab
+        switchTab('builder');
+        loadTab('builder');
+
+        // Re-render
+        setTimeout(() => {
+            renderBuilderNodes();
+            renderConnections();
+        }, 50);
+
+        toast(`Loaded "${s.name}" into Builder`, 'info');
+    } catch (e) {
+        console.error("[Builder] Load Error:", e);
+        toast('Failed to load flow data.', 'error');
+    }
+}
+
+function clearBuilderWorkspace() {
+    if (state.builder.nodes.length > 0 && !confirm('Clear current workspace and start new flow?')) return;
+    
+    state.builder.nodes = [];
+    state.builder.edges = [];
+    state.builder.x = -2000;
+    state.builder.y = -2000;
+    state.builder.zoom = 1;
+    
+    document.getElementById('flow-scraper-id').value = '';
+    document.getElementById('flow-name').value = '';
+    document.getElementById('flow-desc').value = '';
+    
+    // Update UI
+    const canvas = document.getElementById('builder-canvas');
+    if (canvas) {
+        canvas.style.transform = `translate(-2000px, -2000px) scale(1)`;
+    }
+    
+    renderBuilderNodes();
+    renderConnections();
+    toast('Workspace cleared.', 'info');
 }
 
 /* ════════════════════════════════════════════════
@@ -932,7 +1328,7 @@ function renderScrapersList(scrapers) {
               <button class="icon-btn" onclick="openAssignTagsModal(${s.id})" title="Manage Tags">🏷️</button>
               <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
               <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
-              <button class="icon-btn" onclick="openEditModal(${s.id})" title="Edit Scraper">✏️</button>
+              <button class="icon-btn" onclick="${s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})`}" title="${s.scraper_type === 'builder' ? 'Edit in Builder' : 'Edit Scraper'}">✏️</button>
               <button class="icon-btn" onclick="toggleScraper(${s.id})" title="${s.enabled ? 'Disable' : 'Enable'}">${s.enabled ? '⏸️' : '▶️'}</button>
               <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
             </div>

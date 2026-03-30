@@ -8,7 +8,7 @@
   <meta name="description" content="Manage, schedule, and monitor scrapers with integrations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=15" />
+  <link rel="stylesheet" href="/static/style.css?v=27" />
 </head>
 
 <body>
@@ -597,9 +597,6 @@
     <section class="tab-panel" id="tab-builder" style="padding:0; height:calc(100vh - 110px); overflow:hidden; position:relative;">
       <!-- Builder Toolbar -->
       <div class="builder-toolbar">
-        <button class="btn btn-ghost builder-tool-btn active" id="tool-pan" onclick="setBuilderTool('pan')" title="Pan (Spacebar)">
-          <span>🖐️</span>
-        </button>
 
         <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
 
@@ -609,8 +606,8 @@
             <span>📐</span> Input <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">⚡ External Trigger</button>
-            <button class="menu-item" onclick="selectBuilderPreset('input', 'variable')">📦 Variable / Function</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">⚡ External Parameter</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'expression')">📦 Expression</button>
           </div>
         </div>
 
@@ -1431,7 +1428,7 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=18"></script>
+  <script src="/static/app.js?v=23"></script>
   <!-- ── Save Flow Modal ─────────────────────────────── -->
   <div class="modal-overlay" id="save-flow-modal" style="display:none" onclick="closeSaveFlowModal(event)">
     <div class="modal-box" style="max-width:500px">
