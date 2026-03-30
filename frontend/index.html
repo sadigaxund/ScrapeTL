@@ -595,8 +595,18 @@
 
     <!-- ── Builder Tab ────────────────────────────── -->
     <section class="tab-panel" id="tab-builder" style="padding:0; height:calc(100vh - 110px); overflow:hidden; position:relative;">
+      <!-- Builder Context Indicator -->
+      <div id="builder-context-bar" style="position:absolute; top:20px; left:20px; z-index:100; display:flex; align-items:center; gap:12px; padding:6px 14px; background:rgba(15,15,15,0.7); border:1px solid rgba(255,255,255,0.1); border-radius:10px; backdrop-filter:blur(8px); pointer-events:none; transition:all 0.3s ease;">
+        <div style="width:8px; height:8px; border-radius:50%; background:var(--primary); box-shadow:0 0 10px var(--primary);"></div>
+        <span id="builder-current-name" style="font-size:12px; font-weight:700; color:var(--text-secondary); letter-spacing:0.02em;">New Scraper Flow</span>
+      </div>
+
       <!-- Builder Toolbar -->
       <div class="builder-toolbar">
+        <button class="btn btn-ghost builder-tool-btn" onclick="createNewFlow()" title="New Flow (Clear Canvas)" style="padding:0 12px; height:36px; display:flex; align-items:center; gap:6px;">
+          <span style="font-size:16px;">➕</span>
+          <span style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; opacity:0.8;">New</span>
+        </button>
 
         <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
 

@@ -65,7 +65,9 @@ let state = {
         zoom: 1.0,
         activeConnection: null,  // { fromId, fromPortType, mouseX, mouseY }
         selected: null,          // { type: 'node'|'edge', id: any }
-        copyBuffer: null         // node data
+        copyBuffer: null,        // node data
+        currentScraperId: null,   // track active scraper ID
+        currentScraperName: null // track active scraper name
     }
 };
 
@@ -1080,6 +1082,60 @@ function closeSaveFlowModal(e) {
     document.getElementById('save-flow-modal').style.display = 'none';
 }
 
+function updateBuilderContextUI() {
+    const nameDisplay = document.getElementById('builder-current-name');
+    const bar = document.getElementById('builder-context-bar');
+    if (!nameDisplay || !bar) return;
+
+    if (state.builder.currentScraperId) {
+        nameDisplay.textContent = `Editing: ${state.builder.currentScraperName}`;
+    } else {
+        nameDisplay.textContent = 'New Scraper Flow';
+    }
+}
+
+function createNewFlow() {
+    if (state.builder.nodes.length > 0 && !confirm('Are you sure you want to clear the canvas and start a new scraper? Any unsaved changes will be lost.')) {
+        return;
+    }
+
+    // Reset state
+    deselectAll();
+    state.builder.nodes = [];
+    state.builder.edges = [];
+    state.builder.currentScraperId = null;
+    state.builder.currentScraperName = null;
+    state.builder.x = -2000;
+    state.builder.y = -2000;
+    state.builder.zoom = 1;
+    state.builder.activeConnection = null;
+
+    // Reset hidden inputs
+    document.getElementById('flow-scraper-id').value = '';
+    document.getElementById('flow-name').value = '';
+    document.getElementById('flow-desc').value = '';
+
+    // Reset Canvas Transform
+    const canvas = document.getElementById('builder-canvas');
+    if (canvas) {
+        canvas.style.transform = `translate(-2000px, -2000px) scale(1)`;
+        updateBuilderZoomHUD();
+    }
+
+    // Small delay to ensure browser reflow after native confirm() dialog
+    setTimeout(() => {
+        renderBuilderNodes();
+        renderConnections();
+        updateBuilderContextUI();
+        
+        // Close any floating context menus
+        const menu = document.querySelector('.builder-add-menu');
+        if (menu) menu.remove();
+        
+        toast('Workspace reset. Start building your new scraper!', 'info');
+    }, 50);
+}
+
 async function saveFlow() {
     const name = document.getElementById('flow-name').value.trim();
     const desc = document.getElementById('flow-desc').value.trim();
@@ -1106,8 +1162,15 @@ async function saveFlow() {
     if (scraperId) formData.append('scraper_id', scraperId);
 
     try {
-        await apiFetch('/api/scrapers/builder', { method: 'POST', body: formData });
-        toast('Flow saved successfully as a Scraper!', 'success');
+        const savedScraper = await apiFetch('/api/scrapers/builder', { method: 'POST', body: formData });
+        
+        // Update context so subsequent saves update THIS scraper
+        state.builder.currentScraperId = savedScraper.id;
+        state.builder.currentScraperName = savedScraper.name;
+        document.getElementById('flow-scraper-id').value = savedScraper.id;
+        
+        toast(scraperId ? 'Flow updated successfully!' : 'Flow saved successfully!', 'success');
+        updateBuilderContextUI();
         closeSaveFlowModal();
         loadScrapers(); // Refresh scrapers list
     } catch (e) {
@@ -1121,6 +1184,11 @@ async function saveFlow() {
 async function editInBuilder(id) {
     const s = state.scrapers.find(x => x.id === id);
     if (!s || s.scraper_type !== 'builder') return;
+
+    // Update context
+    state.builder.currentScraperId = s.id;
+    state.builder.currentScraperName = s.name;
+    updateBuilderContextUI();
 
     try {
         // Handle both string and already-parsed object (from API)
@@ -1147,6 +1215,8 @@ async function editInBuilder(id) {
         document.getElementById('flow-name').value = s.name;
         document.getElementById('flow-desc').value = s.description || '';
 
+        updateBuilderContextUI();
+
         // Switch Tab
         switchTab('builder');
         loadTab('builder');
@@ -1168,30 +1238,6 @@ async function editInBuilder(id) {
         console.error("[Builder] Load Error:", e);
         toast('Failed to load flow data.', 'error');
     }
-}
-
-function clearBuilderWorkspace() {
-    if (state.builder.nodes.length > 0 && !confirm('Clear current workspace and start new flow?')) return;
-    
-    state.builder.nodes = [];
-    state.builder.edges = [];
-    state.builder.x = -2000;
-    state.builder.y = -2000;
-    state.builder.zoom = 1;
-    
-    document.getElementById('flow-scraper-id').value = '';
-    document.getElementById('flow-name').value = '';
-    document.getElementById('flow-desc').value = '';
-    
-    // Update UI
-    const canvas = document.getElementById('builder-canvas');
-    if (canvas) {
-        canvas.style.transform = `translate(-2000px, -2000px) scale(1)`;
-    }
-    
-    renderBuilderNodes();
-    renderConnections();
-    toast('Workspace cleared.', 'info');
 }
 
 /* ════════════════════════════════════════════════
