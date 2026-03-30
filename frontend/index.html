@@ -8,7 +8,7 @@
   <meta name="description" content="Manage, schedule, and monitor scrapers with integrations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=30" />
+  <link rel="stylesheet" href="/static/style.css?v=34" />
 </head>
 
 <body>
@@ -581,8 +581,8 @@
 
                   <div class="form-group" style="flex:1; display:flex; flex-direction:column;">
                     <label>Documentation (Markdown)</label>
-                    <textarea id="func-doc-md"
-                      style="flex:1; height:180px; font-family:var(--font-mono); font-size:12px; line-height:1.6; padding:12px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--bg-input); resize:none"
+                    <textarea id="func-doc-md" class="markdown-editor"
+                      style="flex:1; height:180px; resize:none"
                       placeholder="Usage, parameters, and return types..."></textarea>
                   </div>
 
@@ -1466,8 +1466,8 @@
 
         <div class="form-group">
           <label style="font-size:11px; margin-bottom:6px;">Documentation (Markdown)</label>
-          <textarea id="edit-func-doc"
-            style="height:280px; font-family:var(--font-mono); font-size:13px; line-height:1.6; padding:12px; resize:vertical; background:var(--bg-input); border:1px solid var(--border);"
+          <textarea id="edit-func-doc" class="markdown-editor"
+            style="height:280px; width:100%; resize:vertical;"
             placeholder="Describe parameters, examples, and return type..."></textarea>
           <p style="font-size:11px; color:var(--text-muted); margin-top:8px;">Supports Markdown. This content appears in
             the Expression side-drawer.</p>
@@ -1483,7 +1483,7 @@
     </div>
   </div>
 
-  <script src="/static/app.js?v=31"></script>
+  <script src="/static/app.js?v=34"></script>
   <!-- ── Save Flow Modal ─────────────────────────────── -->
   <div class="modal-overlay" id="save-flow-modal" style="display:none" onclick="closeSaveFlowModal(event)">
     <div class="modal-box" style="max-width:500px">
@@ -1498,7 +1498,7 @@
       </div>
       <div class="form-group" style="margin-bottom:20px">
         <label>Description</label>
-        <textarea id="flow-desc" placeholder="What this scraper does..." style="height:100px; resize:none"></textarea>
+        <textarea id="flow-desc" class="markdown-editor" placeholder="What this scraper does..." style="height:100px; width:100%; resize:none"></textarea>
       </div>
       <div
         style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">

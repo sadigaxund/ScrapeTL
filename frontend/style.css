@@ -2104,8 +2104,34 @@ input:checked + .slider { background-color: var(--success); }
 }
 
 .code-textarea-wrap textarea::placeholder {
-  color: var(--text-muted);
+  color: var(--text-secondary);
+  opacity: 0.7;
   font-family: monospace;
+}
+
+/* ── Modern Markdown Editor Styles ────────── */
+.markdown-editor {
+  background: #0f121d !important; /* Softened dark navy for better blending */
+  color: #ffffff !important;      /* Pure white text */
+  border: 1px solid var(--border-strong) !important;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 13px !important;
+  padding: 14px !important;
+  line-height: 1.6;
+  outline: none;
+  transition: all var(--transition);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.markdown-editor:focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow), inset 0 2px 4px rgba(0,0,0,0.2) !important;
+}
+
+.markdown-editor::placeholder {
+  color: #818cf8 !important; /* High-contrast indigo placeholder */
+  opacity: 0.8 !important;
 }
 
 /* ══════════════════════════════════════════════════
