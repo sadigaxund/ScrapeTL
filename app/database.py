@@ -35,6 +35,10 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE scrape_logs ADD COLUMN schedule_id INTEGER REFERENCES schedules(id)"))
             conn.commit()
             print("[DB] Added schedule_id to scrape_logs")
+        if "debug_payload" not in cols:
+            conn.execute(text("ALTER TABLE scrape_logs ADD COLUMN debug_payload TEXT"))
+            conn.commit()
+            print("[DB] Added debug_payload to scrape_logs")
 
         # Check task_queue
         res = conn.execute(text("PRAGMA table_info(task_queue)"))
@@ -81,10 +85,10 @@ def _ensure_schema_columns():
         # Check global_variables
         res = conn.execute(text("PRAGMA table_info(global_variables)"))
         cols = [r[1] for r in res]
-        if not cols:
-             # This will be handled by create_all normally, but let's be safe 
-             # if we ever add columns here later.
-             pass
+        if cols and "is_readonly" not in cols:
+            conn.execute(text("ALTER TABLE global_variables ADD COLUMN is_readonly BOOLEAN DEFAULT 0"))
+            conn.commit()
+            print("[DB] Added is_readonly to global_variables")
 
 
 def _seed_defaults():

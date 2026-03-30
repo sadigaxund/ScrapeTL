@@ -88,6 +88,7 @@ class ScrapeLog(Base):
     triggered_by  = Column(String, default="scheduler")  # "scheduler" | "manual" | "catchup"
     retry_count   = Column(Integer, default=0)       # how many retries were attempted
     integration_details = Column(Text, nullable=True) # JSON with integration results
+    debug_payload       = Column(Text, nullable=True) # JSON with secondary debug artifacts
 
     scraper = relationship("Scraper", back_populates="logs")
     schedule = relationship("Schedule")
@@ -176,6 +177,7 @@ class GlobalVariable(Base):
     value_type  = Column(String,  default="string")  # "string" | "number" | "boolean" | "json"
     description = Column(Text,    nullable=True)
     is_secret   = Column(Boolean, default=False)
+    is_readonly = Column(Boolean, default=False)
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     doc_md      = Column(Text, nullable=True)   # Markdown documentation

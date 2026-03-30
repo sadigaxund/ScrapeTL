@@ -89,7 +89,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             from app.scrapers import load_scraper_class_from_code
             scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
             scraper_instance = scraper_cls(homepage_url=scraper_record.homepage_url)
-            episodes = scraper_instance.scrape(vars=global_vars, **_input_values)
+            episodes = scraper_instance.scrape(vars=global_vars, db=db, **_input_values)
 
             episode_count = len(episodes)
 
@@ -100,7 +100,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
             status = "success"
             error_msg = None
-            print(f"[Runner] ✅ {scraper_record.name} — {episode_count} episodes found (attempt {attempt + 1}).")
+            print(f"[Runner] ✅ {scraper_record.name} — {episode_count} results found (attempt {attempt + 1}).")
             break  # success — exit retry loop
 
         except ScrapeSkip as skip:
@@ -138,6 +138,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         triggered_by=triggered_by,
         retry_count=retry_count,
         schedule_id=schedule_id,
+        debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", []))
     )
     db.add(log)
 

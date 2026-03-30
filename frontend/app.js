@@ -358,16 +358,16 @@ function loadTab(tab) {
 const NODE_PRESETS = {
     input: {
         external: {
-            title: 'External Parameter',
+            title: '⚡ External Parameter',
             inputs: [],
-            outputs: ['Data Out'],
+            outputs: ['Val Out'],
             configs: [
                 { key: 'name', type: 'text', label: 'Var Name', placeholder: 'my_param' },
                 { key: 'dataType', type: 'select', label: 'Type', options: ['string', 'number', 'bool', 'json'] }
             ]
         },
         expression: {
-            title: 'Expression',
+            title: '📦 Expression',
             inputs: [],
             outputs: ['Val Out'],
             configs: [
@@ -375,15 +375,51 @@ const NODE_PRESETS = {
             ]
         },
     },
-    node: {
-        node1: { title: 'Processor 1', inputs: ['In'], outputs: ['Out'] },
-        node2: { title: 'Splitter', inputs: ['Source'], outputs: ['Path A', 'Path B'] },
-        node3: { title: 'Merger', inputs: ['Val 1', 'Val 2'], outputs: ['Result'] },
-        transformer: { title: 'GPT Agent', inputs: ['Prompt', 'Data'], outputs: ['Response'] },
+    action: {
+        fetch_url: {
+            title: '🌐 Fetch HTML',
+            inputs: ['URL'],
+            outputs: ['HTML'],
+            configs: [
+                { key: 'method', type: 'select', label: 'Method', options: ['GET', 'POST'] },
+                { key: 'headers', type: 'text', label: 'Extra Headers (JSON)', placeholder: '{"User-Agent": "..."}' }
+            ]
+        },
+        fetch_playwright: {
+            title: '🎭 Playwright Fetch',
+            inputs: ['URL'],
+            outputs: ['HTML'],
+            configs: [
+                { key: 'wait_for', type: 'text', label: 'Wait Selector', placeholder: '.content-ready' },
+                { key: 'timeout', type: 'text', label: 'Timeout (ms)', placeholder: '30000' }
+            ]
+        }
     },
-    output: {
-        external: { title: 'External Sink', inputs: ['Output Point'], outputs: [] },
-        terminal: { title: 'Debug Log', inputs: ['Log'], outputs: [] },
+    sink: {
+        system_output: {
+            title: '🏁 System Output',
+            inputs: ['Data Rows'],
+            outputs: [],
+            configs: [
+                { key: 'label', type: 'text', label: 'Collection Name', placeholder: 'Results' }
+            ]
+        },
+        context: {
+            title: '🧩 Context Registry',
+            inputs: ['Data'],
+            outputs: [],
+            configs: [
+                { key: 'variable_key', type: 'expression', label: 'Registry Key', filter: 'writable' }
+            ]
+        },
+        debug: {
+            title: '🐛 Debug Sink',
+            inputs: ['Log Data'],
+            outputs: [],
+            configs: [
+                { key: 'label', type: 'text', label: 'Artifact Label', placeholder: 'Debug' }
+            ]
+        }
     }
 };
 
@@ -729,7 +765,7 @@ function renderBuilderNodes() {
                     pickBtn.textContent = 'Pick';
                     pickBtn.onclick = (e) => {
                         e.stopPropagation();
-                        openContextRegistry(node.id, cfg.key, input);
+                        openContextRegistry(node.id, cfg.key, input, cfg.filter);
                     };
 
                     row.appendChild(input);
@@ -887,6 +923,8 @@ function openContextRegistry(nodeId, configKey, inputEl) {
 
     // 2. Global Variables
     state.variables.forEach(v => {
+        if (filter === 'writable' && v.is_readonly) return;
+        
         const item = document.createElement('div');
         item.className = 'context-item';
         const valPreview = v.value ? `<small style="opacity:0.4; margin-left:auto; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.value}</small>` : '';
@@ -1332,6 +1370,10 @@ async function editInBuilder(id) {
     }
 }
 
+function downloadScraper(id) {
+    window.open(`/api/scrapers/${id}/download`, '_blank');
+}
+
 /* ════════════════════════════════════════════════
    SCRAPERS
 ════════════════════════════════════════════════ */
@@ -1474,6 +1516,7 @@ function renderScrapersList(scrapers) {
                         <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
                         <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
                         <button class="icon-btn" onclick="${s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})`}" title="Edit">✏️</button>
+                        <button class="icon-btn" onclick="downloadScraper(${s.id})" title="Download Code">📥</button>
                         <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
                     </div>
                     <button class="btn btn-run" style="padding: 6px 14px;" onclick="runScraper(${s.id}, this)">⚡ Run</button>
@@ -2297,13 +2340,28 @@ async function loadLogs(page = null) {
                 <div class="log-details" id="${detailsId}" style="display:${isExpanded ? 'block' : 'none'}">
                     ${isRunning ? `<div class="log-running-msg">Execution in progress. Results will be available after completion.</div>` : ''}
                     ${log.error_msg && !isRunning ? (log.status === 'skipped' ? `<div class="log-skipped-msg">⏭ ${log.error_msg}</div>` : `<div class="log-error">❌ ${log.error_msg}</div>`) : ''}
-                    ${log.payload ? `
-                    <div class="payload-download-bar">
-                        <span class="payload-download-label">Download payload:</span>
-                        <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'json')" title="Download JSON">⬇ JSON</button>
-                        <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'csv')" title="Download CSV">⬇ CSV</button>
+                    
+                    ${log.debug_payload && log.debug_payload.length > 0 ? `
+                    <div class="log-tabs" style="display:flex; gap:8px; margin-bottom:12px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
+                        <button class="log-tab-btn active" onclick="switchLogTab('${log.id}', 'results', this)">Results</button>
+                        <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'debug', this)">Debug Assets (${log.debug_payload.length})</button>
                     </div>
-                    ${renderPayload(log.payload, log.episode_count)}` : ''}
+                    ` : ''}
+
+                    <div id="log-content-results-${log.id}">
+                        ${log.payload ? `
+                        <div class="payload-download-bar">
+                            <span class="payload-download-label">Download payload:</span>
+                            <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'json')" title="Download JSON">⬇ JSON</button>
+                            <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'csv')" title="Download CSV">⬇ CSV</button>
+                        </div>
+                        ${renderPayload(log.payload, log.episode_count)}` : ''}
+                    </div>
+
+                    <div id="log-content-debug-${log.id}" style="display:none">
+                        ${renderDebugPayload(log.debug_payload)}
+                    </div>
+
                     ${renderLogContext(log)}
                 </div>` : ''}
             </div>`;
@@ -2334,6 +2392,68 @@ function toggleLogDetails(id) {
     }
 }
 
+function switchLogTab(logId, tab, btn) {
+    const results = document.getElementById(`log-content-results-${logId}`);
+    const debug = document.getElementById(`log-content-debug-${logId}`);
+    if (tab === 'results') {
+        results.style.display = 'block';
+        debug.style.display = 'none';
+    } else {
+        results.style.display = 'none';
+        debug.style.display = 'block';
+    }
+    const nav = btn.parentElement;
+    nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function renderDebugPayload(artifacts) {
+    if (!artifacts || !artifacts.length) return '<div class="empty-state">No debug artifacts found.</div>';
+    
+    return artifacts.map(a => {
+        const isHtml = typeof a.data === 'string' && (a.data.trim().startsWith('<') || a.data.includes('</'));
+        let content = '';
+        if (isHtml) {
+            content = `
+            <div class="debug-html-wrapper">
+                <div class="debug-html-actions" style="margin-bottom:8px; display:flex; gap:8px;">
+                    <button class="btn btn-ghost btn-sm" onclick="toggleDebugSource(this)">👁 View Source</button>
+                    <button class="btn btn-ghost btn-sm active" onclick="toggleDebugPreview(this)">🖼 Preview</button>
+                </div>
+                <div class="debug-html-preview" style="background:#fff; border-radius:var(--radius-sm); overflow:auto; max-height:400px; padding:10px;">
+                    ${a.data}
+                </div>
+                <pre class="debug-html-source" style="display:none; background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:400px;">${a.data.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+            </div>`;
+        } else {
+            const pretty = typeof a.data === 'object' ? JSON.stringify(a.data, null, 2) : String(a.data);
+            content = `<pre style="background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:400px;">${pretty}</pre>`;
+        }
+        
+        return `
+        <div class="debug-artifact" style="margin-bottom:16px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; background:rgba(255,255,255,0.01);">
+            <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">${a.label || 'Artifact'}</div>
+            ${content}
+        </div>`;
+    }).join('');
+}
+
+function toggleDebugSource(btn) {
+    const parent = btn.closest('.debug-html-wrapper');
+    parent.querySelector('.debug-html-preview').style.display = 'none';
+    parent.querySelector('.debug-html-source').style.display = 'block';
+    btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
+function toggleDebugPreview(btn) {
+    const parent = btn.closest('.debug-html-wrapper');
+    parent.querySelector('.debug-html-preview').style.display = 'block';
+    parent.querySelector('.debug-html-source').style.display = 'none';
+    btn.parentElement.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+}
+
 function renderPayload(payload, episodeCount = 0) {
     if (!payload || typeof payload !== 'object') return '';
 
@@ -2343,10 +2463,20 @@ function renderPayload(payload, episodeCount = 0) {
 
         let tbody = payload.map(obj => {
             return '<tr>' + keys.map(k => {
-                let v = obj[k] !== null && obj[k] !== undefined ? String(obj[k]) : '—';
-                if (v.length > 200) v = v.substring(0, 200) + '...';
-                if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
-                return `<td>${v}</td>`;
+                const val = (obj[k] !== null && obj[k] !== undefined) ? String(obj[k]) : '—';
+                const isHtml = val.length > 10 && (val.trim().startsWith('<') || val.includes('</'));
+                let cellContent = '';
+                
+                if (isHtml) {
+                    const encoded = b64EncodeUnicode(val);
+                    cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">🖼 Preview HTML</button>`;
+                } else {
+                    let v = val;
+                    if (v.length > 200) v = v.substring(0, 200) + '...';
+                    if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
+                    cellContent = v;
+                }
+                return `<td>${cellContent}</td>`;
             }).join('') + '</tr>';
         }).join('');
 
@@ -2368,6 +2498,36 @@ function renderPayload(payload, episodeCount = 0) {
             return `<div class="payload-row"><span class="payload-key">${label}</span><span class="payload-val">${val}</span></div>`;
         });
     return `<div class="payload-grid">${rows.join('')}</div>`;
+}
+
+function showHtmlModal(encoded) {
+    const html = b64DecodeUnicode(encoded);
+    const modal = document.getElementById('log-context-modal'); // Reusing log modal or creating new
+    const body = document.getElementById('log-context-body');
+    
+    body.innerHTML = `
+        <div class="debug-html-wrapper">
+            <div class="debug-html-actions" style="margin-bottom:12px; display:flex; gap:8px;">
+                <button class="btn btn-ghost btn-sm" onclick="toggleDebugSource(this)">👁 View Source</button>
+                <button class="btn btn-ghost btn-sm active" onclick="toggleDebugPreview(this)">🖼 Preview</button>
+            </div>
+            <div class="debug-html-preview" style="background:#fff; color:#000; border-radius:var(--radius-sm); overflow:auto; max-height:70vh; padding:12px; border:1px solid var(--border);">
+                ${html}
+            </div>
+            <pre class="debug-html-source" style="display:none; background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all;">${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+        </div>
+    `;
+    
+    document.getElementById('log-context-title').textContent = 'HTML Preview';
+    modal.style.display = 'flex';
+}
+
+function b64EncodeUnicode(str) {
+    return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode('0x' + p1)));
+}
+
+function b64DecodeUnicode(str) {
+    return decodeURIComponent(atob(str).split('').map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)).join(''));
 }
 
 function renderLogContext(log) {
@@ -3579,8 +3739,11 @@ function renderVariablesList() {
                     </div>
                 </div>
                 <div style="display:flex; gap:8px;">
-                    <button class="btn btn-ghost btn-sm" onclick="toggleInlineVariableSecret(${idx})" style="padding:0 10px">
+                    <button class="btn btn-ghost btn-sm" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Hide' : 'Show'} Secret" style="padding:0 10px">
                         ${v.is_secret ? '🔒' : '👁️'}
+                    </button>
+                    <button class="btn btn-ghost btn-sm" onclick="toggleInlineVariableReadonly(${idx})" title="${v.is_readonly ? 'Make Writable' : 'Make Read-Only'}" style="padding:0 10px; color:${v.is_readonly ? 'var(--failure)' : 'var(--text-muted)'}">
+                        ${v.is_readonly ? '🚫' : '📝'}
                     </button>
                     <button class="btn btn-primary btn-sm" onclick="saveInlineVariable(${idx})" style="min-width:64px">💾 Save</button>
                     <button class="btn btn-ghost btn-sm" style="color:var(--failure)" onclick="cancelInlineEdit(${idx})">✕</button>
@@ -3599,6 +3762,7 @@ function renderVariablesList() {
             <div class="item-actions">
                 <div class="action-btn-group">
                     <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
+                    <button class="icon-btn" onclick="toggleVariableReadonly(${idx})" title="${v.is_readonly ? 'Unlock' : 'Lock (Read-Only)'}">${v.is_readonly ? '🚫' : '📝'}</button>
                     <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit Inline">✏️</button>
                     <button class="icon-btn icon-btn-danger" onclick="deleteVariable(${v.id})" title="Delete">✕</button>
                 </div>
@@ -3667,6 +3831,22 @@ function toggleInlineVariableSecret(idx) {
     renderVariablesList();
 }
 
+async function toggleVariableReadonly(idx) {
+    const v = state.variables[idx];
+    try {
+        await apiFetch(`${API.variables}/${v.id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({ is_readonly: !v.is_readonly })
+        });
+        loadVariables(true);
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function toggleInlineVariableReadonly(idx) {
+    state.variables[idx].is_readonly = !state.variables[idx].is_readonly;
+    renderVariablesList();
+}
+
 async function saveInlineVariable(idx) {
     const v = state.variables[idx];
     const key = document.getElementById(`inline-var-key-${idx}`).value.trim();
@@ -3676,7 +3856,7 @@ async function saveInlineVariable(idx) {
 
     if (!key) { toast('Key is required', 'error'); return; }
 
-    const payload = { value, value_type: type, is_secret: v.is_secret, description };
+    const payload = { value, value_type: type, is_secret: v.is_secret, is_readonly: v.is_readonly, description };
     if (v._isNew) {
         payload.key = key;
     }

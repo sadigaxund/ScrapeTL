@@ -1,0 +1,273 @@
+import json
+import concurrent.futures
+from typing import Dict, Any, List, Optional
+import requests
+from playwright.sync_api import sync_playwright
+from app.expressions import resolve_expressions
+from app.models import GlobalVariable
+
+class BuilderEngine:
+    """
+    Executes a visual builder flow (DAG).
+    Handles node caching, parallel branching, and multiple output merging.
+    """
+
+    def __init__(self, flow_data: Dict[str, Any], global_vars: Dict[str, Any], db_session=None):
+        self.nodes = {n["id"]: n for n in flow_data.get("nodes", [])}
+        self.edges = flow_data.get("edges", [])
+        self.global_vars = global_vars
+        self.db = db_session
+        
+        # Internal cache for node results to prevent redundant execution
+        self.results_cache: Dict[str, Any] = {}
+        
+        # Adjacency list for DAG traversal
+        self.adj = {}
+        self.in_degree = {nid: 0 for nid in self.nodes}
+        for edge in self.edges:
+            # Handle both terminology: (Reat Flow: source/target) and (Custom: from/to)
+            src = edge.get("source") or edge.get("from")
+            tgt = edge.get("target") or edge.get("to")
+            
+            if src not in self.adj: self.adj[src] = []
+            self.adj[src].append(tgt)
+            self.in_degree[tgt] += 1
+
+    def execute(self, runtime_inputs: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """
+        Main entry point for execution.
+        """
+        # 1. Resolve initial "Expression" nodes that don't depend on others
+        # (Though technically the topological sort will handle this)
+        
+        # 2. Topological Sort / Execution
+        queue = [nid for nid, deg in self.in_degree.items() if deg == 0]
+        
+        # We store final results from all 'sink_system_output' nodes here
+        combined_results = []
+        debug_artifacts = []
+
+        # Using a ThreadPoolExecutor for parallel-ready branches (specifically I/O nodes)
+        # Note: Playwright sync_api is thread-safe if initialized per-thread, 
+        # but for simplicity in this first version, we'll run nodes sequentially 
+        # while respecting the DAG.
+        
+        # Simple sequential execution respecting dependencies
+        processed_nodes = set()
+        combined_results = []
+        debug_artifacts = []
+        
+        while queue:
+            current_id = queue.pop(0)
+            node = self.nodes[current_id]
+            
+            # Execute node logic
+            try:
+                res = self._execute_node(node, runtime_inputs)
+                self.results_cache[current_id] = res
+                print(f"[BuilderEngine] Ran node {current_id} ({node['type']}) -> result type: {type(res).__name__}")
+                
+                # Normalize ntype to match _execute_node logic
+                nt_raw = str(node.get("type", "")).strip()
+                pr_raw = str(node.get("preset", "")).strip()
+                nt = f"{nt_raw}_{pr_raw}" if pr_raw and pr_raw not in nt_raw else nt_raw
+
+                # Check if it's an output node
+                if nt == "sink_system_output":
+                    if isinstance(res, list):
+                        combined_results.extend(res)
+                    elif res:
+                        combined_results.append(res)
+                    else:
+                        print(f"[BuilderEngine] Warning: System Output received empty result from {current_id}")
+                
+                elif nt == "sink_debug":
+                    debug_artifacts.append({
+                        "node_id": current_id,
+                        "label": node.get("config", {}).get("label", "Debug"),
+                        "data": res
+                    })
+
+            except Exception as e:
+                print(f"[BuilderEngine] Error in node {current_id} ({node['type']}): {e}")
+                # Optional: allow flow to continue if node is not critical?
+                # For now, we propagate or log.
+                raise
+
+            # Update neighbors
+            for neighbor in self.adj.get(current_id, []):
+                self.in_degree[neighbor] -= 1
+                if self.in_degree[neighbor] == 0:
+                    queue.append(neighbor)
+            
+            processed_nodes.add(current_id)
+
+        # Store debug artifacts in a special key if they exist
+        # We can pass this back to the runner later
+        self._debug_info = debug_artifacts
+        
+        print(f"[BuilderEngine] Execution finished. Final results: {len(combined_results)} item(s)")
+        return combined_results
+
+    def _execute_node(self, node: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
+        ntype = str(node.get("type", "")).strip()
+        preset = str(node.get("preset", "")).strip()
+        if preset and preset not in ntype:
+            ntype = f"{ntype}_{preset}"
+            
+        # The frontend saves settings in 'config', but some standards use 'data'
+        data = node.get("config") or node.get("data", {})
+        
+        print(f"[BuilderEngine] Executing {node['id']} (Resolved Type: '{ntype}')")
+        
+        # Helper to get inputs from connected nodes
+        node_inputs = self._get_node_inputs(node["id"])
+
+        if ntype == "input_external":
+            # Direct runtime kwarg
+            name = data.get("name")
+            return runtime_inputs.get(name, data.get("default"))
+
+        elif ntype == "input_expression":
+            # The frontend saves this as "value", previously it was "expression"
+            expr = data.get("value") or data.get("expression", "")
+            # Merge global vars with results from parent nodes for expansion
+            context = {**self.global_vars, **node_inputs}
+            print(f"[BuilderEngine] Resolving expression: '{expr}'")
+            return resolve_expressions(expr, context)
+
+        elif ntype == "action_fetch_url":
+            url = data.get("url") or node_inputs.get("url")
+            if not url: 
+                print("[BuilderEngine] Warning: Fetcher node has no URL input! Skipping.")
+                return None
+            
+            # Resolve if it contains expressions
+            url = resolve_expressions(url, {**self.global_vars, **node_inputs}).strip()
+            print(f"[BuilderEngine] Fetcher resolved URL: {url}")
+            
+            headers_raw = data.get("headers") or {}
+            headers = {}
+            if isinstance(headers_raw, str):
+                try:
+                    import json
+                    headers = json.loads(headers_raw.strip() or "{}")
+                except:
+                    try:
+                        import ast
+                        # Support Python dict literal copy-paste (e.g. from user context)
+                        headers = ast.literal_eval(headers_raw.strip() or "{}")
+                    except:
+                        print(f"[BuilderEngine] Warning: Failed to parse headers: {headers_raw}")
+            else:
+                headers = headers_raw
+            
+            resp = requests.get(url, headers=headers, timeout=30)
+            resp.raise_for_status()
+            return resp.text
+
+        elif ntype == "action_fetch_playwright":
+            url = data.get("url") or node_inputs.get("url")
+            if not url: return None
+            
+            url = resolve_expressions(url, {**self.global_vars, **node_inputs})
+            headless = data.get("headless", True)
+            cdp_url = data.get("cdp_url") # For scaling/parallel grid
+            
+            with sync_playwright() as p:
+                if cdp_url:
+                    browser = p.chromium.connect_over_cdp(cdp_url)
+                else:
+                    browser = p.chromium.launch(headless=headless)
+                
+                page = browser.new_page()
+                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                
+                # Optional selector wait
+                wait_sel = data.get("wait_for_selector")
+                if wait_sel:
+                    try: page.wait_for_selector(wait_sel, timeout=10000)
+                    except: pass
+                
+                content = page.content()
+                browser.close()
+                return content
+
+        elif ntype == "sink_context":
+            var_key = data.get("variable_key")
+            # Only update if we have a DB session and variable is not readonly
+            value = node_inputs.get("value")
+            if self.db and var_key:
+                var = self.db.query(GlobalVariable).filter(GlobalVariable.key == var_key).first()
+                if var and not var.is_readonly:
+                    var.value = str(value)
+                    self.db.commit()
+            return value
+
+        elif ntype == "sink_system_output":
+            # Pass through but wrap in dictionary if raw
+            data = node_inputs.get("data")
+            label = data.get("label") if isinstance(data, dict) else (data.get("internalLabel") if isinstance(data, dict) else None)
+            # Fallback to config label
+            if not label:
+                label = data.get("label") if isinstance(data, dict) else str(node.get("config", {}).get("label") or "result")
+            
+            if isinstance(data, str) or not isinstance(data, (dict, list)):
+                return {label: data}
+            return data
+
+        elif ntype == "sink_debug":
+            # Simply pass through its input
+            return node_inputs.get("data")
+
+        return None
+
+    def _get_node_inputs(self, node_id: str) -> Dict[str, Any]:
+        """
+        Collects outputs from all nodes that flow INTO this node.
+        """
+        inputs = {}
+        for edge in self.edges:
+            target_id = edge.get("target") or edge.get("to")
+            if target_id == node_id:
+                src_id = edge.get("source") or edge.get("from")
+                src_output = self.results_cache.get(src_id)
+                
+                # If the target handle has a name, we use it as a key
+                # Otherwise, use the port index (toIdx) and map it based on node type
+                handle = edge.get("targetHandle")
+                if not handle and "toIdx" in edge:
+                    handle = self._map_port_to_handle(node_id, edge["toIdx"])
+                
+                if not handle:
+                    handle = "data" # Final fallback
+                    
+                print(f"[BuilderEngine] Found edge: {src_id} -> {node_id} (Mapped to handle '{handle}')")
+                inputs[handle] = src_output
+        return inputs
+
+    def _map_port_to_handle(self, node_id: str, port_idx: int) -> str:
+        """
+        Maps a numeric port index to a descriptive handle name based on node type.
+        """
+        node = self.nodes.get(node_id)
+        if not node: return "data"
+        ntype = node.get("type", "")
+        preset = node.get("preset", "")
+        if preset:
+            ntype = f"{ntype}_{preset}"
+        
+        # Mapping logic based on presets
+        if ntype in ["action_fetch_url", "action_fetch_playwright"]:
+            return "url" if port_idx == 0 else "data"
+        
+        if ntype == "sink_context":
+            return "value" if port_idx == 0 else "data"
+            
+        if ntype == "sink_system_output":
+            return "data"
+            
+        if ntype == "sink_debug":
+            return "data"
+            
+        return f"input_{port_idx}"

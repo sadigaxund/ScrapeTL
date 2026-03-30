@@ -87,6 +87,7 @@ def get_logs(
                 "schedule_name": log.schedule.label or f"Schedule #{log.schedule_id}" if log.schedule else None,
                 "retry_count": log.retry_count,
                 "integration_details": log.integration_details,
+                "debug_payload": json.loads(log.debug_payload) if log.debug_payload else [],
             }
             for log in logs
         ]

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Response
 import json
 import os
 import re
@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models import Scraper, ScraperVersion
 from app.scrapers import load_scraper_class, list_available_scraper_modules
 from app.scrapers.base import BaseScraper
+from app.builder.generator import Generator
 
 router = APIRouter(prefix="/api/scrapers", tags=["scrapers"])
 
@@ -272,6 +273,17 @@ async def save_builder_flow(
     
     db.commit()
     db.refresh(scraper)
+
+    # Generate the Python code for the flow and snapshot it as a version
+    generated_code = Generator.generate_code(flow_data, scraper.name, scraper.description)
+    _snapshot_version(
+        db, 
+        scraper, 
+        version_label="Builder Sync", 
+        commit_message=f"Sync flow to code: {name}", 
+        code=generated_code
+    )
+
     return _scraper_dict(scraper)
 
 
@@ -408,3 +420,27 @@ def revert_version(scraper_id: int, version_id: int, db: Session = Depends(get_d
 
     db.refresh(scraper)
     return {"detail": f"Reverted to version {version.version_label}.", "scraper": _scraper_dict(scraper)}
+
+
+@router.get("/{scraper_id}/download")
+def download_scraper_code(scraper_id: int, db: Session = Depends(get_db)):
+    """Serve the latest version of the scraper's Python code as a file download."""
+    scraper = db.get(Scraper, scraper_id)
+    if not scraper or not scraper.versions:
+        raise HTTPException(status_code=404, detail="Scraper not found or has no code versions.")
+
+    # latest_version is the first in the list (ordered by created_at desc)
+    latest_version = scraper.versions[0]
+
+    # Generate a safe filename
+    safe_name = re.sub(r"[^a-z0-9]", "_", scraper.name.lower().strip())
+    safe_name = re.sub(r"_+", "_", safe_name).strip("_")
+    filename = f"{safe_name or 'scraper'}.py"
+
+    return Response(
+        content=latest_version.code,
+        media_type="text/x-python",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )
