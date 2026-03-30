@@ -105,13 +105,14 @@ function toast(msg, type = 'info') {
     setTimeout(() => el.remove(), 4000);
 }
 
-function fmt(isoStr) {
+function formatDate(isoStr) {
     if (!isoStr) return '—';
-    const d = new Date(isoStr + (isoStr.endsWith('Z') ? '' : 'Z'));
-    return d.toLocaleString(undefined, {
-        timeZone: state.timezone,
-        month: 'short', day: 'numeric',
-        hour: '2-digit', minute: '2-digit'
+    const d = new Date(isoStr);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString(undefined, {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
     });
 }
 
@@ -203,8 +204,8 @@ async function handleDrop(e, type, targetId) {
         if (type === 'scraper') state.scrapers = list;
         else if (type === 'schedule') state.schedules = list;
         else if (type === 'integration') state.integrations = list;
-        
-        Object.keys(responseCache).forEach(k => { if(k.startsWith(type) || k.startsWith('integrations')) responseCache[k] = null; });
+
+        Object.keys(responseCache).forEach(k => { if (k.startsWith(type) || k.startsWith('integrations')) responseCache[k] = null; });
         refreshFn(type === 'schedule' ? true : undefined);
     } catch (e) {
         toast(e.message, 'error');
@@ -320,18 +321,18 @@ function loadTab(tab) {
 
 const NODE_PRESETS = {
     input: {
-        external: { 
-            title: 'External Parameter', 
-            inputs: [], 
+        external: {
+            title: 'External Parameter',
+            inputs: [],
             outputs: ['Data Out'],
             configs: [
                 { key: 'name', type: 'text', label: 'Var Name', placeholder: 'my_param' },
                 { key: 'dataType', type: 'select', label: 'Type', options: ['string', 'number', 'bool', 'json'] }
             ]
         },
-        expression: { 
-            title: 'Expression', 
-            inputs: [], 
+        expression: {
+            title: 'Expression',
+            inputs: [],
             outputs: ['Val Out'],
             configs: [
                 { key: 'value', type: 'expression', label: 'Value / Registry' }
@@ -366,7 +367,7 @@ function initBuilder() {
     viewport.addEventListener('mousedown', (e) => {
         // Ignore if clicking a node or port
         if (e.target.closest('.builder-node') || e.target.closest('.node-port')) return;
-        
+
         if (e.button !== 0) return; // Left click only (panning)
         state.builder.isDragging = true;
         state.builder.startX = e.clientX - state.builder.x;
@@ -412,10 +413,10 @@ function initBuilder() {
             const factor = 1.1;
             const oldZoom = state.builder.zoom;
             const newZoom = delta > 0 ? oldZoom * factor : oldZoom / factor;
-            
+
             // Limit zoom
             state.builder.zoom = Math.min(Math.max(newZoom, 0.2), 3.0);
-            
+
             // Note: For true "zoom to mouse", we'd need to shift X/Y too. 
             // For now, simpler zoom is fine.
             canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
@@ -448,7 +449,7 @@ function initBuilder() {
 
         state.builder.nodes.push(newNode);
         renderBuilderNodes();
-        
+
         // Auto-switch back to pan after placement
         setBuilderTool('pan');
     });
@@ -545,13 +546,13 @@ function deleteSelected() {
 function setBuilderTool(tool) {
     state.builder.activeTool = typeof tool === 'string' ? tool : state.builder.activeTool;
     document.querySelectorAll('.builder-tool-btn').forEach(b => b.classList.remove('active'));
-    
+
     // If it's just 'pan'
     if (tool === 'pan') {
         const panBtn = document.getElementById('tool-pan');
         if (panBtn) panBtn.classList.add('active');
     }
-    
+
     const viewport = document.getElementById('builder-viewport');
     if (viewport) {
         viewport.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
@@ -562,10 +563,10 @@ function toggleBuilderToolDropdown(e, toolId) {
     if (e) e.stopPropagation();
     const dropdown = document.getElementById(`dropdown-${toolId}`);
     const isOpen = dropdown.classList.contains('open');
-    
+
     // Close other dropdowns
     document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
-    
+
     // Toggle current
     if (!isOpen) {
         dropdown.classList.add('open');
@@ -576,12 +577,12 @@ function selectBuilderPreset(type, presetKey) {
     state.builder.activeTool = { type, preset: presetKey };
     document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
     document.querySelectorAll('.builder-tool-btn').forEach(btn => btn.classList.remove('active'));
-    
+
     const toolBtn = document.getElementById(`tool-${type}`);
     if (toolBtn) {
         toolBtn.classList.add('active');
     }
-    
+
     setBuilderTool({ type, preset: presetKey });
 }
 function renderBuilderNodes() {
@@ -598,7 +599,7 @@ function renderBuilderNodes() {
         el.id = `node-${node.id}`;
         el.style.left = `${node.x}px`;
         el.style.top = `${node.y}px`;
-        
+
         if (state.builder.selected && state.builder.selected.type === 'node' && state.builder.selected.id === node.id) {
             el.classList.add('selected');
         }
@@ -606,22 +607,22 @@ function renderBuilderNodes() {
         el.addEventListener('mousedown', (e) => {
             // Prevent if clicking port or input
             if (e.target.classList.contains('node-port') || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.classList.contains('btn-node-action')) return;
-            
+
             e.stopPropagation();
             const canvasRect = document.getElementById('builder-canvas').getBoundingClientRect();
-            
+
             state.builder.draggedNode = node;
             state.builder.dragStartX = (e.clientX - canvasRect.left) / state.builder.zoom - node.x;
             state.builder.dragStartY = (e.clientY - canvasRect.top) / state.builder.zoom - node.y;
 
             el.classList.add('dragging');
-            
+
             deselectAll();
             state.builder.selected = { type: 'node', id: node.id };
             renderBuilderNodes();
             renderConnections();
         });
-        
+
         // Ensure config exists
         node.config = node.config || {};
 
@@ -648,16 +649,16 @@ function renderBuilderNodes() {
         if (preset.configs) {
             const configContainer = document.createElement('div');
             configContainer.className = 'node-config-container';
-            
+
             preset.configs.forEach(cfg => {
                 const group = document.createElement('div');
                 group.className = 'node-config-group';
-                
+
                 const label = document.createElement('label');
                 label.className = 'node-config-label';
                 label.textContent = cfg.label;
                 group.appendChild(label);
-                
+
                 if (cfg.type === 'text') {
                     const input = document.createElement('input');
                     input.className = 'node-input';
@@ -680,13 +681,13 @@ function renderBuilderNodes() {
                 } else if (cfg.type === 'expression') {
                     const row = document.createElement('div');
                     row.className = 'node-config-row';
-                    
+
                     const input = document.createElement('input');
                     input.className = 'node-input';
                     input.style.flex = '1';
                     input.value = node.config[cfg.key] || '';
                     input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
-                    
+
                     const pickBtn = document.createElement('button');
                     pickBtn.className = 'btn-node-action';
                     pickBtn.textContent = 'Pick';
@@ -694,12 +695,12 @@ function renderBuilderNodes() {
                         e.stopPropagation();
                         openContextRegistry(node.id, cfg.key, input);
                     };
-                    
+
                     row.appendChild(input);
                     row.appendChild(pickBtn);
                     group.appendChild(row);
                 }
-                
+
                 configContainer.appendChild(group);
             });
             el.appendChild(configContainer);
@@ -709,16 +710,16 @@ function renderBuilderNodes() {
         preset.inputs.forEach((label, idx) => {
             const row = document.createElement('div');
             row.className = 'node-port-row node-port-row--input';
-            
+
             const port = document.createElement('div');
             port.className = 'node-port node-port--input';
             port.id = `node-${node.id}-input-${idx}`;
             port.onmousedown = (e) => startConnection(e, node.id, 'input', idx);
-            
+
             const lbl = document.createElement('span');
             lbl.className = 'node-port-label';
             lbl.textContent = label;
-            
+
             row.appendChild(port);
             row.appendChild(lbl);
             el.appendChild(row);
@@ -728,47 +729,47 @@ function renderBuilderNodes() {
         preset.outputs.forEach((label, idx) => {
             const row = document.createElement('div');
             row.className = 'node-port-row node-port-row--output';
-            
+
             const port = document.createElement('div');
             port.className = 'node-port node-port--output';
             port.id = `node-${node.id}-output-${idx}`;
             port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
-            
+
             const lbl = document.createElement('span');
             lbl.className = 'node-port-label';
             lbl.textContent = label;
-            
+
             row.appendChild(lbl);
             row.appendChild(port);
             el.appendChild(row);
         });
-        
+
         el.addEventListener('mousedown', (e) => {
             if (e.target.classList.contains('node-port')) return;
             if (state.builder.activeTool !== 'pan') return;
 
             e.stopPropagation();
             state.builder.draggedNode = node;
-            
+
             const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
             const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
-            
+
             state.builder.startX = mouseCanvasX - node.x;
             state.builder.startY = mouseCanvasY - node.y;
-            
+
             el.classList.add('dragging');
         });
 
         container.appendChild(el);
     });
-    
+
     renderConnections();
 }
 
 // Global mousemove for node dragging (updates state + DOM)
 window.addEventListener('mousemove', (e) => {
     if (!state.builder.draggedNode) return;
-    
+
     // Mouse canvas-space position
     const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
     const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
@@ -783,7 +784,7 @@ window.addEventListener('mousemove', (e) => {
 
     state.builder.draggedNode.x = nextX;
     state.builder.draggedNode.y = nextY;
-    
+
     // Update DOM directly for smooth movement
     const el = document.getElementById(`node-${state.builder.draggedNode.id}`);
     if (el) {
@@ -814,18 +815,18 @@ function openContextRegistry(nodeId, configKey, inputEl) {
 
     const menu = document.createElement('div');
     menu.className = 'context-registry-menu';
-    
+
     // Position near the button in canvas-space
     const canvasRect = canvas.getBoundingClientRect();
     const inputRect = inputEl.getBoundingClientRect();
-    
+
     // Canvas-space coords = (Viewport-space Rect - Canvas Origin) / Zoom
     const top = (inputRect.bottom - canvasRect.top) / state.builder.zoom;
     const left = (inputRect.left - canvasRect.left) / state.builder.zoom;
-    
+
     menu.style.top = `${top + 5}px`;
     menu.style.left = `${left}px`;
-    
+
     // Header
     const head = document.createElement('div');
     head.style = 'font-size:10px; font-weight:700; color:var(--accent); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:4px;';
@@ -925,7 +926,7 @@ function openContextRegistry(nodeId, configKey, inputEl) {
 function startConnection(e, fromId, portType, portIdx) {
     e.stopPropagation();
     e.preventDefault();
-    
+
     const canvas = document.getElementById('builder-canvas');
     const rect = canvas.getBoundingClientRect();
     const mouseX = (e.clientX - rect.left) / state.builder.zoom;
@@ -958,7 +959,7 @@ function startConnection(e, fromId, portType, portIdx) {
             const targetId = parseInt(targetNodeEl.id.replace('node-', ''));
             const isTargetInput = targetPort.classList.contains('node-port--input');
             const targetType = isTargetInput ? 'input' : 'output';
-            
+
             // Find target port index
             const portRows = Array.from(targetNodeEl.querySelectorAll('.node-port-row'));
             const filteredRows = portRows.filter(r => r.classList.contains(`node-port-row--${targetType}`));
@@ -968,23 +969,23 @@ function startConnection(e, fromId, portType, portIdx) {
             if (state.builder.activeConnection.fromType !== targetType) {
                 const conn = state.builder.activeConnection;
                 const fromId = conn.fromId;
-                
+
                 const outNodeId = conn.fromType === 'output' ? fromId : targetId;
                 const outPortIdx = conn.fromType === 'output' ? conn.fromPortIdx : targetPortIdx;
-                
+
                 const inNodeId = conn.fromType === 'input' ? fromId : targetId;
                 const inPortIdx = conn.fromType === 'input' ? conn.fromPortIdx : targetPortIdx;
 
                 // Prevent duplicates
-                const exists = state.builder.edges.some(edge => 
-                    edge.from === outNodeId && edge.fromIdx === outPortIdx && 
+                const exists = state.builder.edges.some(edge =>
+                    edge.from === outNodeId && edge.fromIdx === outPortIdx &&
                     edge.to === inNodeId && edge.toIdx === inPortIdx
                 );
 
                 if (!exists && outNodeId !== inNodeId) {
-                    state.builder.edges.push({ 
+                    state.builder.edges.push({
                         from: outNodeId, fromIdx: outPortIdx,
-                        to: inNodeId, toIdx: inPortIdx 
+                        to: inNodeId, toIdx: inPortIdx
                     });
                     toast('Connection created', 'success');
                 }
@@ -1009,15 +1010,15 @@ function getPortPos(nodeId, type, portIdx) {
         const y = node.y + 30 + (portIdx * 24) + 12;
         return { x, y };
     }
-    
+
     const rect = portEl.getBoundingClientRect();
     const canvas = document.getElementById('builder-canvas');
     const canvasRect = canvas.getBoundingClientRect();
-    
+
     // Center of the port in viewport space
     const viewCenterX = rect.left + rect.width / 2;
     const viewCenterY = rect.top + rect.height / 2;
-    
+
     // Convert to canvas space (account for zoom and translation)
     return {
         x: (viewCenterX - canvasRect.left) / state.builder.zoom,
@@ -1038,13 +1039,13 @@ function renderConnections() {
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('class', 'connection-path');
         path.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
-        
+
         path.oncontextmenu = (e) => {
             e.preventDefault();
             state.builder.edges.splice(index, 1);
             renderConnections();
         };
-        
+
         if (state.builder.selected && state.builder.selected.type === 'edge' && state.builder.selected.id === index) {
             path.classList.add('selected');
         }
@@ -1053,7 +1054,7 @@ function renderConnections() {
         const hitArea = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         hitArea.setAttribute('class', 'connection-hit-area');
         hitArea.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
-        
+
         hitArea.onclick = (e) => {
             e.stopPropagation();
             deselectAll();
@@ -1070,7 +1071,7 @@ function renderConnections() {
     if (state.builder.activeConnection) {
         const conn = state.builder.activeConnection;
         const startPos = getPortPos(conn.fromId, conn.fromType, conn.fromPortIdx);
-        
+
         const x1 = startPos.x;
         const y1 = startPos.y;
         const x2 = conn.mouseX;
@@ -1078,7 +1079,7 @@ function renderConnections() {
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         path.setAttribute('class', 'connection-path active-connection-path');
-        
+
         // Ensure directionality in preview (Output to Input)
         if (conn.fromType === 'output') {
             path.setAttribute('d', getBezierPath(x1, y1, x2, y2));
@@ -1168,14 +1169,14 @@ function createNewFlow() {
     if (canvas) {
         // 2. Break GPU optimization by slightly changing the transform
         canvas.style.transform = `translate(-1999.9px, -1999.9px) scale(1)`;
-        
+
         // 3. Force layout reflow
-        void canvas.offsetHeight; 
+        void canvas.offsetHeight;
 
         // 4. Update in next animation frame
         requestAnimationFrame(() => {
             canvas.style.transform = `translate(-2000px, -2000px) scale(1)`;
-            
+
             // Final render pass (with empty arrays)
             renderBuilderNodes();
             renderConnections();
@@ -1212,18 +1213,18 @@ async function saveFlow() {
     formData.append('name', name);
     formData.append('description', desc);
     formData.append('flow_data', flowData);
-    
+
     const scraperId = document.getElementById('flow-scraper-id').value;
     if (scraperId) formData.append('scraper_id', scraperId);
 
     try {
         const savedScraper = await apiFetch('/api/scrapers/builder', { method: 'POST', body: formData });
-        
+
         // Update context so subsequent saves update THIS scraper
         state.builder.currentScraperId = savedScraper.id;
         state.builder.currentScraperName = savedScraper.name;
         document.getElementById('flow-scraper-id').value = savedScraper.id;
-        
+
         toast(scraperId ? 'Flow updated successfully!' : 'Flow saved successfully!', 'success');
         updateBuilderContextUI();
         closeSaveFlowModal();
@@ -1257,7 +1258,7 @@ async function editInBuilder(id) {
         deselectAll();
         state.builder.nodes = flowData.nodes || [];
         state.builder.edges = flowData.edges || [];
-        
+
         // Restore viewport if available
         if (flowData.config && flowData.config.viewport) {
             state.builder.x = flowData.config.viewport.x;
@@ -1280,7 +1281,7 @@ async function editInBuilder(id) {
         setTimeout(() => {
             renderBuilderNodes();
             renderConnections();
-            
+
             // Re-apply viewport to canvas DOM specifically for the first frame
             const canvas = document.getElementById('builder-canvas');
             if (canvas) {
@@ -1374,77 +1375,98 @@ function filterSchedulesByTag(btn, tagId) {
 }
 
 function renderScrapersList(scrapers) {
-    const list = document.getElementById('scrapers-list');
+    const container = document.getElementById('scrapers-list');
     let filtered = scrapers;
     if (state.activeTagFilter) {
         filtered = scrapers.filter(s => s.tags && s.tags.some(t => String(t.id) === String(state.activeTagFilter)));
     }
 
     if (!filtered.length) {
-        list.innerHTML = '<div class="empty-state">No scrapers match the current filter.</div>';
+        container.innerHTML = '<div class="empty-state">No scrapers match the current filter.</div>';
         return;
     }
 
-    list.innerHTML = filtered.map(s => {
-        const thumbEl = s.thumbnail_url
-            ? `<img class="item-thumb" src="${s.thumbnail_url}" alt="" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'item-thumb-placeholder',textContent:'\ud83c\udf8c'}))" />`
-            : `<div class="item-thumb-placeholder">🎌</div>`;
+    const tableRows = filtered.map(s => {
+        const thumbUrl = s.thumbnail_url || '';
+        const thumbHtml = thumbUrl
+            ? `<img class="table-thumb" src="${thumbUrl}" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🎌</text></svg>'">`
+            : `<div class="table-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--bg-input);font-size:18px">🎌</div>`;
 
         const tagsHtml = s.tags && s.tags.length
-            ? s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')
+            ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')}</div>`
             : '';
 
-        const integBadges = s.integrations && s.integrations.length
-            ? s.integrations.map(i => `<span class="integ-badge">${integIcon(i.type)} ${i.name}</span>`).join('')
-            : '';
-
-        const healthInfo = {
-            ok: { icon: '\u2705', label: 'Healthy', cls: 'badge-success' },
-            failing: { icon: '\u274c', label: 'Failing', cls: 'badge-failure' },
-            untested: { icon: '\u2699\ufe0f', label: 'Untested', cls: 'badge-pending' },
-        }[s.health || 'untested'];
-
-        const typeBadge = s.scraper_type === 'builder' 
+        const typeBadge = s.scraper_type === 'builder'
             ? `<span class="status-badge" style="background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2)">🏗️ Builder</span>`
             : `<span class="status-badge" style="background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.2)">🐍 Python</span>`;
 
+        const healthInfo = {
+            ok: { icon: '✅', label: 'Healthy', cls: 'badge-success' },
+            failing: { icon: '❌', label: 'Failing', cls: 'badge-failure' },
+            untested: { icon: '⚙️', label: 'Untested', cls: 'badge-pending' },
+        }[s.health || 'untested'];
+
         return `
-        <div class="item-card item-card--with-thumb" draggable="true"
-             ondragstart="handleDragStart(event, 'scraper', ${s.id})"
-             ondragover="handleDragOver(event)"
-             ondragleave="handleDragLeave(event)"
-             ondrop="handleDrop(event, 'scraper', ${s.id})"
-             ondragend="handleDragEnd(event)">
-          <div class="drag-handle" title="Drag to reorder">⠿</div>
-          ${thumbEl}
-          <div class="item-info">
-            <div class="item-name">
-              ${s.name} ${s.latest_version ? `<span style="font-size:12px;color:var(--accent);font-weight:500;margin-left:6px;background:var(--accent-glow);padding:2px 6px;border-radius:12px;">v${s.latest_version}</span>` : ''}
-              ${s.homepage_url ? `<a href="${s.homepage_url}" target="_blank" rel="noopener" class="btn btn-ghost" style="font-size:12px;padding:2px 6px;margin-left:8px;text-decoration:none">🔗 Visit</a>` : ''}
-            </div>
-            ${s.description ? `<div class="item-meta" style="color:var(--text-secondary);margin-top:2px">${s.description}</div>` : ''}
-            
-            <div class="item-meta-group">
-              ${typeBadge}
-              <span class="status-badge ${healthInfo.cls}" title="Health">${healthInfo.icon} ${healthInfo.label}</span>
-              <span class="status-badge ${s.enabled ? 'badge-enabled' : 'badge-disabled'}">${s.enabled ? '\u25cf Active' : '\u25cb Disabled'}</span>
-              ${tagsHtml ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${tagsHtml}</div>` : ''}
-              ${integBadges ? `<div style="display:flex;flex-wrap:wrap;gap:4px;">${integBadges}</div>` : ''}
-            </div>
-          </div>
-          <div class="item-actions">
-            <div class="action-btn-group">
-              <button class="icon-btn" onclick="openAssignTagsModal(${s.id})" title="Manage Tags">🏷️</button>
-              <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
-              <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
-              <button class="icon-btn" onclick="${s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})`}" title="${s.scraper_type === 'builder' ? 'Edit in Builder' : 'Edit Scraper'}">✏️</button>
-              <button class="icon-btn" onclick="toggleScraper(${s.id})" title="${s.enabled ? 'Disable' : 'Enable'}">${s.enabled ? '⏸️' : '▶️'}</button>
-              <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
-            </div>
-            <button class="btn btn-run" onclick="runScraper(${s.id}, this)">⚡ Run</button>
-          </div>
-        </div>`;
+        <tr draggable="true" 
+            ondragstart="handleDragStart(event, 'scraper', ${s.id})"
+            ondragover="handleDragOver(event)"
+            ondragleave="handleDragLeave(event)"
+            ondrop="handleDrop(event, 'scraper', ${s.id})"
+            ondragend="handleDragEnd(event)">
+            <td><div class="drag-handle">⠿</div></td>
+            <td>${thumbHtml}</td>
+            <td>
+                <div style="font-weight:600; font-size:14px; color:var(--text-primary); display:flex; align-items:center; gap:8px">
+                    ${s.name} ${s.latest_version ? `<span style="font-size:10px; color:var(--accent); background:var(--accent-glow); padding:1px 6px; border-radius:10px;">v${s.latest_version}</span>` : ''}
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">${s.description || 'No description provided.'}</div>
+                ${tagsHtml}
+            </td>
+            <td>${typeBadge}</td>
+            <td>
+                <div style="display:flex; flex-direction:column; gap:6px">
+                    <span class="status-badge ${healthInfo.cls}" style="width:fit-content">${healthInfo.icon} ${healthInfo.label}</span>
+                </div>
+            </td>
+            <td style="color:var(--text-secondary); white-space:nowrap">${formatDate(s.created_at)}</td>
+            <td style="color:var(--text-secondary); white-space:nowrap">${formatDate(s.updated_at)}</td>
+            <td style="color:var(--text-secondary); white-space:nowrap">${formatDate(s.last_run)}</td>
+            <td class="action-cell">
+                <div style="display:flex; align-items:center; gap:8px">
+                    <div class="action-btn-group">
+                        <button class="icon-btn" onclick="openAssignTagsModal(${s.id})" title="Manage Tags">🏷️</button>
+                        <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
+                        <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
+                        <button class="icon-btn" onclick="${s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})`}" title="Edit">✏️</button>
+                        <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
+                    </div>
+                    <button class="btn btn-run" style="padding: 6px 14px;" onclick="runScraper(${s.id}, this)">⚡ Run</button>
+                </div>
+            </td>
+        </tr>`;
     }).join('');
+
+    container.innerHTML = `
+    <div class="scrapers-table-container">
+        <table class="scrapers-table">
+            <thead>
+                <tr>
+                    <th style="width:30px"></th>
+                    <th style="width:80px">Photo</th>
+                    <th>Scraper Plugin</th>
+                    <th style="width:100px">Type</th>
+                    <th style="width:140px">Status</th>
+                    <th style="width:120px">Created</th>
+                    <th style="width:120px">Modified</th>
+                    <th style="width:120px">Last Run</th>
+                    <th class="action-cell">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${tableRows}
+            </tbody>
+        </table>
+    </div>`;
 }
 
 function integIcon(type) {
@@ -1535,31 +1557,31 @@ async function submitWizard(e) {
     const codeFile = document.getElementById('wiz-code-file').files[0];
     if (!codeFile) {
         toast('Scraper script (.py) is required.', 'error');
-        btn.disabled = false; btn.textContent = '✨ Build Scraper';
+        btn.disabled = false; btn.textContent = 'Build Scraper';
         return;
     }
     formData.append('scraper_file', codeFile);
-    
+
     const thumbFile = document.getElementById('wiz-thumb-file').files[0];
     if (thumbFile) formData.append('thumbnail_file', thumbFile);
 
     try {
         await apiFetch(API.scrapers + '/wizard', { method: 'POST', body: formData });
         toast('Scraper configured and built successfully!', 'success');
-        
+
         // Reset form
         document.getElementById('wizard-form').reset();
         document.getElementById('wiz-code-text').textContent = 'Click or Drag .py file here';
         const codeZone = document.getElementById('wiz-code-zone');
         codeZone.style.borderColor = ''; codeZone.style.background = '';
-        
+
         const img = document.getElementById('wiz-thumb-img');
         img.src = ''; img.style.display = 'none';
         document.getElementById('wiz-thumb-placeholder').style.display = 'flex';
-        
+
         loadScrapers();
     } catch (err) { toast(err.message, 'error'); }
-    finally { btn.disabled = false; btn.textContent = '✨ Build Scraper'; }
+    finally { btn.disabled = false; btn.textContent = 'Build Scraper'; }
 }
 
 function handleWizCodeFile(input) {
@@ -1617,14 +1639,6 @@ async function _doRunScraper(id, inputValues, btn) {
         setTimeout(() => loadTab('logs'), 2500);
     } catch (e) { toast(e.message, 'error'); }
     finally { if (btn) { btn.disabled = false; btn.textContent = '▶ Run Now'; } }
-}
-
-async function toggleScraper(id) {
-    try {
-        const res = await apiFetch(`${API.scrapers}/${id}/toggle`, { method: 'PATCH' });
-        toast(`Scraper ${res.enabled ? 'enabled' : 'disabled'}.`, 'info');
-        loadScrapers();
-    } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteScraper(id) {
@@ -1729,7 +1743,7 @@ async function toggleTagAssignment(targetId, tagId, isAssigned, type = 'scraper'
         } else {
             await apiFetch(url, { method: 'POST' });
         }
-        
+
         // Refresh everything to be safe
         const [scrapers, schedules] = await Promise.all([
             apiFetch(API.scrapers),
@@ -1807,15 +1821,15 @@ async function loadSchedules(skipFetch = false) {
             const thumb = s.thumbnail_url
                 ? `<img src="${s.thumbnail_url}" class="sched-thumb" alt="">`
                 : `<div class="sched-thumb sched-thumb--placeholder">📡</div>`;
-            
+
             const tagsHtml = s.tags && s.tags.length
                 ? s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')
                 : '';
 
             const inputs = s.input_values && Object.keys(s.input_values).length
-                ? Object.entries(s.input_values).map(([k,v]) =>
+                ? Object.entries(s.input_values).map(([k, v]) =>
                     `<span class="sched-param"><b>${k}</b>: ${v}</span>`
-                  ).join('')
+                ).join('')
                 : null;
             return `
             <div class="sched-card" draggable="true"
@@ -1838,10 +1852,10 @@ async function loadSchedules(skipFetch = false) {
                   </div>
                 </div>
                 <div class="sched-card__last-col">
-                  ${s.last_run ? `<span class="sched-badge sched-badge--last">🕒 Last: ${fmt(s.last_run)}</span>` : ''}
+                  ${s.last_run ? `<span class="sched-badge sched-badge--last">🕒 Last: ${formatDate(s.last_run)}</span>` : ''}
                 </div>
                 <div class="sched-card__next-col">
-                  ${s.next_run ? `<span class="sched-badge sched-badge--next">⏭ Next: ${fmt(s.next_run)}</span>` : '<span class="sched-badge sched-badge--none">Next: Not scheduled</span>'}
+                  ${s.next_run ? `<span class="sched-badge sched-badge--next">⏭ Next: ${formatDate(s.next_run)}</span>` : '<span class="sched-badge sched-badge--none">Next: Not scheduled</span>'}
                 </div>
                 <div class="sched-card__actions" onclick="event.stopPropagation()">
                   <div class="action-btn-group">
@@ -1907,7 +1921,7 @@ async function createSchedule() {
     if (!cron) { toast('Please enter a cron expression.', 'error'); return; }
 
     const scraper = state.scrapers.find(s => String(s.id) === String(scraper_id));
-    
+
     // Collect input values from the dashboard area
     const inputValues = {};
     if (scraper && scraper.inputs) {
@@ -1939,8 +1953,8 @@ async function createSchedule() {
         }
 
         const res = await apiFetch(API.schedules, { method: 'POST', body: formData });
-        toast(`Schedule created! Next run: ${fmt(res.next_run)}`, 'success');
-        
+        toast(`Schedule created! Next run: ${formatDate(res.next_run)}`, 'success');
+
         // Reset form
         document.getElementById('sched-cron').value = '';
         document.getElementById('sched-label').value = '';
@@ -1951,7 +1965,7 @@ async function createSchedule() {
         document.getElementById('sched-thumb-file').value = '';
         document.getElementById('sched-params-container').innerHTML = '<div class="empty-state" style="padding:40px 0; opacity:0.3; font-size:13px">Select a scraper to view available parameters.</div>';
         previewSchedThumb('');
-        
+
         loadSchedules();
     } catch (e) { toast(e.message, 'error'); }
 }
@@ -1994,7 +2008,7 @@ function openEditScheduleModal(id) {
     document.getElementById('edit-sched-thumb-url').value = s.custom_thumbnail_url || '';
     document.getElementById('edit-sched-thumb-file').value = '';
     document.getElementById('edit-sched-thumb-filename').textContent = '';
-    
+
     currentEditSchedInputs = s.input_values || {};
     previewEditSchedThumb(s.thumbnail_url);
 
@@ -2226,7 +2240,7 @@ async function loadLogs(page = null) {
             const retryBadge = (log.retry_count && log.retry_count > 0)
                 ? `<span class="status-badge badge-pending" title="Retried ${log.retry_count}x">🔄 ${log.retry_count} retr${log.retry_count === 1 ? 'y' : 'ies'}</span>`
                 : '';
-            
+
             return `
             <div class="log-card ${isRunning ? 'log-card--running' : ''}" data-status="${log.status}">
                 <div class="log-card-header" ${hasDetails ? `onclick="toggleLogDetails('${detailsId}')"` : ''} style="${hasDetails ? 'cursor:pointer' : ''}">
@@ -2239,7 +2253,7 @@ async function loadLogs(page = null) {
                     </div>
                     <div class="log-col-retry" style="display:flex; justify-content:center;">${retryBadge}</div>
                     <div class="log-col-trigger">${statusBadge(log.triggered_by)}</div>
-                    <div class="log-col-time"><span class="log-time">${fmt(log.run_at)}</span></div>
+                    <div class="log-col-time"><span class="log-time">${formatDate(log.run_at)}</span></div>
                     <div class="log-col-icon" style="text-align:right;">${hasDetails ? `<span class="log-expand-icon" id="icon-${detailsId}">${isExpanded ? '▼' : '▶'}</span>` : ''}</div>
                 </div>
                 ${hasDetails ? `
@@ -2321,13 +2335,13 @@ function renderPayload(payload, episodeCount = 0) {
 
 function renderLogContext(log) {
     let html = '';
-    
+
     // 1. Trigger Info (Standardized item 1)
     const trigMap = {
         'scheduler': { icon: '📅', title: 'Schedule', color: 'var(--accent)', label: log.schedule_name || 'Untitled Schedule' },
-        'manual':    { icon: '👤', title: 'Manual',   color: 'var(--accent)', label: 'Direct Trigger' },
-        'one-time':  { icon: '⏳', title: 'Task',     color: 'var(--accent)', label: log.schedule_name || 'One-time Run' },
-        'catchup':   { icon: '🔄', title: 'Catch-up', color: 'var(--accent)', label: log.schedule_name || 'System Re-run' }
+        'manual': { icon: '👤', title: 'Manual', color: 'var(--accent)', label: 'Direct Trigger' },
+        'one-time': { icon: '⏳', title: 'Task', color: 'var(--accent)', label: log.schedule_name || 'One-time Run' },
+        'catchup': { icon: '🔄', title: 'Catch-up', color: 'var(--accent)', label: log.schedule_name || 'System Re-run' }
     };
 
     const t = trigMap[log.triggered_by] || trigMap['manual'];
@@ -2362,7 +2376,7 @@ function renderLogContext(log) {
                     ${d.error ? `<div class="ctx-error-msg">⚠️ ${d.error}</div>` : ''}`;
                 });
             }
-        } catch(e) { console.error("Error parsing integration details:", e); }
+        } catch (e) { console.error("Error parsing integration details:", e); }
     }
 
     return html ? `<div class="log-footer-context">${html}</div>` : '';
@@ -2412,7 +2426,7 @@ function sortQueue(col) {
 function renderQueueTasks() {
     const tasks = [...state.queueTasks];
     const { col, order } = state.queueSort;
-    
+
     tasks.sort((a, b) => {
         let valA = a[col] || '';
         let valB = b[col] || '';
@@ -2443,10 +2457,10 @@ function renderQueueTasks() {
 
     tbody.innerHTML = tasks.map(t => {
         const isVirtual = !!t.is_virtual;
-        const removeBtn = !isVirtual 
+        const removeBtn = !isVirtual
             ? `<button class="btn btn-ghost" style="color:var(--failure);padding:4px 8px" onclick="removeQueueTask(${t.id})">✕</button>`
             : '';
-        
+
         // Time left calculation
         let timeLeftStr = '';
         if (t.scheduled_for) {
@@ -2467,7 +2481,7 @@ function renderQueueTasks() {
         return `
         <tr>
             <td><strong>${t.scraper_name || 'N/A'}</strong></td>
-            <td style="white-space:nowrap"><span class="log-epcount" style="margin:0">${fmt(t.scheduled_for)}</span>${timeLeftStr}</td>
+            <td style="white-space:nowrap"><span class="log-epcount" style="margin:0">${formatDate(t.scheduled_for)}</span>${timeLeftStr}</td>
             <td><div style="font-size:12px;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis">${t.note || '—'}</div></td>
             <td>${statusBadge(t.status)}</td>
             <td style="text-align:right">${removeBtn}</td>
@@ -2543,7 +2557,7 @@ function openConnectorModal(type, id = null) {
                     onDiscordFileToggle();
                     setVal('conn-retry-max', cfg.retry_max !== undefined ? cfg.retry_max : '3');
                     setVal('conn-delay', cfg.delay_sec !== undefined ? cfg.delay_sec : '1');
-                    
+
                     setChk('conn-tag', !!cfg.tag_all);
                     setVal('conn-thumb-path', cfg.thumbnail_path || '');
                 } else if (integ.type === 'http_request') {
@@ -2557,7 +2571,7 @@ function openConnectorModal(type, id = null) {
                     setChk('conn-http-trig-skip', trigs.includes('skipped'));
                     setChk('conn-http-send-as-file', !!cfg.send_as_file);
                     setVal('conn-http-headers', cfg.headers ? JSON.stringify(cfg.headers, null, 2) : '');
-                    
+
                     setVal('conn-http-retry', cfg.retry_max !== undefined ? cfg.retry_max : '3');
                     setVal('conn-http-delay', cfg.delay_sec !== undefined ? cfg.delay_sec : '1');
                 }
@@ -2565,7 +2579,7 @@ function openConnectorModal(type, id = null) {
         }
         updateIntegrationFieldsUI();
         document.getElementById('connector-modal').style.display = 'flex';
-    } catch(err) {
+    } catch (err) {
         console.error('openConnectorModal error:', err);
     }
 }
@@ -2576,7 +2590,7 @@ function updateIntegrationFieldsUI() {
         const typeEl = document.getElementById('conn-type');
         if (!typeEl) return;
         const type = typeEl.value;
-        
+
         if (type === 'discord_webhook') {
             const fullDataEl = document.getElementById('conn-include-data');
             const fullData = fullDataEl ? fullDataEl.checked : true;
@@ -2649,9 +2663,9 @@ function stepNum(id, delta) {
     const el = document.getElementById(id);
     if (!el) return;
     const step = parseFloat(el.step) || 1;
-    const min  = el.min !== '' ? parseFloat(el.min) : -Infinity;
-    const max  = el.max !== '' ? parseFloat(el.max) :  Infinity;
-    const val  = parseFloat(el.value) || 0;
+    const min = el.min !== '' ? parseFloat(el.min) : -Infinity;
+    const max = el.max !== '' ? parseFloat(el.max) : Infinity;
+    const val = parseFloat(el.value) || 0;
     el.value = Math.min(max, Math.max(min, +(val + delta).toFixed(2)));
 }
 
@@ -2712,12 +2726,12 @@ async function loadIntegrations() {
             }
 
             if (i.type === 'discord_webhook' && i.config) {
-                const dm  = i.config.dispatch_mode || 'per_element';
-                const sf  = !!i.config.send_as_file;
-                const fs  = i.config.format_style || 'embed';
+                const dm = i.config.dispatch_mode || 'per_element';
+                const sf = !!i.config.send_as_file;
+                const fs = i.config.format_style || 'embed';
                 const dmLabel = dm === 'all_at_once' ? 'All at Once' : 'One by One';
                 metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 7px;">${dmLabel}</span>`;
-                if (sf)  metaChips += ` <span class="tag-chip" style="font-size:10px;padding:2px 7px;color:var(--success)">📎 File</span>`;
+                if (sf) metaChips += ` <span class="tag-chip" style="font-size:10px;padding:2px 7px;color:var(--success)">📎 File</span>`;
                 else if (fs === 'embed') metaChips += ` <span class="tag-chip" style="font-size:10px;padding:2px 7px;color:#818cf8">Embed</span>`;
                 else metaChips += ` <span class="tag-chip" style="font-size:10px;padding:2px 7px;color:var(--warning)">Raw Text</span>`;
                 if (i.config.tag_all) metaChips += ` <span class="tag-chip tag-chip--active" style="font-size:10px;padding:2px 6px">@everyone</span>`;
@@ -2741,7 +2755,7 @@ async function loadIntegrations() {
               <div class="drag-handle" title="Drag to reorder">⠿</div>
               <div class="item-info">
                 <div class="item-name" style="font-size:16px;">${integIcon(i.type)} ${i.name} ${metaChips}</div>
-                <div class="item-meta" style="font-size:12px;color:var(--text-muted)">${titleType} &nbsp;•&nbsp; Created on ${fmt(i.created_at)}</div>
+                <div class="item-meta" style="font-size:12px;color:var(--text-muted)">${titleType} &nbsp;•&nbsp; Created on ${formatDate(i.created_at)}</div>
                 ${descriptionHTML}
               </div>
               <div class="item-actions">
@@ -2785,7 +2799,7 @@ async function saveConnector() {
     } else if (type === 'http_request') {
         const url = document.getElementById('conn-http-url').value.trim();
         if (!url) { toast('Endpoint URL is required.', 'error'); return; }
-        
+
         const triggers = [];
         if (document.getElementById('conn-http-trig-success').checked) triggers.push('success');
         if (document.getElementById('conn-http-trig-failure').checked) triggers.push('failure');
@@ -3100,7 +3114,7 @@ async function openVersionsModal(scraperId) {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border-light);background:var(--bg-card)">
             <div style="flex:1;min-width:0">
                 <span style="font-weight:600;color:var(--accent)">v${v.version_label || '?'}</span>
-                <span style="font-size:12px;color:var(--text-muted);margin-left:10px">${fmt(v.created_at)}</span>
+                <span style="font-size:12px;color:var(--text-muted);margin-left:10px">${formatDate(v.created_at)}</span>
                 ${v.commit_message ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">💬 ${v.commit_message}</div>` : ''}
             </div>
             <div style="display:flex;gap:6px;margin-left:12px">
@@ -3316,20 +3330,20 @@ function renderOneTimeParams() {
         <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:4px">
             <div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px;letter-spacing:0.05em">Parameters</div>
             ${scraper.inputs.map(inp => {
-                const id = `ot-ri-${inp.name}`;
-                const def = inp.default !== undefined ? inp.default : '';
-                let field = '';
-                if (inp.type === 'select' && inp.options) {
-                    const opts = inp.options.map(o => `<option value="${o}" ${String(o) === String(def) ? 'selected' : ''}>${o}</option>`).join('');
-                    field = `<select id="${id}" class="form-control" style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; width:100%">${opts}</select>`;
-                } else if (inp.type === 'boolean') {
-                    field = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="${id}" ${def ? 'checked' : ''}> <span>${inp.label || inp.name}</span></label>`;
-                } else {
-                    const t = inp.type === 'number' ? 'number' : 'text';
-                    field = `<input type="${t}" id="${id}" class="form-control" value="${def}" style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; width:100%">`;
-                }
-                return `<div class="form-group" style="margin-bottom:10px"><label style="font-size:12px;margin-bottom:4px">${inp.type === 'boolean' ? '' : (inp.label || inp.name)}</label>${field}</div>`;
-            }).join('')}
+        const id = `ot-ri-${inp.name}`;
+        const def = inp.default !== undefined ? inp.default : '';
+        let field = '';
+        if (inp.type === 'select' && inp.options) {
+            const opts = inp.options.map(o => `<option value="${o}" ${String(o) === String(def) ? 'selected' : ''}>${o}</option>`).join('');
+            field = `<select id="${id}" class="form-control" style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; width:100%">${opts}</select>`;
+        } else if (inp.type === 'boolean') {
+            field = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="${id}" ${def ? 'checked' : ''}> <span>${inp.label || inp.name}</span></label>`;
+        } else {
+            const t = inp.type === 'number' ? 'number' : 'text';
+            field = `<input type="${t}" id="${id}" class="form-control" value="${def}" style="background:var(--bg-input); color:var(--text-primary); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px; width:100%">`;
+        }
+        return `<div class="form-group" style="margin-bottom:10px"><label style="font-size:12px;margin-bottom:4px">${inp.type === 'boolean' ? '' : (inp.label || inp.name)}</label>${field}</div>`;
+    }).join('')}
         </div>`;
 }
 
@@ -3390,10 +3404,10 @@ window.addEventListener('DOMContentLoaded', () => {
     } catch (e) {
         console.error("[App] Initialization error during load:", e);
     }
-    
+
     // Pre-load integrations state so assign modal works from the start
     apiFetch(API.integrations).then(i => { state.integrations = i; }).catch(() => { });
-    
+
     // Wire up drag-and-drop for both code upload zones
     try {
         _setupCodeDropZone('wiz-code-zone', 'wiz-code-file', 'wiz-code-text');
@@ -3443,7 +3457,7 @@ function handleWizThumbFile(input) {
 function switchContextTab(tab, btn) {
     document.getElementById('ctx-vars-view').style.display = tab === 'vars' ? 'block' : 'none';
     document.getElementById('ctx-funcs-view').style.display = tab === 'funcs' ? 'block' : 'none';
-    
+
     const nav = btn.parentElement;
     nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -3454,12 +3468,12 @@ function switchContextTab(tab, btn) {
 async function loadVariables(silent = false) {
     // Skip if editing/adding to avoid clearing local state
     if (state.variables && state.variables.some(v => v._editing || v._isNew)) return;
-    
+
     try {
         const vars = await apiFetch(API.variables);
         state.variables = vars.map(v => ({ ...v, _editing: false }));
         renderVariablesList();
-    } catch (e) { 
+    } catch (e) {
         if (!silent) toast(e.message, 'error');
     }
 }
@@ -3467,7 +3481,7 @@ async function loadVariables(silent = false) {
 function renderVariablesList() {
     const list = document.getElementById('variables-list');
     if (!list) return;
-    
+
     if (!state.variables.length) {
         list.innerHTML = '<div class="empty-state">No variables defined yet.</div>';
         return;
@@ -3542,7 +3556,7 @@ function renderVariableValue(v) {
 function addVariableRow() {
     // Check if we are already adding one
     if (state.variables.some(v => v._isNew)) return;
-    
+
     state.variables.unshift({
         key: '',
         value: '',
@@ -3621,11 +3635,11 @@ async function deleteVariable(id) {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-async function loadFunctions(silent=false) {
+async function loadFunctions(silent = false) {
     try {
         state.functions = await apiFetch(API.functions);
         renderFunctionsList();
-    } catch (e) { 
+    } catch (e) {
         if (!silent) toast('Failed to load functions', 'error');
         console.error(e);
     }
@@ -3638,7 +3652,7 @@ function handleFuncFile(input) {
     document.getElementById('func-code-text').textContent = file.name;
     const reader = new FileReader();
     reader.onload = (e) => {
-        funcCodeText = e.target.result; 
+        funcCodeText = e.target.result;
     };
     reader.readAsText(file);
 }
@@ -3749,9 +3763,9 @@ function renderFunctionsList() {
         <h3 style="font-size:12px; color:var(--text-muted); margin-bottom:16px; letter-spacing:0.05em; text-transform:uppercase; font-weight:700;">Built-in Expressions</h3>
         <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
             ${builtins.map(f => {
-                const safeDesc = f.desc.replace(/'/g, "\\'");
-                const safeExample = f.example.replace(/'/g, "\\'");
-                return `
+        const safeDesc = f.desc.replace(/'/g, "\\'");
+        const safeExample = f.example.replace(/'/g, "\\'");
+        return `
                 <div class="ctx-item-card" onclick="openContextDrawer('builtin', '${f.name}')" style="cursor:pointer">
                     <div class="ctx-item-header" style="margin:0">
                         <div>
@@ -3763,7 +3777,7 @@ function renderFunctionsList() {
                         </div>
                     </div>
                 </div>`;
-            }).join('')}
+    }).join('')}
         </div>
     </div>`;
 
@@ -3773,8 +3787,8 @@ function renderFunctionsList() {
             <h3 style="font-size:12px; color:var(--text-muted); margin-bottom:16px; letter-spacing:0.05em; text-transform:uppercase; font-weight:700;">Custom User Functions</h3>
             <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
                 ${state.functions.map(f => {
-                    const safeDesc = (f.description || '').replace(/'/g, "\\'");
-                    return `
+            const safeDesc = (f.description || '').replace(/'/g, "\\'");
+            return `
                     <div class="ctx-item-card">
                         <div class="ctx-item-header" style="margin:0; display:flex; align-items:center;">
                             <div style="flex:1; cursor:pointer;" onclick="openContextDrawer('func', ${f.id})">
@@ -3793,7 +3807,7 @@ function renderFunctionsList() {
                             </div>
                         </div>
                     </div>`;
-                }).join('')}
+        }).join('')}
             </div>
         </div>`;
     } else {
@@ -3811,9 +3825,9 @@ function renderFunctionsList() {
 function openContextDrawer(type, id) {
     const drawer = document.getElementById('ctx-drawer');
     const backdrop = document.getElementById('ctx-drawer-backdrop');
-    
+
     let title = '', subtitle = '', md = '';
-    
+
     if (type === 'func') {
         const f = state.functions.find(x => x.id === id);
         if (!f) return;
@@ -3842,7 +3856,7 @@ function openContextDrawer(type, id) {
 
     document.getElementById('drawer-title').textContent = title;
     document.getElementById('drawer-subtitle').textContent = subtitle;
-    
+
     const content = (md || '').trim();
     if (!content) {
         document.getElementById('drawer-body').innerHTML = '<div class="empty-state" style="opacity:0.5; font-style:italic">No documentation provided.</div>';
@@ -3856,7 +3870,7 @@ function openContextDrawer(type, id) {
             .replace(/^- (.*$)/gim, '<li style="margin-left:20px; margin-bottom:6px; list-style-type:circle">$1</li>')
             .replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--text-primary)">$1</strong>')
             .replace(/`([^`]+)`/g, '<code style="background:rgba(255,255,255,0.08); padding:2px 6px; border-radius:4px; font-family:var(--font-mono); font-size:0.9em; color:var(--accent-light); border:1px solid rgba(255,255,255,0.05)">$1</code>');
-            
+
         // Final line break processing (only for non-tag lines)
         html = html.split('\n').map(line => {
             if (line.trim().startsWith('<')) return line;
@@ -3865,7 +3879,7 @@ function openContextDrawer(type, id) {
 
         document.getElementById('drawer-body').innerHTML = html;
     }
-    
+
     drawer.classList.add('active');
     backdrop.classList.add('active');
 }

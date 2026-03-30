@@ -1407,6 +1407,32 @@ select option {
   line-height: 1;
 }
 
+/* ── Meta Date Badge ─────────────────────── */
+.meta-date-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    font-size: 10px;
+    font-weight: 600;
+    color: var(--text-muted);
+    transition: all 0.2s;
+    cursor: default;
+}
+.meta-date-badge:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--text-primary);
+}
+.meta-date-badge i {
+    font-style: normal;
+    opacity: 0.5;
+    font-size: 11px;
+}
+
 /* ── Inline Tag Pill ─────────────────────── */
 .tag-pill-hover:hover {
   transform: translateY(-1px);
@@ -1425,6 +1451,70 @@ select option {
   opacity: 1 !important;
   color: var(--failure);
   transform: scale(1.2);
+}
+
+/* ── Scrapers Table Layout (Option B) ────── */
+.scrapers-table-container {
+    overflow-x: auto;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+}
+.scrapers-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    text-align: left;
+}
+.scrapers-table th {
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.02);
+    border-bottom: 2px solid var(--border);
+    color: var(--text-muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 11px;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+}
+.scrapers-table td {
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border-light);
+    vertical-align: middle;
+}
+.scrapers-table tr:hover td {
+    background: rgba(255, 255, 255, 0.015);
+}
+.scrapers-table tr:last-child td {
+    border-bottom: none;
+}
+
+/* Row Drag Handle */
+.scrapers-table .drag-handle {
+    cursor: grab;
+    opacity: 0.3;
+    font-size: 16px;
+    padding: 0 4px;
+    transition: opacity 0.2s;
+}
+.scrapers-table tr:hover .drag-handle {
+    opacity: 0.8;
+}
+
+/* Table Thumbnail */
+.scrapers-table .table-thumb {
+    width: 64px;
+    height: 64px;
+    border-radius: 8px;
+    object-fit: cover;
+    border: 1px solid var(--border);
+    background: var(--bg-input);
+}
+
+/* Action Groups in Table */
+.scrapers-table .action-cell {
+    width: 1%;
+    white-space: nowrap;
 }
 
 /* ── Modern SemVer Input ─────────────────── */

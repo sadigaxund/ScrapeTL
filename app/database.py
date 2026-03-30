@@ -64,6 +64,16 @@ def _ensure_schema_columns():
             conn.commit()
             print("[DB] Added thumbnail_data to schedules")
 
+        # Check scrapers
+        res = conn.execute(text("PRAGMA table_info(scrapers)"))
+        cols = [r[1] for r in res]
+        if "updated_at" not in cols:
+            conn.execute(text("ALTER TABLE scrapers ADD COLUMN updated_at DATETIME"))
+            # Default to created_at if it's new
+            conn.execute(text("UPDATE scrapers SET updated_at = created_at WHERE updated_at IS NULL"))
+            conn.commit()
+            print("[DB] Added updated_at to scrapers")
+
         # Check global_variables
         res = conn.execute(text("PRAGMA table_info(global_variables)"))
         cols = [r[1] for r in res]

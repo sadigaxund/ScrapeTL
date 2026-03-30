@@ -20,8 +20,6 @@ def manual_run(scraper_id: int, payload: RunPayload = None, db: Session = Depend
     scraper = db.get(Scraper, scraper_id)
     if not scraper:
         raise HTTPException(status_code=404, detail="Scraper not found.")
-    if not scraper.enabled:
-        raise HTTPException(status_code=400, detail="Scraper is disabled.")
 
     input_values = (payload.input_values or {}) if payload else {}
     from app.models import TaskQueue
