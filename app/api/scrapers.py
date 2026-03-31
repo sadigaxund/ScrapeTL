@@ -369,6 +369,62 @@ def delete_scraper(scraper_id: int, db: Session = Depends(get_db)):
     return {"detail": "Deleted."}
 
 
+@router.post("/{scraper_id}/duplicate")
+def duplicate_scraper(scraper_id: int, db: Session = Depends(get_db)):
+    original = db.get(Scraper, scraper_id)
+    if not original:
+        raise HTTPException(status_code=404, detail="Scraper not found.")
+
+    # Generate unique module path
+    slug = re.sub(r"[^a-z0-9]", "_", original.name.lower().strip())
+    slug = re.sub(r"_+", "_", slug).strip("_")
+    module_path = f"app.scrapers.{slug}_copy_{uuid.uuid4().hex[:4]}"
+
+    # Determine position
+    max_pos = db.query(Scraper).order_by(Scraper.position.desc()).first()
+    new_pos = (max_pos.position + 1) if max_pos else 0
+
+    # Create new scraper
+    new_scraper = Scraper(
+        name=f"{original.name} (Copy)",
+        module_path=module_path,
+        description=original.description,
+        homepage_url=original.homepage_url,
+        thumbnail_url=original.thumbnail_url,
+        local_thumbnail_path=original.local_thumbnail_path,
+        thumbnail_data=original.thumbnail_data,
+        scraper_type=original.scraper_type,
+        flow_data=original.flow_data,
+        position=new_pos,
+        health="untested"
+    )
+
+    # Copy tags
+    for tag in original.tags:
+        new_scraper.tags.append(tag)
+
+    # Copy integrations
+    for integration in original.integrations:
+        new_scraper.integrations.append(integration)
+
+    db.add(new_scraper)
+    db.commit()
+    db.refresh(new_scraper)
+
+    # Copy latest version
+    if original.versions:
+        latest_v = original.versions[0] # Ordered by created_at desc
+        _snapshot_version(
+            db,
+            new_scraper,
+            version_label=latest_v.version_label or "1.0.0",
+            commit_message=f"Duplicate of {original.name}",
+            code=latest_v.code
+        )
+
+    return _scraper_dict(new_scraper)
+
+
 @router.post("/reorder")
 def reorder_scrapers(ids: list[int], db: Session = Depends(get_db)):
     for index, scraper_id in enumerate(ids):
