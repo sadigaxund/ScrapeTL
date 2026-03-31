@@ -17,16 +17,29 @@ class RunPayload(BaseModel):
 
 
 @router.post("/{scraper_id}")
-def manual_run(scraper_id: int, payload: RunPayload = None, db: Session = Depends(get_db)):
+def manual_run(scraper_id: int, force: bool = False, payload: RunPayload = None, db: Session = Depends(get_db)):
     """Immediately trigger a scraper in a background thread."""
     scraper = db.get(Scraper, scraper_id)
     if not scraper:
         raise HTTPException(status_code=404, detail="Scraper not found.")
 
-    input_values = (payload.input_values or {}) if payload else {}
     from app.models import TaskQueue
     from datetime import datetime
     import json
+
+    # Check for already running task of the same scraper
+    if not force:
+        existing = db.query(TaskQueue).filter(
+            TaskQueue.scraper_id == scraper_id,
+            TaskQueue.status == "running"
+        ).first()
+        if existing:
+            raise HTTPException(
+                status_code=409, 
+                detail=f"Scraper '{scraper.name}' is already running. Run another instance anyway?"
+            )
+
+    input_values = (payload.input_values or {}) if payload else {}
 
     task = TaskQueue(
         scraper_id=scraper_id,
