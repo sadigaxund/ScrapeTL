@@ -108,6 +108,9 @@ function toast(msg, type = 'info') {
 
 function formatDate(isoStr) {
     if (!isoStr) return '—';
+    if (typeof isoStr === 'string' && !isoStr.includes('Z') && !isoStr.includes('+')) {
+        isoStr = isoStr.replace(' ', 'T') + 'Z';
+    }
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleString(undefined, {
@@ -116,23 +119,31 @@ function formatDate(isoStr) {
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-        second: '2-digit'
+        second: '2-digit',
+        timeZone: state.timezone || 'UTC'
     });
 }
 
 function formatDateOnly(isoStr) {
     if (!isoStr) return '—';
+    if (typeof isoStr === 'string' && !isoStr.includes('Z') && !isoStr.includes('+')) {
+        isoStr = isoStr.replace(' ', 'T') + 'Z';
+    }
     const d = new Date(isoStr);
     if (isNaN(d.getTime())) return '—';
     return d.toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
-        day: 'numeric'
+        day: 'numeric',
+        timeZone: state.timezone || 'UTC'
     });
 }
 
 function formatRelativeDate(isoStr) {
     if (!isoStr) return '—';
+    if (typeof isoStr === 'string' && !isoStr.includes('Z') && !isoStr.includes('+')) {
+        isoStr = isoStr.replace(' ', 'T') + 'Z';
+    }
     const d = new Date(isoStr);
     const now = new Date();
     if (isNaN(d.getTime())) return '—';
@@ -1743,10 +1754,7 @@ function renderScrapersList(scrapers) {
                         <button class="icon-btn" onclick="downloadScraper(${s.id})" title="Download Code">📥</button>
                         <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
                     </div>
-                    ${state.queueTasks && state.queueTasks.some(t => t.scraper_id === s.id && t.status === 'running') 
-                        ? `<button class="btn btn-stop" style="padding: 6px 14px; background:rgba(239, 68, 68, 0.1); color:var(--failure); border:1px solid rgba(239, 68, 68, 0.2)" onclick="stopScraperRun(${state.queueTasks.find(t => t.scraper_id === s.id && t.status === 'running').id})">🛑 Stop</button>`
-                        : `<button class="btn btn-run" style="padding: 6px 14px;" onclick="runScraper(${s.id}, this)">⚡ Run</button>`
-                    }
+                        <button class="btn btn-run" style="padding: 6px 14px;" onclick="runScraper(${s.id}, this)">⚡ Run</button>
                 </div>
             </td>
         </tr>`;
@@ -1934,17 +1942,33 @@ async function runScraper(id, btn) {
     }
 }
 
-async function _doRunScraper(id, inputValues, btn) {
+async function _doRunScraper(id, inputValues, btn, force = false) {
     if (btn) { btn.disabled = true; btn.textContent = '⚡ Running…'; }
     try {
-        const res = await apiFetch(API.run(id), {
+        let url = API.run(id);
+        if (force) url += '?force=true';
+
+        const res = await apiFetch(url, {
             method: 'POST',
             body: JSON.stringify({ input_values: inputValues }),
         });
         toast(res.detail, 'success');
         setTimeout(() => loadTab('logs'), 2500);
-    } catch (e) { toast(e.message, 'error'); }
-    finally { if (btn) { btn.disabled = false; btn.textContent = '▶ Run Now'; } }
+    } catch (e) {
+        // Handle concurrency conflict (already running)
+        if (e.message.includes('already running')) {
+            if (confirm(e.message)) {
+                return _doRunScraper(id, inputValues, btn, true);
+            }
+        } else {
+            toast(e.message, 'error');
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = '⚡ Run'; // Restore button text
+        }
+    }
 }
 
 async function deleteScraper(id) {
@@ -3949,7 +3973,7 @@ function renderVariablesList() {
         return;
     }
 
-    list.innerHTML = state.variables.map((v, idx) => {
+    const tableRows = state.variables.map((v, idx) => {
         if (v._editing || v._isNew) {
             return `
             <tr class="editing-row" style="background:rgba(99,102,241,0.03)">
@@ -4001,22 +4025,20 @@ function renderVariablesList() {
             </td>
         </tr>`;
     }).join('');
-    container.innerHTML = `<table class="data-table">
-        <thead>
-            <tr>
-                <th style="width:40px"></th>
-                <th style="width:60px"></th>
-                <th>Scraper</th>
-                <th style="width:120px">Type</th>
-                <th style="width:140px">Health</th>
-                <th style="width:110px">Created</th>
-                <th style="width:110px">Updated</th>
-                <th style="width:130px">Last Run</th>
-                <th style="width:180px; text-align:right">Actions</th>
-            </tr>
-        </thead>
-        <tbody>${tableRows}</tbody>
-    </table>`;
+
+    list.innerHTML = `
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th style="width:200px">Key</th>
+                    <th style="width:100px">Type</th>
+                    <th>Value</th>
+                    <th>Description</th>
+                    <th style="width:150px; text-align:right">Actions</th>
+                </tr>
+            </thead>
+            <tbody>${tableRows}</tbody>
+        </table>`;
 }
 
 async function stopScraperRun(taskId, btn) {
