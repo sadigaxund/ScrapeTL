@@ -1428,7 +1428,11 @@ function updateBuilderContextUI() {
             dot.style.background = '#34d399';
             dot.style.boxShadow = '0 0 10px #34d399';
         }
-        nameDisplay.textContent = state.builder.currentScraperName;
+        
+        // Only update if not currently renaming (to avoid clobbering input)
+        if (!document.querySelector('#builder-name-container input')) {
+            nameDisplay.textContent = state.builder.currentScraperName;
+        }
     } else {
         typeLabel.textContent = 'NEW';
         typeLabel.style.color = 'var(--primary)'; // Blue/Theme for new
@@ -1438,6 +1442,76 @@ function updateBuilderContextUI() {
         }
         nameDisplay.textContent = 'New Scraper Flow';
     }
+}
+
+function startRenameBuilderScraper() {
+    const container = document.getElementById('builder-name-container');
+    const nameSpan = document.getElementById('builder-current-name');
+    if (!container || !nameSpan) return;
+
+    // prevent double-init
+    if (container.querySelector('input')) return;
+
+    const currentName = nameSpan.textContent;
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = currentName;
+    input.style.fontSize = '12px';
+    input.style.fontWeight = '600';
+    input.style.color = 'var(--text-primary)';
+    input.style.background = 'rgba(255,255,255,0.05)';
+    input.style.border = '1px solid var(--border-strong)';
+    input.style.borderRadius = '4px';
+    input.style.padding = '2px 8px';
+    input.style.width = '200px';
+    input.style.outline = 'none';
+
+    // Swap
+    nameSpan.style.display = 'none';
+    const icon = document.getElementById('builder-name-edit-icon');
+    if (icon) icon.style.display = 'none';
+    container.appendChild(input);
+    input.focus();
+    input.select();
+
+    // Event listeners
+    input.onblur = () => finishRenameBuilderScraper(input, currentName);
+    input.onkeydown = (e) => {
+        if (e.key === 'Enter') input.blur();
+        if (e.key === 'Escape') {
+            input.value = currentName;
+            input.blur();
+        }
+    };
+}
+
+async function finishRenameBuilderScraper(input, oldName) {
+    const newName = input.value.trim();
+    const scraperId = state.builder.currentScraperId;
+    const container = document.getElementById('builder-name-container');
+    const nameSpan = document.getElementById('builder-current-name');
+    const icon = document.getElementById('builder-name-edit-icon');
+
+    if (!newName || newName === oldName) {
+        input.remove();
+        nameSpan.style.display = 'block';
+        if (icon) icon.style.display = 'inline-block';
+        return;
+    }
+
+    // Natural behavior: Rename only updates the local draft and the "Save Flow" modal field.
+    // The actual persist to the database happens when the user clicks the "Save Flow" button.
+    state.builder.currentScraperName = newName;
+
+    // Always sync with the Save Modal input field to avoid "double rename"
+    const nameField = document.getElementById('flow-name');
+    if (nameField) nameField.value = newName;
+
+    input.remove();
+    nameSpan.textContent = state.builder.currentScraperName || 'New Scraper Flow';
+    nameSpan.style.display = 'block';
+    if (icon) icon.style.display = 'inline-block';
+    updateBuilderContextUI();
 }
 
 function createNewFlow() {

@@ -40,6 +40,14 @@
   --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+#builder-name-container:hover #builder-name-edit-icon {
+  opacity: 1 !important;
+}
+
+#builder-name-container:hover #builder-current-name {
+  color: var(--accent) !important;
+}
+
 /* ── Reset & Base ───────────────────────────── */
 *,
 *::before,
