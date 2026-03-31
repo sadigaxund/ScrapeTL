@@ -97,14 +97,22 @@ def _resolve_thumb(ep: dict, thumb_path: str, static_thumb: str, scraper_thumbna
     return thumb_url or ep.get("thumbnail") or scraper_thumbnail or None
 
 
-def _build_embed(ep: dict, scraper_name: str, thumb_url) -> dict:
+def _build_embed(ep: dict, scraper_name: str, thumb_url, shorten_urls: bool = False) -> dict:
+    import re
+    url_pattern = re.compile(r"https?://[^\s<>\"']+")
+
+    def formatter(text):
+        if not shorten_urls or not isinstance(text, str):
+            return text
+        return url_pattern.sub(lambda m: f"[Link]({m.group(0)})", text)
+
     ep_num = ep.get("episode_number")
     date = ep.get("release_date")
     url_ep = ep.get("website_url")
 
     fields = []
     if "title" in ep:
-        fields.append({"name": "📑 Title", "value": ep.get("title"), "inline": False})
+        fields.append({"name": "📑 Title", "value": formatter(ep.get("title")), "inline": False})
         
     if ep_num:
         fields.append({"name": "🔢 Number/ID", "value": f"#{ep_num}", "inline": True})
@@ -117,7 +125,7 @@ def _build_embed(ep: dict, scraper_name: str, thumb_url) -> dict:
     for key, val in ep.items():
         if key not in known and val:
             label = key.replace("_", " ").title()
-            fields.append({"name": label, "value": str(val)[:256], "inline": True})
+            fields.append({"name": label, "value": formatter(str(val))[:1024], "inline": True})
 
     embed: dict = {
         "title": scraper_name,
@@ -156,6 +164,7 @@ def send_notification(
     static_thumb = config.get("thumbnail_url", "")
     max_retries = int(config.get("retry_max", 3))
     delay_sec = float(config.get("delay_sec", 1.0))
+    shorten_urls = bool(config.get("shorten_urls", False))
 
     results = []
 
@@ -199,7 +208,7 @@ def send_notification(
         else:  # per_element embed (default)
             for ep in episodes:
                 thumb_url = _resolve_thumb(ep, thumb_path, static_thumb, scraper_thumbnail)
-                embed = _build_embed(ep, display_name, thumb_url)
+                embed = _build_embed(ep, display_name, thumb_url, shorten_urls=shorten_urls)
                 content = "@everyone" if tag_all else ""
                 post({"url": url, "json": {"content": content, "embeds": [embed]}})
                 time.sleep(delay_sec)

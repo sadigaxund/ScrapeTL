@@ -491,6 +491,7 @@ function initBuilder() {
         // Ignore if clicking a node or port
         if (e.target.closest('.builder-node') || e.target.closest('.node-port')) return;
 
+        if (state.builder.activeTool !== 'pan') return;
         if (e.button !== 0) return; // Left click only (panning)
         state.builder.isDragging = true;
         state.builder.startX = e.clientX - state.builder.x;
@@ -522,7 +523,7 @@ function initBuilder() {
     // Node Placement (Click on Viewport)
     viewport.addEventListener('mousedown', (e) => {
         if (state.builder.activeTool === 'pan') return;
-        if (e.target !== viewport && e.target !== canvas) return; // Only if clicking background
+        if (e.target !== viewport && e.target !== canvas && e.target.id !== 'builder-svg-layer') return; // Only if clicking background
 
         const rect = canvas.getBoundingClientRect();
         let x = (e.clientX - rect.left) / state.builder.zoom;
@@ -551,7 +552,7 @@ function initBuilder() {
 
     // Deselect on background click
     viewport.addEventListener('mousedown', (e) => {
-        if (e.target === viewport || e.target === canvas) {
+        if (e.target === viewport || e.target === canvas || e.target.id === 'builder-svg-layer') {
             deselectAll();
             renderBuilderNodes();
             renderConnections();
@@ -1163,8 +1164,9 @@ function renderConnections() {
         hitArea.setAttribute('class', 'connection-hit-area');
         hitArea.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
 
-        hitArea.onclick = (e) => {
+        hitArea.onmousedown = (e) => {
             e.stopPropagation();
+            e.preventDefault();
             deselectAll();
             state.builder.selected = { type: 'edge', id: index };
             path.classList.add('selected');
@@ -2755,6 +2757,7 @@ function openConnectorModal(type, id = null) {
             setVal('conn-retry-max', '3');
             setVal('conn-delay', '1');
             setChk('conn-tag', false);
+            setChk('conn-shorten-urls', false);
             setVal('conn-thumb-path', '');
             setVal('conn-thumb-file', '');
             setText('conn-thumb-filename', 'No file selected');
@@ -2790,6 +2793,7 @@ function openConnectorModal(type, id = null) {
                     setVal('conn-delay', cfg.delay_sec !== undefined ? cfg.delay_sec : '1');
 
                     setChk('conn-tag', !!cfg.tag_all);
+                    setChk('conn-shorten-urls', !!cfg.shorten_urls);
                     setVal('conn-thumb-path', cfg.thumbnail_path || '');
                 } else if (integ.type === 'http_request') {
                     setVal('conn-http-url', cfg.url || '');
@@ -3025,6 +3029,7 @@ async function saveConnector() {
             retry_max: parseInt(document.getElementById('conn-retry-max').value, 10) || 0,
             delay_sec: parseFloat(document.getElementById('conn-delay').value) || 0,
             tag_all: document.getElementById('conn-tag').checked,
+            shorten_urls: document.getElementById('conn-shorten-urls').checked,
             thumbnail_path: document.getElementById('conn-thumb-path').value.trim(),
         };
     } else if (type === 'http_request') {
