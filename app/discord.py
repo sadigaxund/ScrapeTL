@@ -98,12 +98,14 @@ def _resolve_thumb(ep: dict, thumb_path: str, static_thumb: str, scraper_thumbna
 
 
 def _build_embed(ep: dict, scraper_name: str, thumb_url) -> dict:
-    title = ep.get("title", "Unknown")
     ep_num = ep.get("episode_number")
     date = ep.get("release_date")
     url_ep = ep.get("website_url")
 
-    fields = [{"name": "📑 Title", "value": title, "inline": False}]
+    fields = []
+    if "title" in ep:
+        fields.append({"name": "📑 Title", "value": ep.get("title"), "inline": False})
+        
     if ep_num:
         fields.append({"name": "🔢 Number/ID", "value": f"#{ep_num}", "inline": True})
     if date:
@@ -122,7 +124,7 @@ def _build_embed(ep: dict, scraper_name: str, thumb_url) -> dict:
         "color": STATUS_COLOR["success"],
         "fields": fields,
     }
-    if url_ep:
+    if url_ep and str(url_ep).startswith("http"):
         embed["url"] = url_ep
     if thumb_url and thumb_url.startswith("http"):
         embed["thumbnail"] = {"url": thumb_url}
@@ -137,6 +139,7 @@ def send_notification(
     error_msg: str = "",
     triggered_by: str = "scheduler",
     config=None,
+    integration_name: str = None,
 ):
     if config is None:
         config = {}
@@ -147,6 +150,7 @@ def send_notification(
         return None
 
     dispatch_mode, format_style, send_as_file = _resolve_config(config)
+    display_name = integration_name or scraper_name
     tag_all = config.get("tag_all", False)
     thumb_path = config.get("thumbnail_path", "")
     static_thumb = config.get("thumbnail_url", "")
@@ -171,19 +175,19 @@ def send_notification(
                 for ep in episodes:
                     file_data = json.dumps(ep, indent=2).encode("utf-8")
                     files = {"file": ("element.json", file_data, "application/json")}
-                    payload = {"content": (mention + f"**{scraper_name}** — element").strip()}
+                    payload = {"content": (mention + f"**{display_name}** — element").strip()}
                     post({"url": url, "data": payload, "files": files})
                     time.sleep(delay_sec)
             else:  # all_at_once
                 file_data = json.dumps(episodes, indent=2).encode("utf-8")
                 files = {"file": ("data.json", file_data, "application/json")}
-                payload = {"content": (mention + f"**{scraper_name}** completed! {len(episodes)} item(s).").strip()}
+                payload = {"content": (mention + f"**{display_name}** completed! {len(episodes)} item(s).").strip()}
                 post({"url": url, "data": payload, "files": files})
 
         elif dispatch_mode == "all_at_once":
             preview = json.dumps(episodes[:5], indent=2)
             suffix = f"\n… +{len(episodes)-5} more" if len(episodes) > 5 else ""
-            content = mention + f"**{scraper_name}** — {len(episodes)} item(s) found\n```json\n{preview}{suffix}\n```"
+            content = mention + f"**{display_name}** — {len(episodes)} item(s) found\n```json\n{preview}{suffix}\n```"
             post({"url": url, "json": {"content": content.strip()}})
 
         elif format_style == "text":
@@ -195,7 +199,7 @@ def send_notification(
         else:  # per_element embed (default)
             for ep in episodes:
                 thumb_url = _resolve_thumb(ep, thumb_path, static_thumb, scraper_thumbnail)
-                embed = _build_embed(ep, scraper_name, thumb_url)
+                embed = _build_embed(ep, display_name, thumb_url)
                 content = "@everyone" if tag_all else ""
                 post({"url": url, "json": {"content": content, "embeds": [embed]}})
                 time.sleep(delay_sec)
@@ -213,7 +217,7 @@ def send_notification(
 
         payload = {
             "embeds": [{
-                "title":  f"🎌 {scraper_name}",
+                "title":  f"🎌 {display_name}",
                 "color":  color,
                 "fields": fields,
                 "footer": {"text": f"ScrapeTL • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"},

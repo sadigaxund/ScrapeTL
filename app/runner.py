@@ -201,6 +201,7 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
                     error_msg=error_msg,
                     triggered_by=triggered_by,
                     config=config,
+                    integration_name=integ.name,
                 )
                 if res:
                     res["name"] = integ.name

@@ -8,7 +8,7 @@ from app.database import init_db
 from app.api import scrapers, schedules, logs, run
 from app.api import settings, tags, integrations, variables, functions
 
-app = FastAPI(title="Anime Scraper Registry", version="2.0.0")
+app = FastAPI(title="ScrapeTL", version="2.0.0")
 
 # Include all API routers
 app.include_router(scrapers.router)
