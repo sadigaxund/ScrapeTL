@@ -1091,9 +1091,9 @@ select option {
 
 /* ── Tag Filter Chips ────────────────────────── */
 .tag-chip {
-  padding: 4px 16px;
+  padding: 7px 18px;
   border-radius: 99px;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--border);
@@ -2881,6 +2881,12 @@ input:checked+.slider {
   border-color: rgba(34, 197, 94, 0.5) !important;
 }
 
+.builder-node--source {
+  min-width: 160px;
+  background: linear-gradient(135deg, rgba(14, 165, 233, 0.15), rgba(15, 15, 15, 0.98)) !important;
+  border-color: rgba(14, 165, 233, 0.4) !important;
+}
+
 .builder-node--action {
   min-width: 180px;
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.15), rgba(15, 15, 15, 0.98)) !important;
@@ -3157,6 +3163,70 @@ input:checked+.slider {
   background: #1a1a1a;
   color: #fff;
   padding: 8px;
+}
+
+/* ── Macro / Action List UI ── */
+.macro-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.macro-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.macro-select {
+  flex: 0 0 100px;
+  font-size: 10px;
+  padding: 4px 20px 4px 6px;
+}
+
+.macro-input {
+  flex: 1;
+  font-size: 10px;
+  padding: 4px 6px;
+}
+
+.btn-macro-del {
+  background: transparent;
+  color: var(--danger);
+  border: none;
+  font-size: 10px;
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.7;
+  transition: 0.2s;
+}
+
+.btn-macro-del:hover {
+  opacity: 1;
+  transform: scale(1.1);
+}
+
+.btn-macro-add {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 6px;
+  font-size: 10px;
+  cursor: pointer;
+  transition: 0.2s;
+  text-align: center;
+}
+
+.btn-macro-add:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .node-config-row {

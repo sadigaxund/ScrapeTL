@@ -19,13 +19,26 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 
 
 19. When a scraper contains some new library thats not in the app's environment, scraper does not run, maybe a way of dynamically installing libraries.
+
 20. investigate why is there 2 retries when i manually ran the scraper, it should be applied only to the integration, where if and only if after the message is scraped, it retries the message sending process not the scraping process, which has to be idempotent unless stated otherwise.
 25. catchup ignores inputs
 
-* fix markdown text vs background color
 
 22. option to be able to hide urls as Link or show full maybe shortened [NOT SURE]
 14. rework the integration part to be similar to scraper/schedules creation part, but where at the top  [NOT SURE]
 26. Rename Schedules to Routines[NOT SURE]
 
 27. a button to save a version within builder, like a snapshot. I think after reverting to certain version then snapshotting, it should just create a new version and append to the end of versions list. Not sure how to select the version number
+
+
+28. add return types to the functions
+29. Lines disappear when switching between menus, only comes back if I do something like drag, pan but not zoom
+30. add action to duplicate a scraper
+31. ability to Select which fields to send to integrations.
+32. ability to force stop running scraper/integration
+
+34. make filters in logs menu wider, 
+33. scraper connected dashboard
+
+DONE: 
+

@@ -113,6 +113,8 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             break
 
         except Exception as exc:
+            import traceback
+            traceback.print_exc()
             error_msg = str(exc)
             retry_count = attempt
             if attempt < max_retries:

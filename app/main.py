@@ -3,6 +3,11 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, Response
 import os
 import threading
+import builtins
+
+# Global alias injection for no-code builder compatibility
+setattr(builtins, "true", True)
+setattr(builtins, "false", False)
 
 from app.database import init_db
 from app.api import scrapers, schedules, logs, run
