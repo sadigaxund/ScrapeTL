@@ -501,22 +501,31 @@ function initBuilder() {
 
     // Mouse interaction logic (Panning/Move) moved to consolidated global handlers at bottom of file
 
-    // Zooming logic (Ctrl + Scroll)
+    // Zooming logic (Ctrl + Scroll, Zoom-to-mouse)
     viewport.addEventListener('wheel', (e) => {
         if (e.ctrlKey) {
             e.preventDefault();
             const delta = -e.deltaY;
             const factor = 1.1;
             const oldZoom = state.builder.zoom;
-            const newZoom = delta > 0 ? oldZoom * factor : oldZoom / factor;
+            let newZoom = delta > 0 ? oldZoom * factor : oldZoom / factor;
 
             // Limit zoom
-            state.builder.zoom = Math.min(Math.max(newZoom, 0.2), 3.0);
+            newZoom = Math.min(Math.max(newZoom, 0.2), 3.0);
 
-            // Note: For true "zoom to mouse", we'd need to shift X/Y too. 
-            // For now, simpler zoom is fine.
-            canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
-            updateZoomHUD();
+            if (newZoom !== oldZoom) {
+                // Calculate cursor position in unscaled canvas space
+                const mouseX = (e.clientX - state.builder.x) / oldZoom;
+                const mouseY = (e.clientY - state.builder.y) / oldZoom;
+
+                // Update zoom and shift origin so the cursor point stays fixed
+                state.builder.zoom = newZoom;
+                state.builder.x = e.clientX - mouseX * newZoom;
+                state.builder.y = e.clientY - mouseY * newZoom;
+
+                canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+                updateZoomHUD();
+            }
         }
     }, { passive: false });
 
