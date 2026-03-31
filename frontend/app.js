@@ -379,7 +379,7 @@ const NODE_PRESETS = {
             ]
         },
     },
-    action: {
+    source: {
         fetch_url: {
             title: '🌐 Fetch HTML',
             inputs: ['URL'],
@@ -394,10 +394,13 @@ const NODE_PRESETS = {
             inputs: ['URL'],
             outputs: ['HTML'],
             configs: [
-                { key: 'wait_for', type: 'text', label: 'Wait Selector', placeholder: '.content-ready' },
-                { key: 'timeout', type: 'text', label: 'Timeout (ms)', placeholder: '30000' }
+                { key: 'headless', type: 'checkbox', label: 'Headless Mode (Silent)', default: true },
+                { key: 'actions', type: 'action_list', label: 'Playwright Actions' },
+                { key: 'auto_dismiss', type: 'string_array', label: 'Auto-Dismiss Selectors (e.g. cookie banners)' }
             ]
-        },
+        }
+    },
+    action: {
         bs4_select: {
             title: '🥣 BeautifulSoup Selector',
             inputs: ['HTML'],
@@ -849,6 +852,24 @@ function renderBuilderNodes() {
                     row.appendChild(input);
                     row.appendChild(pickBtn);
                     group.appendChild(row);
+                } else if (cfg.type === 'checkbox') {
+                    const wrap = document.createElement('label');
+                    wrap.style = 'display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary); margin-top:4px';
+                    
+                    const cb = document.createElement('input');
+                    cb.type = 'checkbox';
+                    const currentVal = node.config[cfg.key];
+                    cb.checked = currentVal !== undefined ? currentVal : (cfg.default !== undefined ? cfg.default : true);
+                    cb.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.checked);
+                    
+                    wrap.appendChild(cb);
+                    wrap.appendChild(document.createTextNode(cfg.label));
+                    group.innerHTML = ''; // Replace label with this integrated toggle
+                    group.appendChild(wrap);
+                } else if (cfg.type === 'action_list') {
+                    renderActionListUI(node.id, cfg.key, group);
+                } else if (cfg.type === 'string_array') {
+                    renderStringArrayUI(node.id, cfg.key, group);
                 }
 
                 configContainer.appendChild(group);
@@ -919,6 +940,153 @@ function updateNodeConfig(nodeId, key, value) {
     if (node) {
         node.config[key] = value;
     }
+}
+
+function renderActionListUI(nodeId, configKey, container) {
+    const node = state.builder.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    // Initialize if empty
+    if (!Array.isArray(node.config[configKey])) {
+        node.config[configKey] = [];
+    }
+    
+    const listContainer = document.createElement('div');
+    listContainer.className = 'macro-list-container';
+    
+    const renderList = () => {
+        listContainer.innerHTML = '';
+        const actions = node.config[configKey];
+        
+        actions.forEach((action, idx) => {
+            const row = document.createElement('div');
+            row.className = 'macro-row';
+            
+            const typeSelect = document.createElement('select');
+            typeSelect.className = 'node-select macro-select';
+            const types = {
+                'click': 'Click',
+                'wait': 'Wait (ms)',
+                'wait_for_selector': 'Wait For',
+                'scroll_bottom': 'Scroll Bottom',
+                'scroll_to': 'Scroll To Selector',
+                'goto': 'Go To URL',
+                'type': 'Type Text'
+            };
+            for (const [k, v] of Object.entries(types)) {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.textContent = v;
+                if (action.type === k) opt.selected = true;
+                typeSelect.appendChild(opt);
+            }
+            typeSelect.onchange = (e) => {
+                actions[idx].type = e.target.value;
+                updateNodeConfig(nodeId, configKey, actions);
+                renderList(); // Refresh to show/hide value input if needed
+            };
+            
+            row.appendChild(typeSelect);
+            
+            if (action.type !== 'scroll_bottom') {
+                const valInput = document.createElement('input');
+                valInput.className = 'node-input macro-input';
+                valInput.placeholder = action.type === 'wait' ? '2000' : 'Selector or URL...';
+                valInput.value = action.value || '';
+                valInput.oninput = (e) => {
+                    actions[idx].value = e.target.value;
+                    updateNodeConfig(nodeId, configKey, actions);
+                };
+                row.appendChild(valInput);
+            }
+            
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-macro-del';
+            delBtn.textContent = '✕';
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                actions.splice(idx, 1);
+                updateNodeConfig(nodeId, configKey, actions);
+                renderList();
+            };
+            row.appendChild(delBtn);
+            
+            listContainer.appendChild(row);
+        });
+        
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn-macro-add';
+        addBtn.textContent = '+ Add Action';
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            actions.push({ type: 'wait_for_selector', value: '' });
+            updateNodeConfig(nodeId, configKey, actions);
+            renderList();
+        };
+        listContainer.appendChild(addBtn);
+    };
+    
+    renderList();
+    container.appendChild(listContainer);
+}
+
+function renderStringArrayUI(nodeId, configKey, container) {
+    const node = state.builder.nodes.find(n => n.id === nodeId);
+    if (!node) return;
+    
+    if (!Array.isArray(node.config[configKey])) {
+        node.config[configKey] = [];
+    }
+    
+    const listContainer = document.createElement('div');
+    listContainer.className = 'macro-list-container';
+    
+    const renderList = () => {
+        listContainer.innerHTML = '';
+        const items = node.config[configKey];
+        
+        items.forEach((item, idx) => {
+            const row = document.createElement('div');
+            row.className = 'macro-row';
+            
+            const valInput = document.createElement('input');
+            valInput.className = 'node-input macro-input';
+            valInput.placeholder = '.close-modal-btn';
+            valInput.value = item || '';
+            valInput.oninput = (e) => {
+                items[idx] = e.target.value;
+                updateNodeConfig(nodeId, configKey, items);
+            };
+            row.appendChild(valInput);
+            
+            const delBtn = document.createElement('button');
+            delBtn.className = 'btn-macro-del';
+            delBtn.textContent = '✕';
+            delBtn.onclick = (e) => {
+                e.stopPropagation();
+                items.splice(idx, 1);
+                updateNodeConfig(nodeId, configKey, items);
+                renderList();
+            };
+            row.appendChild(delBtn);
+            
+            listContainer.appendChild(row);
+        });
+        
+        const addBtn = document.createElement('button');
+        addBtn.className = 'btn-macro-add';
+        addBtn.textContent = '+ Add Selector';
+        addBtn.onclick = (e) => {
+            e.stopPropagation();
+            items.push('');
+            updateNodeConfig(nodeId, configKey, items);
+            renderList();
+        };
+        listContainer.appendChild(addBtn);
+    };
+    
+    renderList();
+    container.appendChild(listContainer);
 }
 
 function openContextRegistry(nodeId, configKey, inputEl) {
@@ -1120,7 +1288,10 @@ function startConnection(e, fromId, portType, portIdx) {
 
 function getPortPos(nodeId, type, portIdx) {
     const portEl = document.getElementById(`node-${nodeId}-${type}-${portIdx}`);
-    if (!portEl) {
+    const rect = portEl ? portEl.getBoundingClientRect() : null;
+    
+    // If element doesn't exist OR hasn't been laid out by browser yet (0 width/height)
+    if (!portEl || !rect || rect.width === 0) {
         // Fallback to estimation if DOM not ready (e.g. initial load)
         const node = state.builder.nodes.find(n => n.id === nodeId);
         if (!node) return { x: 0, y: 0 };
@@ -1129,7 +1300,6 @@ function getPortPos(nodeId, type, portIdx) {
         return { x, y };
     }
 
-    const rect = portEl.getBoundingClientRect();
     const canvas = document.getElementById('builder-canvas');
     const canvasRect = canvas.getBoundingClientRect();
 
@@ -1322,10 +1492,7 @@ async function saveFlow() {
 
     const flowData = JSON.stringify({
         nodes: state.builder.nodes,
-        edges: state.builder.edges,
-        config: {
-            viewport: { x: state.builder.x, y: state.builder.y, zoom: state.builder.zoom }
-        }
+        edges: state.builder.edges
     });
 
     const formData = new FormData();
@@ -1375,15 +1542,19 @@ async function editInBuilder(id) {
 
         // Hydrate state
         deselectAll();
-        state.builder.nodes = flowData.nodes || [];
+        state.builder.nodes = (flowData.nodes || []).map(node => {
+            // Backward compatibility for nodes moved from Action to Source
+            if (node.type === 'action' && ['fetch_url', 'fetch_playwright'].includes(node.preset)) {
+                node.type = 'source';
+            }
+            return node;
+        });
         state.builder.edges = flowData.edges || [];
 
-        // Restore viewport if available
-        if (flowData.config && flowData.config.viewport) {
-            state.builder.x = flowData.config.viewport.x;
-            state.builder.y = flowData.config.viewport.y;
-            state.builder.zoom = flowData.config.viewport.zoom;
-        }
+        // Reset viewport for consistency
+        state.builder.x = -2000;
+        state.builder.y = -2000;
+        state.builder.zoom = 1;
 
         // Setup save fields for updating
         document.getElementById('flow-scraper-id').value = s.id;

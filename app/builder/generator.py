@@ -39,13 +39,13 @@ class GeneratedScraper(BaseScraper):
     description = "{description or 'ScrapeTL Builder Flow'}"
     
     # Declarative inputs for the UI
-    inputs = {json.dumps(inputs_schema, indent=8)}
+    inputs = json.loads({repr(json.dumps(inputs_schema))})
 
     def scrape(self, vars=None, db=None, **kwargs) -> List[Dict[str, Any]]:
         """
         Executes the builder DAG flow.
         """
-        flow_data = {json.dumps(data)}
+        flow_data = json.loads({repr(json.dumps(data))})
         
         # Initialize the engine
         engine = BuilderEngine(

@@ -28,6 +28,8 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
         "strip": lambda s: str(s).strip(),
         "datetime": datetime,
         "timedelta": timedelta,
+        "true": True,
+        "false": False,
     }
     
     # 2. Inject static variables
@@ -64,13 +66,14 @@ def _resolve_string(text, ns):
             if isinstance(result, (dict, list)):
                 return json.dumps(result)
             return str(result)
-        except Exception:
+        except Exception as e:
             # Fallback for simple key matching if eval fails
             if expr in ns:
                 val = ns[expr]
                 if isinstance(val, (dict, list)):
                     return json.dumps(val)
                 return str(val)
+            print(f"[Expressions] Eval failed for '{expr}': {e}")
             return match.group(0)
 
     return re.sub(pattern, replace, text)

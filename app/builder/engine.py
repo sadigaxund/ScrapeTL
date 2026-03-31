@@ -196,13 +196,21 @@ class BuilderEngine:
             resp.raise_for_status()
             return resp.text
 
-        elif ntype == "action_fetch_playwright":
+        elif ntype in ["action_fetch_playwright", "source_fetch_playwright"]:
             url = data.get("url") or node_inputs.get("url")
             if not url: return None
             
             url = resolve_expressions(url, {**self.global_vars, **node_inputs})
             headless = data.get("headless", True)
             cdp_url = data.get("cdp_url") # For scaling/parallel grid
+            
+            actions = data.get("actions", [])
+            auto_dismiss = data.get("auto_dismiss", [])
+            
+            # Legacy fallback
+            wait_sel = data.get("wait_for_selector") or data.get("wait_for")
+            if not actions and wait_sel:
+                actions = [{"type": "wait_for_selector", "value": wait_sel}]
             
             with sync_playwright() as p:
                 if cdp_url:
@@ -211,14 +219,71 @@ class BuilderEngine:
                     browser = p.chromium.launch(headless=headless)
                 
                 page = browser.new_page()
+                
+                # Setup Auto-Dismiss watchdog (Native Alert & DOM Banners)
+                page.on('dialog', lambda dialog: dialog.accept()) # Auto-accept alerts
+                
+                if auto_dismiss:
+                    # Inject an aggressive setInterval to click dismiss selectors in background
+                    script = f"""
+                    setInterval(() => {{
+                        const selectors = {json.dumps(auto_dismiss)};
+                        selectors.forEach(sel => {{
+                            try {{
+                                document.querySelectorAll(sel).forEach(el => {{
+                                    el.click();
+                                }});
+                            }} catch(e) {{}}
+                        }});
+                    }}, 1500);
+                    """
+                    page.add_init_script(script)
+                
+                # Default behavior: Always navigate to the root URL first unless overriden
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 
-                # Optional selector wait
-                wait_sel = data.get("wait_for_selector")
-                if wait_sel:
-                    try: page.wait_for_selector(wait_sel, timeout=10000)
-                    except: pass
-                
+                # Execute Action Macro
+                for action in actions:
+                    atype = action.get("type", "")
+                    aval = str(action.get("value", ""))
+                    
+                    try:
+                        if atype == "click":
+                            page.locator(aval).first.click(timeout=10000)
+                        elif atype == "wait":
+                            page.wait_for_timeout(int(aval) if aval.isdigit() else 2000)
+                        elif atype == "wait_for_selector":
+                            page.wait_for_selector(aval, timeout=15000)
+                        elif atype == "scroll_bottom":
+                            # Incremental scroll to trigger lazy loading
+                            page.evaluate("""
+                                async () => {
+                                    await new Promise((resolve) => {
+                                        let totalHeight = 0;
+                                        let distance = 600;
+                                        let timer = setInterval(() => {
+                                            let scrollHeight = document.body.scrollHeight;
+                                            window.scrollBy(0, distance);
+                                            totalHeight += distance;
+                                            if(totalHeight >= scrollHeight){
+                                                clearInterval(timer);
+                                                resolve();
+                                            }
+                                        }, 150);
+                                    });
+                                }
+                            """)
+                        elif atype == "scroll_to":
+                            page.locator(aval).first.scroll_into_view_if_needed(timeout=10000)
+                        elif atype == "goto":
+                            page.goto(aval, wait_until="domcontentloaded", timeout=30000)
+                        elif atype == "type":
+                            # For POC: assume simple active typing or specific selector format if needed
+                            page.keyboard.type(aval)
+                    except Exception as e:
+                        print(f"[BuilderEngine] Warning: Action '{atype}' failed on value '{aval}': {e}")
+                        # Silent continue for POC to emulate resilience
+                        
                 content = page.content()
                 browser.close()
                 return content
@@ -418,19 +483,19 @@ class BuilderEngine:
             ntype = f"{ntype}_{preset}"
         
         # Mapping logic based on presets
-        if ntype in ["action_fetch_url", "action_fetch_playwright"]:
+        if ntype in ["action_fetch_url", "action_fetch_playwright", "source_fetch_playwright", "source_fetch_html"]:
             return "url" if port_idx == 0 else "data"
             
         if ntype in ["action_bs4_select", "action_html_children"]:
             return "html" if port_idx == 0 else "data"
         
-        if ntype == "sink_context":
+        if ntype in ["action_regex_extract", "action_text_transform"]:
+            return "text" if port_idx == 0 else "data"
+            
+        if ntype in ["action_type_convert", "sink_context"]:
             return "value" if port_idx == 0 else "data"
             
-        if ntype == "sink_system_output":
-            return "data"
-            
-        if ntype == "sink_debug":
+        if ntype in ["sink_system_output", "sink_debug"]:
             return "data"
             
         return f"input_{port_idx}"

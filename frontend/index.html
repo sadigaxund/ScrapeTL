@@ -400,19 +400,19 @@
           style="padding:0 0 16px 0; border-bottom:1px solid var(--border-light); display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
 
           <div class="custom-dropdown" id="dd-scraper" onclick="toggleDropdown(event, 'dd-scraper')">
-            <button class="tag-chip" id="summary-scraper" style="padding: 0 16px;">Scraper: <b style="margin-left:4px">All</b> <span
+            <button class="tag-chip" id="summary-scraper">Scraper: <b style="margin-left:4px">All</b> <span
                 style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-scrapers" onclick="event.stopPropagation()"></div>
           </div>
 
           <div class="custom-dropdown" id="dd-tag" onclick="toggleDropdown(event, 'dd-tag')">
-            <button class="tag-chip" id="summary-tag" style="padding: 0 16px;">Tag: <b style="margin-left:4px">All</b> <span
+            <button class="tag-chip" id="summary-tag">Tag: <b style="margin-left:4px">All</b> <span
                 style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-tags" onclick="event.stopPropagation()"></div>
           </div>
 
           <div class="custom-dropdown" id="dd-status" onclick="toggleDropdown(event, 'dd-status')">
-            <button class="tag-chip" id="summary-status" style="padding: 0 16px;">Status: <b style="margin-left:4px">All</b> <span
+            <button class="tag-chip" id="summary-status">Status: <b style="margin-left:4px">All</b> <span
                 style="font-size:10px;margin-left:6px;opacity:0.5">▼</span></button>
             <div class="custom-dropdown-menu" id="log-menu-statuses" onclick="event.stopPropagation()"></div>
           </div>
@@ -641,14 +641,23 @@
           </div>
         </div>
 
+        <div class="bt-dropdown" id="dropdown-source">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'source')"
+            id="tool-source">
+            <span>🌐</span> Source <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+          </button>
+          <div class="bt-menu">
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_url')">🌐 Fetch HTML</button>
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">🎭 Playwright Fetch</button>
+          </div>
+        </div>
+
         <div class="bt-dropdown" id="dropdown-action">
           <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'action')"
             id="tool-action">
             <span>⚙️</span> Action <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'fetch_url')">🌐 Fetch HTML</button>
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'fetch_playwright')">🎭 Playwright Fetch</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'bs4_select')">🥣 BeautifulSoup Selector</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'html_children')">🌿 HTML Children</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'regex_extract')">🔍 Regex Extraction</button>
