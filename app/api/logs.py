@@ -41,6 +41,7 @@ def get_logs(
         for t in running_tasks:
             running_items.append({
                 "id": f"run_{t.id}",
+                "task_id": t.id,
                 "scraper_id": t.scraper_id,
                 "scraper_name": t.scraper.name if t.scraper else f"Scraper #{t.scraper_id}",
                 "status": "running",

@@ -28,6 +28,7 @@ const API = {
     reorderIntegrations: '/api/integrations/reorder',
     variables: '/api/variables',
     functions: '/api/functions',
+    stopRun: (id) => `/api/run/stop/${id}`,
 };
 
 /* ── State ──────────────────────────────────────────── */
@@ -166,6 +167,7 @@ function statusBadge(status) {
         scheduler: ['🕐', 'scheduler'],
         skipped: ['⏭', 'skipped'],
         scheduled: ['🗓️', 'pending'],
+        cancelled: ['🛑', 'failure'],
     };
     const [icon, cls] = map[status] || ['•', 'pending'];
     return `<span class="status-badge badge-${cls}">${icon} ${status.toUpperCase()}</span>`;
@@ -1597,10 +1599,13 @@ function downloadScraper(id) {
    SCRAPERS
 ════════════════════════════════════════════════ */
 async function loadScrapers() {
-    const [scrapers, tags] = await Promise.all([
+    const [scrapers, tags, queue] = await Promise.all([
         apiFetch(API.scrapers),
         apiFetch(API.tags).catch(() => []),
+        apiFetch(API.queue).catch(() => []),
     ]);
+
+    state.queueTasks = queue; // Update global state for 'Stop' button visibility
 
     const cacheKey = 'scrapers_' + state.activeTagFilter;
     const dataHash = JSON.stringify({ scrapers, tags, activeFilter: state.activeTagFilter });
@@ -1738,7 +1743,10 @@ function renderScrapersList(scrapers) {
                         <button class="icon-btn" onclick="downloadScraper(${s.id})" title="Download Code">📥</button>
                         <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
                     </div>
-                    <button class="btn btn-run" style="padding: 6px 14px;" onclick="runScraper(${s.id}, this)">⚡ Run</button>
+                    ${state.queueTasks && state.queueTasks.some(t => t.scraper_id === s.id && t.status === 'running') 
+                        ? `<button class="btn btn-stop" style="padding: 6px 14px; background:rgba(239, 68, 68, 0.1); color:var(--failure); border:1px solid rgba(239, 68, 68, 0.2)" onclick="stopScraperRun(${state.queueTasks.find(t => t.scraper_id === s.id && t.status === 'running').id})">🛑 Stop</button>`
+                        : `<button class="btn btn-run" style="padding: 6px 14px;" onclick="runScraper(${s.id}, this)">⚡ Run</button>`
+                    }
                 </div>
             </td>
         </tr>`;
@@ -2429,7 +2437,8 @@ function renderLogFilters() {
         { id: 'running', label: '⚡ Running' },
         { id: 'success', label: '✅ Success' },
         { id: 'failure', label: '❌ Failure' },
-        { id: 'skipped', label: '⏭ Skipped' }
+        { id: 'skipped', label: '⏭ Skipped' },
+        { id: 'cancelled', label: '🛑 Cancelled' }
     ];
     const aStat = statuses.find(st => st.id === state.logFilters.status);
 
@@ -2553,6 +2562,9 @@ async function loadLogs(page = null) {
                     <div class="log-col-retry" style="display:flex; justify-content:center;">${retryBadge}</div>
                     <div class="log-col-trigger">${statusBadge(log.triggered_by)}</div>
                     <div class="log-col-time"><span class="log-time">${formatDate(log.run_at)}</span></div>
+                    <div class="log-col-stop" style="text-align:right">
+                        ${isRunning ? `<button class="btn btn-stop" style="padding:4px 10px; background:rgba(239, 68, 68, 0.1); color:var(--failure); border:1px solid rgba(239, 68, 68, 0.2); font-size:11px" onclick="event.stopPropagation(); stopScraperRun(${log.task_id || log.id})">🛑 Stop</button>` : ''}
+                    </div>
                     <div class="log-col-icon" style="text-align:right;">${hasDetails ? `<span class="log-expand-icon" id="icon-${detailsId}">${isExpanded ? '▼' : '▶'}</span>` : ''}</div>
                 </div>
                 ${hasDetails ? `
@@ -3989,6 +4001,56 @@ function renderVariablesList() {
             </td>
         </tr>`;
     }).join('');
+    container.innerHTML = `<table class="data-table">
+        <thead>
+            <tr>
+                <th style="width:40px"></th>
+                <th style="width:60px"></th>
+                <th>Scraper</th>
+                <th style="width:120px">Type</th>
+                <th style="width:140px">Health</th>
+                <th style="width:110px">Created</th>
+                <th style="width:110px">Updated</th>
+                <th style="width:130px">Last Run</th>
+                <th style="width:180px; text-align:right">Actions</th>
+            </tr>
+        </thead>
+        <tbody>${tableRows}</tbody>
+    </table>`;
+}
+
+async function stopScraperRun(taskId, btn) {
+    if (!confirm('Are you sure you want to force stop this scraper run?')) return;
+    
+    // Support both direct IDs (from Scrapers list) and "run_ID" strings (from Logs list)
+    let cleanId = taskId;
+    if (typeof taskId === 'string') {
+        cleanId = taskId.replace('run_', '');
+    }
+
+    const originalText = btn ? btn.textContent : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.textContent = '⏳ Stopping...';
+    }
+
+    try {
+        await apiFetch(API.stopRun(cleanId), { method: 'POST' });
+        toast('Stop signal sent to scraper.', 'success');
+        
+        // Polling refresh after a short delay
+        setTimeout(() => {
+            loadScrapers();
+            loadLogs();
+            loadQueue();
+        }, 1500);
+    } catch (e) {
+        toast(e.message, 'error');
+        if (btn) {
+            btn.disabled = false;
+            btn.textContent = originalText;
+        }
+    }
 }
 
 function renderVariableValue(v) {
