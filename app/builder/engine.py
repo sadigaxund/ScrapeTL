@@ -1,5 +1,6 @@
 import json
 import concurrent.futures
+import threading
 from typing import Dict, Any, List, Optional
 import requests
 from playwright.sync_api import sync_playwright
@@ -35,7 +36,7 @@ class BuilderEngine:
             self.adj[src].append(tgt)
             self.in_degree[tgt] += 1
 
-    def execute(self, runtime_inputs: Dict[str, Any]) -> List[Dict[str, Any]]:
+    def execute(self, runtime_inputs: Dict[str, Any], stop_event: Optional[threading.Event] = None) -> List[Dict[str, Any]]:
         """
         Main entry point for execution.
         """
@@ -59,6 +60,11 @@ class BuilderEngine:
         debug_artifacts = []
         
         while queue:
+            # Check for cancellation signal
+            if stop_event and stop_event.is_set():
+                print("[BuilderEngine] 🛑 Execution cancelled by stop signal.")
+                break
+
             current_id = queue.pop(0)
             node = self.nodes[current_id]
             

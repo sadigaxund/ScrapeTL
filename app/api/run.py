@@ -7,6 +7,8 @@ from app.database import get_db
 from app.models import Scraper
 from app.runner import run_scraper
 
+from app import task_registry
+
 router = APIRouter(prefix="/api/run", tags=["run"])
 
 
@@ -48,4 +50,31 @@ def manual_run(scraper_id: int, payload: RunPayload = None, db: Session = Depend
     thread = threading.Thread(target=_run, daemon=True)
     thread.start()
 
-    return {"detail": f"Scraper '{scraper.name}' started.", "scraper_id": scraper_id}
+    return {
+        "detail": f"Scraper '{scraper.name}' started.",
+        "scraper_id": scraper_id,
+        "task_id": task_id
+    }
+
+
+@router.post("/stop/{task_id}")
+def stop_run(task_id: int):
+    """Request a graceful stop for a running task."""
+    success = task_registry.request_stop(task_id)
+    if not success:
+        # Check if it's in the DB but not in registry (maybe stalled?)
+        # We can still mark it as 'cancelled' in DB if it's 'running'
+        from app.database import SessionLocal
+        from app.models import TaskQueue
+        db = SessionLocal()
+        task = db.get(TaskQueue, task_id)
+        if task and task.status == "running":
+            task.status = "cancelled"
+            db.commit()
+            db.close()
+            return {"detail": "Task marked as cancelled in database (stalled run)."}
+        
+        db.close()
+        raise HTTPException(status_code=404, detail="Active task not found or already finished.")
+
+    return {"detail": "Stop request sent to scraper."}

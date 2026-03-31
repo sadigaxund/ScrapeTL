@@ -1154,7 +1154,7 @@ select option {
 
 .log-card-header {
   display: grid;
-  grid-template-columns: 110px minmax(140px, 1fr) 90px 110px 110px 160px 30px;
+  grid-template-columns: 110px minmax(140px, 1fr) 90px 110px 110px 160px 80px 30px;
   align-items: center;
   padding: 10px 14px;
   gap: 12px;
