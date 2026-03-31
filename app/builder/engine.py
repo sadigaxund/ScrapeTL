@@ -3,6 +3,8 @@ import concurrent.futures
 from typing import Dict, Any, List, Optional
 import requests
 from playwright.sync_api import sync_playwright
+import re
+from bs4 import BeautifulSoup
 from app.expressions import resolve_expressions
 from app.models import GlobalVariable
 
@@ -54,7 +56,6 @@ class BuilderEngine:
         
         # Simple sequential execution respecting dependencies
         processed_nodes = set()
-        combined_results = []
         debug_artifacts = []
         
         while queue:
@@ -72,16 +73,7 @@ class BuilderEngine:
                 pr_raw = str(node.get("preset", "")).strip()
                 nt = f"{nt_raw}_{pr_raw}" if pr_raw and pr_raw not in nt_raw else nt_raw
 
-                # Check if it's an output node
-                if nt == "sink_system_output":
-                    if isinstance(res, list):
-                        combined_results.extend(res)
-                    elif res:
-                        combined_results.append(res)
-                    else:
-                        print(f"[BuilderEngine] Warning: System Output received empty result from {current_id}")
-                
-                elif nt == "sink_debug":
+                if nt == "sink_debug":
                     debug_artifacts.append({
                         "node_id": current_id,
                         "label": node.get("config", {}).get("label", "Debug"),
@@ -106,8 +98,46 @@ class BuilderEngine:
         # We can pass this back to the runner later
         self._debug_info = debug_artifacts
         
-        print(f"[BuilderEngine] Execution finished. Final results: {len(combined_results)} item(s)")
-        return combined_results
+        # Aggregate and Auto-Zip results from all sink_system_output nodes
+        sink_results = []
+        for n_id, node in self.nodes.items():
+            nt_raw = str(node.get("type", "")).strip()
+            pr_raw = str(node.get("preset", "")).strip()
+            nt = f"{nt_raw}_{pr_raw}" if pr_raw and pr_raw not in nt_raw else nt_raw
+            if nt == "sink_system_output":
+                res = self.results_cache.get(n_id)
+                if res:
+                    sink_results.append(res)
+                    
+        columns = {}
+        for res in sink_results:
+            if isinstance(res, list):
+                for item in res:
+                    if isinstance(item, dict):
+                        for k, v in item.items():
+                            columns.setdefault(k, []).append(v)
+            elif isinstance(res, dict):
+                for k, v in res.items():
+                    columns.setdefault(k, []).append(v)
+                    
+        if columns:
+            max_len = max(len(col) for col in columns.values())
+            merged = []
+            for i in range(max_len):
+                row = {}
+                for k, col in columns.items():
+                    if len(col) == 1:
+                        row[k] = col[0] # broadcast scalar value to all rows
+                    elif i < len(col):
+                        row[k] = col[i] # zip array value
+                    else:
+                        row[k] = None
+                merged.append(row)
+            print(f"[BuilderEngine] Execution finished. Zipped {len(sink_results)} sink(s) into {len(merged)} row(s).")
+            return merged
+
+        print(f"[BuilderEngine] Execution finished. 0 item(s)")
+        return []
 
     def _execute_node(self, node: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
         ntype = str(node.get("type", "")).strip()
@@ -193,6 +223,133 @@ class BuilderEngine:
                 browser.close()
                 return content
 
+        elif ntype == "action_bs4_select":
+            html_input = data.get("html") or node_inputs.get("html")
+            if not html_input:
+                print("[BuilderEngine] Warning: BS4 node has no HTML input! Skipping.")
+                return None
+            
+            selector = data.get("selector")
+            mode = data.get("mode", "first") # "first" or "all"
+            out_type = data.get("output_type", "html") # "html", "text", or "attr"
+            attr_name = data.get("attribute") # Optional: "src", "href", "data-num", etc.
+            limit = data.get("limit") # Optional: limit result count
+            
+            if not selector:
+                print("[BuilderEngine] Warning: BS4 node has no selector! Returning raw HTML.")
+                return html_input
+                
+            print(f"[BuilderEngine] BS4 Selector: {selector} (Mode: {mode}, Output: {out_type})")
+            
+            def _extract_val(el):
+                if out_type == "text":
+                    return el.get_text(strip=True)
+                if out_type == "attr" and attr_name:
+                    return el.get(attr_name, "")
+                return str(el)
+
+            def _process_html(h_str):
+                soup = BeautifulSoup(str(h_str), "html.parser")
+                if mode == "all":
+                    results = soup.select(selector)
+                    if limit and str(limit).isdigit():
+                        results = results[:int(limit)]
+                    return [_extract_val(r) for r in results]
+                else:
+                    result = soup.select_one(selector)
+                    if not result:
+                        return None
+                    return _extract_val(result)
+
+            if isinstance(html_input, list):
+                mapped = [_process_html(h) for h in html_input]
+                if mode == "all":
+                    # Flatten list of lists
+                    return [item for sublist in mapped if sublist for item in sublist]
+                return mapped
+            else:
+                return _process_html(html_input)
+
+        elif ntype == "action_regex_extract":
+            text_input = node_inputs.get("text") or node_inputs.get("data") or ""
+            pattern = data.get("pattern", "")
+            group_idx = int(data.get("group", 0))
+            
+            if not pattern: return text_input
+            
+            def _extract(txt):
+                match = re.search(pattern, str(txt), re.I | re.S)
+                if match:
+                    try:
+                        return match.group(group_idx)
+                    except IndexError:
+                        return match.group(0)
+                return None
+                
+            if isinstance(text_input, list):
+                return [_extract(t) for t in text_input]
+            return _extract(text_input)
+
+        elif ntype == "action_text_transform":
+            text_input = node_inputs.get("text") or node_inputs.get("data") or ""
+            op = data.get("operation", "none") # "prefix", "replace", "trim"
+            val = data.get("value", "")
+            repl = data.get("replacement", "")
+            
+            def _transform(txt):
+                t = str(txt or "")
+                if op == "prefix":
+                    return f"{val}{t}"
+                elif op == "suffix":
+                    return f"{t}{val}"
+                elif op == "replace":
+                    return t.replace(val, repl)
+                elif op == "trim":
+                    return t.strip()
+                return t
+                
+            if isinstance(text_input, list):
+                return [_transform(t) for t in text_input]
+            return _transform(text_input)
+
+        elif ntype == "action_type_convert":
+            val_input = node_inputs.get("value") or node_inputs.get("data")
+            to_type = data.get("to_type", "string") # "int", "float", "json"
+            
+            def _convert(v):
+                if to_type == "int":
+                    try: return int(re.sub(r"[^\d-]", "", str(v)))
+                    except: return 0
+                elif to_type == "float":
+                    try: return float(re.sub(r"[^\d\.-]", "", str(v)))
+                    except: return 0.0
+                elif to_type == "json":
+                    try: return json.loads(v) if isinstance(v, str) else v
+                    except: return v
+                return str(v)
+                
+            if isinstance(val_input, list):
+                return [_convert(v) for v in val_input]
+            return _convert(val_input)
+
+        elif ntype == "action_html_children":
+            html = node_inputs.get("html") or ""
+            selector = data.get("selector", "*")
+            
+            if not html: return []
+            
+            soup = BeautifulSoup(html, "html.parser")
+            # If the input is already a fragment/tag, we find children
+            # select() with recursive=False isn't a direct BS4 method, 
+            # we use find_all(recursive=False)
+            children = soup.find_all(recursive=False)
+            results = []
+            for child in children:
+                # Basic selector match if provided
+                if selector == "*" or child.select_one(selector) or child.name == selector:
+                    results.append(str(child))
+            return results
+
         elif ntype == "sink_context":
             var_key = data.get("variable_key")
             # Only update if we have a DB session and variable is not readonly
@@ -212,7 +369,10 @@ class BuilderEngine:
             if not label:
                 label = data.get("label") if isinstance(data, dict) else str(node.get("config", {}).get("label") or "result")
             
-            if isinstance(data, str) or not isinstance(data, (dict, list)):
+            if isinstance(data, list):
+                # Ensure every item in the list is a dict (standard scraper format)
+                return [ (d if isinstance(d, dict) else {label: str(d)}) for d in data ]
+            elif isinstance(data, str) or not isinstance(data, dict):
                 return {label: data}
             return data
 
@@ -260,6 +420,9 @@ class BuilderEngine:
         # Mapping logic based on presets
         if ntype in ["action_fetch_url", "action_fetch_playwright"]:
             return "url" if port_idx == 0 else "data"
+            
+        if ntype in ["action_bs4_select", "action_html_children"]:
+            return "html" if port_idx == 0 else "data"
         
         if ntype == "sink_context":
             return "value" if port_idx == 0 else "data"

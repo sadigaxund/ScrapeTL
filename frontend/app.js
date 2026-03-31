@@ -352,7 +352,11 @@ function loadTab(tab) {
     if (tab === 'integrations') loadIntegrations();
     if (tab === 'variables') loadVariables();
     if (tab === 'settings') loadSettings();
-    if (tab === 'builder') initBuilder();
+    if (tab === 'builder') {
+        initBuilder();
+        renderBuilderNodes();
+        renderConnections();
+    }
 }
 
 const NODE_PRESETS = {
@@ -392,6 +396,53 @@ const NODE_PRESETS = {
             configs: [
                 { key: 'wait_for', type: 'text', label: 'Wait Selector', placeholder: '.content-ready' },
                 { key: 'timeout', type: 'text', label: 'Timeout (ms)', placeholder: '30000' }
+            ]
+        },
+        bs4_select: {
+            title: '🥣 BeautifulSoup Selector',
+            inputs: ['HTML'],
+            outputs: ['Result'],
+            configs: [
+                { key: 'selector', type: 'text', label: 'CSS Selector', placeholder: '.item-title' },
+                { key: 'mode', type: 'select', label: 'Match Mode', options: ['first', 'all'] },
+                { key: 'output_type', type: 'select', label: 'Output Type', options: ['html', 'text', 'attr'] },
+                { key: 'attribute', type: 'text', label: 'Attribute Name', placeholder: 'href' },
+                { key: 'limit', type: 'text', label: 'Result Limit', placeholder: '10' }
+            ]
+        },
+        regex_extract: {
+            title: '🔍 Regex Extraction',
+            inputs: ['Text'],
+            outputs: ['Match'],
+            configs: [
+                { key: 'pattern', type: 'text', label: 'Regex Pattern', placeholder: 'score: (\\d+)' },
+                { key: 'group', type: 'text', label: 'Group Index', placeholder: '1' }
+            ]
+        },
+        text_transform: {
+            title: '📝 Text Transform',
+            inputs: ['Text'],
+            outputs: ['Result'],
+            configs: [
+                { key: 'operation', type: 'select', label: 'Operation', options: ['prefix', 'suffix', 'replace', 'trim'] },
+                { key: 'value', type: 'text', label: 'Param Value', placeholder: 'https://...' },
+                { key: 'replacement', type: 'text', label: 'Replacement', placeholder: '' }
+            ]
+        },
+        type_convert: {
+            title: '🔢 Type Converter',
+            inputs: ['Data'],
+            outputs: ['Typed'],
+            configs: [
+                { key: 'to_type', type: 'select', label: 'Target Type', options: ['string', 'int', 'float', 'json'] }
+            ]
+        },
+        html_children: {
+            title: '🌿 HTML Children',
+            inputs: ['HTML'],
+            outputs: ['List'],
+            configs: [
+                { key: 'selector', type: 'text', label: 'Child Selector (*)', placeholder: 'li' }
             ]
         }
     },
@@ -447,35 +498,7 @@ function initBuilder() {
         viewport.style.cursor = 'grabbing';
     });
 
-    window.addEventListener('mousemove', (e) => {
-        if (state.builder.isDragging) {
-            state.builder.x = e.clientX - state.builder.startX;
-            state.builder.y = e.clientY - state.builder.startY;
-            canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
-        } else if (state.builder.draggedNode) {
-            const canvasRect = canvas.getBoundingClientRect();
-            let x = (e.clientX - canvasRect.left) / state.builder.zoom - state.builder.dragStartX;
-            let y = (e.clientY - canvasRect.top) / state.builder.zoom - state.builder.dragStartY;
-
-            if (state.builder.snapToGrid) {
-                x = Math.round(x / 30) * 30;
-                y = Math.round(y / 30) * 30;
-            }
-
-            state.builder.draggedNode.x = x;
-            state.builder.draggedNode.y = y;
-
-            renderBuilderNodes();
-            renderConnections();
-        }
-    });
-
-    window.addEventListener('mouseup', () => {
-        state.builder.isDragging = false;
-        state.builder.draggedNode = null;
-        document.querySelectorAll('.builder-node').forEach(n => n.classList.remove('dragging'));
-        viewport.style.cursor = state.builder.activeTool === 'pan' ? 'grab' : 'crosshair';
-    });
+    // Mouse interaction logic (Panning/Move) moved to consolidated global handlers at bottom of file
 
     // Zooming logic (Ctrl + Scroll)
     viewport.addEventListener('wheel', (e) => {
@@ -677,34 +700,41 @@ function renderBuilderNodes() {
         }
 
         el.addEventListener('mousedown', (e) => {
-            // Prevent if clicking port or input
-            if (e.target.classList.contains('node-port') || e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || e.target.classList.contains('btn-node-action')) return;
+            // Prevent if clicking port or interactive elements
+            if (e.target.classList.contains('node-port') || 
+                ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName) || 
+                e.target.classList.contains('btn-node-action')) return;
 
             e.stopPropagation();
-            const canvasRect = document.getElementById('builder-canvas').getBoundingClientRect();
+            
+            // Standardize coordinate math for canvas space
+            const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
+            const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
 
             state.builder.draggedNode = node;
-            state.builder.dragStartX = (e.clientX - canvasRect.left) / state.builder.zoom - node.x;
-            state.builder.dragStartY = (e.clientY - canvasRect.top) / state.builder.zoom - node.y;
+            state.builder.startX = mouseCanvasX - node.x;
+            state.builder.startY = mouseCanvasY - node.y;
 
             el.classList.add('dragging');
 
+            // Handle selection visually without full re-render during drag start for performance
             deselectAll();
             state.builder.selected = { type: 'node', id: node.id };
-            renderBuilderNodes();
+            el.classList.add('selected');
+            
             renderConnections();
         });
 
         // Ensure config exists
         node.config = node.config || {};
 
-        // Title
+        // 1. Title
         const title = document.createElement('div');
         title.className = 'builder-node__title';
         title.textContent = preset.title;
         el.appendChild(title);
 
-        // Universal Node Label (NEW) - Processors only
+        // 2. Universal Node Label (NEW) - Processors only
         if (node.type === 'node') {
             const nameGroup = document.createElement('div');
             nameGroup.className = 'node-label-container';
@@ -717,7 +747,45 @@ function renderBuilderNodes() {
             el.appendChild(nameGroup);
         }
 
-        // Configuration UI (NEW)
+        // 3. Inputs (Left)
+        preset.inputs.forEach((label, idx) => {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--input';
+
+            const port = document.createElement('div');
+            port.className = 'node-port node-port--input';
+            port.id = `node-${node.id}-input-${idx}`;
+            port.onmousedown = (e) => startConnection(e, node.id, 'input', idx);
+
+            const lbl = document.createElement('span');
+            lbl.className = 'node-port-label';
+            lbl.textContent = label;
+
+            row.appendChild(port);
+            row.appendChild(lbl);
+            el.appendChild(row);
+        });
+
+        // 4. Outputs (Right)
+        preset.outputs.forEach((label, idx) => {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--output';
+
+            const port = document.createElement('div');
+            port.className = 'node-port node-port--output';
+            port.id = `node-${node.id}-output-${idx}`;
+            port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
+
+            const lbl = document.createElement('span');
+            lbl.className = 'node-port-label';
+            lbl.textContent = label;
+
+            row.appendChild(lbl);
+            row.appendChild(port);
+            el.appendChild(row);
+        });
+
+        // 5. Configuration UI (Moved to bottom for stability)
         if (preset.configs) {
             const configContainer = document.createElement('div');
             configContainer.className = 'node-config-container';
@@ -744,7 +812,7 @@ function renderBuilderNodes() {
                     cfg.options.forEach(opt => {
                         const o = document.createElement('option');
                         o.value = opt;
-                        o.textContent = opt;
+                        o.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
                         if ((node.config[cfg.key] || cfg.options[0]) === opt) o.selected = true;
                         select.appendChild(o);
                     });
@@ -778,93 +846,59 @@ function renderBuilderNodes() {
             el.appendChild(configContainer);
         }
 
-        // Inputs (Left)
-        preset.inputs.forEach((label, idx) => {
-            const row = document.createElement('div');
-            row.className = 'node-port-row node-port-row--input';
-
-            const port = document.createElement('div');
-            port.className = 'node-port node-port--input';
-            port.id = `node-${node.id}-input-${idx}`;
-            port.onmousedown = (e) => startConnection(e, node.id, 'input', idx);
-
-            const lbl = document.createElement('span');
-            lbl.className = 'node-port-label';
-            lbl.textContent = label;
-
-            row.appendChild(port);
-            row.appendChild(lbl);
-            el.appendChild(row);
-        });
-
-        // Outputs (Right)
-        preset.outputs.forEach((label, idx) => {
-            const row = document.createElement('div');
-            row.className = 'node-port-row node-port-row--output';
-
-            const port = document.createElement('div');
-            port.className = 'node-port node-port--output';
-            port.id = `node-${node.id}-output-${idx}`;
-            port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
-
-            const lbl = document.createElement('span');
-            lbl.className = 'node-port-label';
-            lbl.textContent = label;
-
-            row.appendChild(lbl);
-            row.appendChild(port);
-            el.appendChild(row);
-        });
-
-        el.addEventListener('mousedown', (e) => {
-            if (e.target.classList.contains('node-port')) return;
-            if (state.builder.activeTool !== 'pan') return;
-
-            e.stopPropagation();
-            state.builder.draggedNode = node;
-
-            const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
-            const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
-
-            state.builder.startX = mouseCanvasX - node.x;
-            state.builder.startY = mouseCanvasY - node.y;
-
-            el.classList.add('dragging');
-        });
-
         container.appendChild(el);
     });
 
     renderConnections();
 }
 
-// Global mousemove for node dragging (updates state + DOM)
+// Global mousemove for canvas panning AND node dragging
 window.addEventListener('mousemove', (e) => {
-    if (!state.builder.draggedNode) return;
+    const canvas = document.getElementById('builder-canvas');
+    if (!canvas) return;
 
-    // Mouse canvas-space position
-    const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
-    const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
+    if (state.builder.isDragging) {
+        state.builder.x = e.clientX - state.builder.startX;
+        state.builder.y = e.clientY - state.builder.startY;
+        canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+        renderConnections();
+    } else if (state.builder.draggedNode) {
+        // Mouse canvas-space position
+        const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
+        const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
 
-    let nextX = mouseCanvasX - state.builder.startX;
-    let nextY = mouseCanvasY - state.builder.startY;
+        let nextX = mouseCanvasX - state.builder.startX;
+        let nextY = mouseCanvasY - state.builder.startY;
 
-    if (state.builder.snapToGrid) {
-        nextX = Math.round(nextX / 30) * 30;
-        nextY = Math.round(nextY / 30) * 30;
+        if (state.builder.snapToGrid) {
+            nextX = Math.round(nextX / 30) * 30;
+            nextY = Math.round(nextY / 30) * 30;
+        }
+
+        state.builder.draggedNode.x = nextX;
+        state.builder.draggedNode.y = nextY;
+
+        // Update DOM directly for smooth movement
+        const el = document.getElementById(`node-${state.builder.draggedNode.id}`);
+        if (el) {
+            el.style.left = `${nextX}px`;
+            el.style.top = `${nextY}px`;
+        }
+
+        // Refresh connections while dragging
+        renderConnections();
     }
+});
 
-    state.builder.draggedNode.x = nextX;
-    state.builder.draggedNode.y = nextY;
-
-    // Update DOM directly for smooth movement
-    const el = document.getElementById(`node-${state.builder.draggedNode.id}`);
-    if (el) {
-        el.style.left = `${nextX}px`;
-        el.style.top = `${nextY}px`;
+// Consolidate Global MouseUp
+window.addEventListener('mouseup', () => {
+    state.builder.isDragging = false;
+    state.builder.draggedNode = null;
+    document.querySelectorAll('.builder-node').forEach(n => n.classList.remove('dragging'));
+    const viewport = document.getElementById('builder-viewport');
+    if (viewport) {
+        viewport.style.cursor = state.builder.activeTool === 'pan' ? 'grab' : 'crosshair';
     }
-
-    // Refresh connections while dragging
     renderConnections();
 });
 
@@ -1081,7 +1115,7 @@ function getPortPos(nodeId, type, portIdx) {
         const node = state.builder.nodes.find(n => n.id === nodeId);
         if (!node) return { x: 0, y: 0 };
         const x = type === 'input' ? node.x : node.x + 160;
-        const y = node.y + 30 + (portIdx * 24) + 12;
+        const y = node.y + 40 + (portIdx * 24); // 40px offset for title/label area
         return { x, y };
     }
 

@@ -21,17 +21,17 @@ If you prefer managing the container manually:
 
 ### Build the image
 ```bash
-docker build -t anime-scraper .
+docker build -t scrapetl .
 ```
 
 ### Run the container
 Ensure you mount a local folder for the database to persist between restarts.
 ```bash
 # Windows (PowerShell)
-docker run -d -p 8000:8000 -v ${PWD}/data:/app/data --name anime-scraper anime-scraper
+docker run -d -p 8000:8000 -v ${PWD}/data:/app/data --name scrapetl scrapetl
 
 # Linux / macOS
-docker run -d -p 8000:8000 -v $(pwd)/data:/app/data --name anime-scraper anime-scraper
+docker run -d -p 8000:8000 -v $(pwd)/data:/app/data --name scrapetl scrapetl
 ```
 
 ## Environment Variables
