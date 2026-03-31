@@ -416,7 +416,11 @@ class BuilderEngine:
             return results
 
         elif ntype == "sink_context":
-            var_key = data.get("variable_key")
+            var_key = data.get("variable_key", "")
+            # Sanitize: Strip {{ }} if present (frontend Pick appends them)
+            if isinstance(var_key, str) and var_key.startswith("{{") and var_key.endswith("}}"):
+                var_key = var_key[2:-2].strip()
+
             # Only update if we have a DB session and variable is not readonly
             value = node_inputs.get("value")
             if self.db and var_key:

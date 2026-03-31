@@ -1089,7 +1089,7 @@ function renderStringArrayUI(nodeId, configKey, container) {
     container.appendChild(listContainer);
 }
 
-function openContextRegistry(nodeId, configKey, inputEl) {
+function openContextRegistry(nodeId, configKey, inputEl, filter) {
     // Remove any existing menu
     const existing = document.querySelector('.context-registry-menu');
     if (existing) existing.remove();
@@ -1150,44 +1150,47 @@ function openContextRegistry(nodeId, configKey, inputEl) {
     });
 
     // 3. Global Functions (UDfs)
-    state.functions.forEach(f => {
-        const item = document.createElement('div');
-        item.className = 'context-item';
-        item.innerHTML = `<b>${f.name}()</b> <small style="margin-left:auto; opacity:0.5">${f.description || ''}</small>`;
-        item.onclick = () => {
-            inputEl.value += `${f.name}()`;
-            updateNodeConfig(nodeId, configKey, inputEl.value);
-            menu.remove();
-        };
-        menu.appendChild(item);
-    });
+    if (filter !== 'writable') {
+        state.functions.forEach(f => {
+            const item = document.createElement('div');
+            item.className = 'context-item';
+            item.innerHTML = `<b>${f.name}()</b> <small style="margin-left:auto; opacity:0.5">${f.description || ''}</small>`;
+            item.onclick = () => {
+                inputEl.value += `${f.name}()`;
+                updateNodeConfig(nodeId, configKey, inputEl.value);
+                menu.remove();
+            };
+            menu.appendChild(item);
+        });
+    }
 
-    // 4. Built-in Functions
-    const builtins = [
-        { name: 'now', desc: 'Current timestamp' },
-        { name: 'today', desc: 'Current date' },
-        { name: 'random', desc: 'Random number' },
-        { name: 'str', desc: 'Convert to string' },
-        { name: 'int', desc: 'Convert to int' },
-        { name: 'json', desc: 'Parse/Stringify JSON' }
-    ];
+    if (filter !== 'writable') {
+        const builtins = [
+            { name: 'now', desc: 'Current timestamp' },
+            { name: 'today', desc: 'Current date' },
+            { name: 'random', desc: 'Random number' },
+            { name: 'str', desc: 'Convert to string' },
+            { name: 'int', desc: 'Convert to int' },
+            { name: 'json', desc: 'Parse/Stringify JSON' }
+        ];
 
-    const builtinHead = document.createElement('div');
-    builtinHead.style = 'font-size:10px; font-weight:700; color:var(--text-muted); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin:8px 0 4px 0;';
-    builtinHead.textContent = 'Built-in Functions';
-    menu.appendChild(builtinHead);
+        const builtinHead = document.createElement('div');
+        builtinHead.style = 'font-size:10px; font-weight:700; color:var(--text-muted); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin:8px 0 4px 0;';
+        builtinHead.textContent = 'Built-in Functions';
+        menu.appendChild(builtinHead);
 
-    builtins.forEach(b => {
-        const item = document.createElement('div');
-        item.className = 'context-item';
-        item.innerHTML = `<b>${b.name}()</b> <small style="margin-left:auto; opacity:0.5">${b.desc}</small>`;
-        item.onclick = () => {
-            inputEl.value += `${b.name}()`;
-            updateNodeConfig(nodeId, configKey, inputEl.value);
-            menu.remove();
-        };
-        menu.appendChild(item);
-    });
+        builtins.forEach(b => {
+            const item = document.createElement('div');
+            item.className = 'context-item';
+            item.innerHTML = `<b>${b.name}()</b> <small style="margin-left:auto; opacity:0.5">${b.desc}</small>`;
+            item.onclick = () => {
+                inputEl.value += `${b.name}()`;
+                updateNodeConfig(nodeId, configKey, inputEl.value);
+                menu.remove();
+            };
+            menu.appendChild(item);
+        });
+    }
 
     if (menu.children.length === 1) {
         const none = document.createElement('div');
@@ -3926,67 +3929,65 @@ async function loadVariables(silent = false) {
 }
 
 function renderVariablesList() {
-    const list = document.getElementById('variables-list');
+    const list = document.getElementById('variables-list-body');
     if (!list) return;
 
     if (!state.variables.length) {
-        list.innerHTML = '<div class="empty-state">No variables defined yet.</div>';
+        list.innerHTML = '<tr><td colspan="5" class="empty-td">No variables defined yet.</td></tr>';
         return;
     }
 
     list.innerHTML = state.variables.map((v, idx) => {
         if (v._editing || v._isNew) {
             return `
-            <div class="item-card item-card--editing" style="padding:16px; gap:12px; border-color:var(--accent); background:rgba(99,102,241,0.03)">
-                <div style="flex:1; display:flex; gap:12px; align-items:center;">
-                    <div style="width:180px">
-                        <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" ${v._editing && !v._isNew ? 'disabled' : ''} style="width:100%; height:38px">
+            <tr class="editing-row" style="background:rgba(99,102,241,0.03)">
+                <td>
+                    <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px">
+                </td>
+                <td>
+                    <select id="inline-var-type-${idx}" style="width:100%; height:34px;" onchange="state.variables[${idx}].value_type = this.value">
+                        <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
+                        <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
+                        <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
+                        <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
+                    </select>
+                </td>
+                <td>
+                    <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." oninput="state.variables[${idx}].value = this.value" style="width:100%; height:34px">
+                </td>
+                <td>
+                    <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Description..." oninput="state.variables[${idx}].description = this.value" style="width:100%; height:34px">
+                </td>
+                <td style="text-align:right">
+                    <div style="display:flex; justify-content:flex-end; gap:6px;">
+                        <button class="icon-btn" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Hide' : 'Show'} Secret">
+                            ${v.is_secret ? '🔒' : '👁️'}
+                        </button>
+                        <button class="icon-btn" onclick="toggleInlineVariableReadonly(${idx})" title="${v.is_readonly ? 'Make Writable' : 'Make Read-Only'}" style="color:${v.is_readonly ? 'var(--failure)' : 'var(--text-muted)'}">
+                            ${v.is_readonly ? '🚫' : '📝'}
+                        </button>
+                        <button class="icon-btn" onclick="saveInlineVariable(${idx})" style="color:var(--success)">💾</button>
+                        <button class="icon-btn" style="color:var(--failure)" onclick="cancelInlineEdit(${idx})">✕</button>
                     </div>
-                    <div style="width:120px">
-                        <select id="inline-var-type-${idx}" style="width:100%; height:38px;">
-                            <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
-                            <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
-                            <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
-                            <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
-                        </select>
-                    </div>
-                    <div style="flex:1">
-                        <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." style="width:100%; height:38px">
-                    </div>
-                    <div style="flex:1.2">
-                        <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Simple description (visible in logs)..." style="width:100%; height:38px">
-                    </div>
-                </div>
-                <div style="display:flex; gap:8px;">
-                    <button class="btn btn-ghost btn-sm" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Hide' : 'Show'} Secret" style="padding:0 10px">
-                        ${v.is_secret ? '🔒' : '👁️'}
-                    </button>
-                    <button class="btn btn-ghost btn-sm" onclick="toggleInlineVariableReadonly(${idx})" title="${v.is_readonly ? 'Make Writable' : 'Make Read-Only'}" style="padding:0 10px; color:${v.is_readonly ? 'var(--failure)' : 'var(--text-muted)'}">
-                        ${v.is_readonly ? '🚫' : '📝'}
-                    </button>
-                    <button class="btn btn-primary btn-sm" onclick="saveInlineVariable(${idx})" style="min-width:64px">💾 Save</button>
-                    <button class="btn btn-ghost btn-sm" style="color:var(--failure)" onclick="cancelInlineEdit(${idx})">✕</button>
-                </div>
-            </div>`;
+                </td>
+            </tr>`;
         }
 
         return `
-        <div class="item-card" style="padding:12px 16px; align-items:center;">
-            <div style="flex:1; display:flex; align-items:center; gap:16px; min-width:0">
-                <div style="width:180px; font-family:var(--font-mono); font-weight:700; color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.key}</div>
-                <div style="width:100px"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></div>
-                <div style="width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary)">${renderVariableValue(v)}</div>
-                <div style="flex:1; color:var(--text-muted); opacity:0.8; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || ''}</div>
-            </div>
-            <div class="item-actions">
-                <div class="action-btn-group">
+        <tr>
+            <td><div style="font-family:var(--font-mono); font-weight:700; color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.key}</div></td>
+            <td><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
+            <td><div style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary)">${renderVariableValue(v)}</div></td>
+            <td><div style="color:var(--text-muted); opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || ''}</div></td>
+            <td style="text-align:right">
+                <div class="action-btn-group" style="justify-content:flex-end">
                     <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
                     <button class="icon-btn" onclick="toggleVariableReadonly(${idx})" title="${v.is_readonly ? 'Unlock' : 'Lock (Read-Only)'}">${v.is_readonly ? '🚫' : '📝'}</button>
                     <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit Inline">✏️</button>
                     <button class="icon-btn icon-btn-danger" onclick="deleteVariable(${v.id})" title="Delete">✕</button>
                 </div>
-            </div>
-        </div>`;
+            </td>
+        </tr>`;
     }).join('');
 }
 
@@ -3996,12 +3997,12 @@ function renderVariableValue(v) {
     }
     if (v.value_type === 'boolean') {
         const isTrue = String(v.value).toLowerCase() === 'true' || v.value === '1';
-        return `<span class="status-badge ${isTrue ? 'badge-success' : 'badge-failure'}">${isTrue ? 'TRUE' : 'FALSE'}</span>`;
+        return `<span class="status-badge ${isTrue ? 'badge-success' : 'badge-failure'}" style="padding: 1px 8px; font-size:10px">${isTrue ? 'TRUE' : 'FALSE'}</span>`;
     }
     if (v.value_type === 'json') {
-        return `<code style="font-size:11px;opacity:0.7">{...}</code>`;
+        return `<code style="font-size:11px;opacity:0.7;background:rgba(255,255,255,0.05);padding:2px 4px;border-radius:4px">{...}</code>`;
     }
-    return `<span class="truncate-text" title="${v.value}">${v.value || '—'}</span>`;
+    return `<span title="${v.value}">${v.value || '—'}</span>`;
 }
 
 function addVariableRow() {
@@ -4014,6 +4015,7 @@ function addVariableRow() {
         value_type: 'string',
         description: '',
         is_secret: false,
+        is_readonly: true,
         _editing: true,
         _isNew: true
     });
@@ -4075,9 +4077,9 @@ async function saveInlineVariable(idx) {
 
     if (!key) { toast('Key is required', 'error'); return; }
 
-    const payload = { value, value_type: type, is_secret: v.is_secret, is_readonly: v.is_readonly, description };
+    const payload = { key, value, value_type: type, is_secret: v.is_secret, is_readonly: v.is_readonly, description };
     if (v._isNew) {
-        payload.key = key;
+        // payload already has key
     }
 
     try {
@@ -4201,6 +4203,7 @@ function openVarCreateModal() {
         value: '',
         value_type: 'string',
         is_secret: false,
+        is_readonly: true,
         doc_md: '',
         _editing: true,
         _isNew: true

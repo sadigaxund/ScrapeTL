@@ -14,13 +14,14 @@ class VariableBase(BaseModel):
     value_type: str = "string"
     description: Optional[str] = None
     is_secret: bool = False
-    is_readonly: bool = False
+    is_readonly: bool = True
     doc_md: Optional[str] = None
 
 class VariableCreate(VariableBase):
     pass
 
 class VariableUpdate(BaseModel):
+    key: Optional[str] = None
     value: Optional[str] = None
     value_type: Optional[str] = None
     description: Optional[str] = None
@@ -69,7 +70,13 @@ def update_variable(var_id: int, payload: VariableUpdate, db: Session = Depends(
     var = db.get(GlobalVariable, var_id)
     if not var:
         raise HTTPException(status_code=404, detail="Variable not found.")
-    
+    if payload.key is not None and payload.key != var.key:
+        # Ensure new key is unique
+        existing = db.query(GlobalVariable).filter(GlobalVariable.key == payload.key).first()
+        if existing:
+            raise HTTPException(status_code=400, detail=f"Variable with key '{payload.key}' already exists.")
+        var.key = payload.key
+
     if payload.value is not None:
         var.value = payload.value
     if payload.value_type is not None:
