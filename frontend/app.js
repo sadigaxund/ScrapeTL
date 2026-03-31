@@ -29,6 +29,7 @@ const API = {
     variables: '/api/variables',
     functions: '/api/functions',
     stopRun: (id) => `/api/run/stop/${id}`,
+    duplicateScraper: (id) => `/api/scrapers/${id}/duplicate`,
 };
 
 /* ── State ──────────────────────────────────────────── */
@@ -1751,6 +1752,7 @@ function renderScrapersList(scrapers) {
                         <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
                         <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
                         <button class="icon-btn" onclick="${s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})`}" title="Edit">✏️</button>
+                        <button class="icon-btn" onclick="duplicateScraper(${s.id})" title="Duplicate Scraper">👯</button>
                         <button class="icon-btn" onclick="downloadScraper(${s.id})" title="Download Code">📥</button>
                         <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
                     </div>
@@ -1976,6 +1978,15 @@ async function deleteScraper(id) {
     try {
         await apiFetch(`${API.scrapers}/${id}`, { method: 'DELETE' });
         toast('Scraper deleted.', 'info');
+        loadScrapers();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+async function duplicateScraper(id) {
+    if (!confirm('Duplicate this scraper (metadata, tags, and latest code)?')) return;
+    try {
+        await apiFetch(API.duplicateScraper(id), { method: 'POST' });
+        toast('Scraper duplicated.', 'success');
         loadScrapers();
     } catch (e) { toast(e.message, 'error'); }
 }
