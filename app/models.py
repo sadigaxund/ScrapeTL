@@ -177,7 +177,7 @@ class GlobalVariable(Base):
     value_type  = Column(String,  default="string")  # "string" | "number" | "boolean" | "json"
     description = Column(Text,    nullable=True)
     is_secret   = Column(Boolean, default=False)
-    is_readonly = Column(Boolean, default=False)
+    is_readonly = Column(Boolean, default=True)
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     doc_md      = Column(Text, nullable=True)   # Markdown documentation

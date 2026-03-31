@@ -528,8 +528,21 @@
 
         <!-- ── Variables View ────────────────────────────── -->
         <div id="ctx-vars-view" style="padding: 16px 0;">
-          <div id="variables-list" class="item-list">
-            <!-- Rendered as item-cards -->
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th style="width:180px">Name / Key</th>
+                  <th style="width:100px">Type</th>
+                  <th style="width:240px">Value</th>
+                  <th>Description</th>
+                  <th style="width:150px; text-align:right">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="variables-list-body">
+                <!-- Rendered as table-rows (tr) -->
+              </tbody>
+            </table>
           </div>
         </div>
 
