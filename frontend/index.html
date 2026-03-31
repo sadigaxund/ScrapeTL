@@ -627,8 +627,14 @@
         </div>
         <span id="builder-context-type" style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--primary); letter-spacing:0.08em; line-height:1;">NEW</span>
         <div style="width:1px; height:12px; background:rgba(255,255,255,0.15); margin:0 2px;"></div>
-        <span id="builder-current-name"
-          style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New Scraper Flow</span>
+        <div id="builder-name-container" 
+          onclick="startRenameBuilderScraper()" 
+          style="display:flex; align-items:center; gap:6px; cursor:pointer; pointer-events:auto;"
+          title="Click to rename scraper">
+          <span id="builder-current-name"
+            style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New Scraper Flow</span>
+          <span id="builder-name-edit-icon" style="font-size:10px; opacity:0; transition:opacity 0.2s;">✏️</span>
+        </div>
       </div>
 
       <!-- Builder Toolbar -->
