@@ -79,19 +79,28 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             elif v.value_type == "boolean":
                 val = str(val).lower() in ("true", "1", "yes")
             elif v.value_type == "json":
-                try: val = json.loads(val)
+                try: 
+                    val = json.loads(val)
+                    if isinstance(val, list):
+                        # Wrap in Batch so it can be distinguished from standard function returns
+                        class Batch(list): pass
+                        val = Batch(val)
                 except: pass
             global_vars[v.key] = val
             
         # 3.5 Resolve Expressions in Input Values using current variables
         custom_funcs = {f.name: f.code for f in db.query(UserFunction).all()}
         _input_values = resolve_expressions(_input_values, global_vars, custom_funcs)        # Detect Iterable Inputs (Batches/Generators)
-        import types
         batch_input_name = None
         iterable_source = [_input_values] # Default: single item list
 
+        import types
+        # The Yield Rule: We only iterate if it's an explicit Stream (Generator)
+        # OR it's a manual array from the Registry (wrapped in Batch)
+        # Standard lists from return statements are treated as single values.
         for k, v in _input_values.items():
-            if isinstance(v, (list, types.GeneratorType)):
+            is_iter = isinstance(v, types.GeneratorType) or (hasattr(v, "__class__") and v.__class__.__name__ == "Batch")
+            if is_iter:
                 batch_input_name = k
                 iterable_source = v
                 break

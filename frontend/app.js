@@ -3771,10 +3771,32 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
                 <span style="font-size:14px">${inp.label || inp.name}</span>
             </label>`;
         } else if (inp.type === 'generator') {
-            const funcOpts = state.functions.map(f => 
-                `<option value="{{${f.name}()}}" ${`{{${f.name}()}}` === String(def) ? 'selected' : ''}>${f.name}</option>`
-            ).join('');
-            field = `<select id="${id}" class="inp"><option value="">-- Select Generator Function --</option>${funcOpts}</select>`;
+            const streams = state.functions.filter(f => f.is_generator);
+            const statics = state.functions.filter(f => !f.is_generator);
+            
+            const builtinOpts = `
+                <optgroup label="Built-in Streams">
+                    <option value="{{range(1, 10)}}">range(1, 10)</option>
+                    <option value="{{random_stream(10)}}">random_stream(10)</option>
+                </optgroup>`;
+
+            const streamOpts = streams.length ? `
+                <optgroup label="Custom Streams (📡)">
+                    ${streams.map(f => `<option value="{{${f.name}()}}" ${`{{${f.name}()}}` === String(def) ? 'selected' : ''}>${f.name}</option>`).join('')}
+                </optgroup>` : '';
+
+            const staticOpts = statics.length ? `
+                <optgroup label="Static Functions (📦)">
+                    ${statics.map(f => `<option value="{{${f.name}()}}" ${`{{${f.name}()}}` === String(def) ? 'selected' : ''}>${f.name}</option>`).join('')}
+                </optgroup>` : '';
+
+            field = `
+            <select id="${id}" class="inp">
+                <option value="">-- Select Source --</option>
+                ${builtinOpts}
+                ${streamOpts}
+                ${staticOpts}
+            </select>`;
         } else if (inp.type === 'list') {
             const varOpts = state.variables.filter(v => v.value_type === 'json').map(v => 
                 `<option value="{{${v.key}}}" ${`{{${v.key}}}` === String(def) ? 'selected' : ''}>[Var] ${v.key}</option>`
@@ -4439,6 +4461,8 @@ function renderFunctionsList() {
         { name: 'yesterday', desc: 'Yesterday\'s date', example: '{{yesterday}}' },
         { name: 'env', desc: 'Access an environment variable', example: '{{env("VAR")}}' },
         { name: 'random', desc: 'Random number between min/max', example: '{{random(1, 100)}}' },
+        { name: 'random_stream', desc: '📡 Generator: n random numbers', example: '{{random_stream(10, 1, 100)}}' },
+        { name: 'range', desc: '📡 Generator: numerical sequence', example: '{{range(1, 10)}}' },
         { name: 'uuid', desc: 'Generate a unique UUID v4', example: '{{uuid()}}' },
         { name: 'json', desc: 'Serialize object to JSON string', example: '{{json({"id": 1})}}' },
         { name: 'upper', desc: 'Convert string to UPPERCASE', example: '{{upper("hello")}}' },
@@ -4483,6 +4507,9 @@ function renderFunctionsList() {
                                 <div style="display:flex; align-items:center; gap:8px">
                                     <span style="font-size:18px; color:var(--success)">ƒ</span>
                                     <code class="var-key" style="font-size:14px">${f.name}</code>
+                                    <span class="status-badge ${f.is_generator ? 'badge-pending' : 'badge-success'}" style="font-size:9px; padding:1px 6px; letter-spacing:0.05em">
+                                        ${f.is_generator ? '📡 STREAM' : '📦 STATIC'}
+                                    </span>
                                 </div>
                                 <div class="ctx-subtext" style="margin-top:4px">${f.description || 'No description.'}</div>
                             </div>
@@ -4529,6 +4556,8 @@ function openContextDrawer(type, id) {
             { name: 'yesterday', desc: "Returns yesterday's date in **YYYY-MM-DD** format.", example: '{{yesterday}}' },
             { name: 'env', desc: 'Accesses an environment variable from the host system.', example: '{{env("DB_PASS")}}' },
             { name: 'random', desc: 'Generates a random integer between the provided min and max values (inclusive).', example: '{{random(1, 50)}}' },
+            { name: 'random_stream', desc: '📡 **Generator**: Returns a stream of `n` random numbers. Useful for stress-testing or batch generation.', example: '{{random_stream(10, 1, 100)}}' },
+            { name: 'range', desc: '📡 **Generator**: Returns a numerical sequence (start to stop). This is the primary way to trigger iterative batch runs.', example: '{{range(1, 10)}}' },
             { name: 'uuid', desc: 'Generates a unique version 4 UUID string.', example: '{{uuid()}}' },
             { name: 'json', desc: 'Converts a Python object into a JSON-formatted string.', example: '{{json({"key": "val"})}}' },
             { name: 'upper', desc: 'Transforms input text into all uppercase letters.', example: '{{upper("hi")}}' },

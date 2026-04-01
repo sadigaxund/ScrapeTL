@@ -90,6 +90,14 @@ def _ensure_schema_columns():
             conn.commit()
             print("[DB] Added is_readonly to global_variables")
 
+        # Check user_functions
+        res = conn.execute(text("PRAGMA table_info(user_functions)"))
+        cols = [r[1] for r in res]
+        if cols and "is_generator" not in cols:
+            conn.execute(text("ALTER TABLE user_functions ADD COLUMN is_generator BOOLEAN DEFAULT 0"))
+            conn.commit()
+            print("[DB] Added is_generator to user_functions")
+
 
 def _seed_defaults():
     """Seed default values into app_settings if they don't exist."""
