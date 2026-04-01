@@ -8,7 +8,7 @@
   <meta name="description" content="Manage, schedule, and monitor scrapers with integrations." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="/static/style.css?v=34" />
+  <link rel="stylesheet" href="/static/style.css?v=51" />
 </head>
 
 <body>
@@ -509,7 +509,7 @@
             <p style="color:var(--text-secondary);font-size:14px;margin-top:6px;">Shared values and dynamic expressions
               accessible by all scrapers.</p>
           </div>
-          <button class="btn btn-primary" onclick="openVarCreateModal()"
+          <button class="btn btn-primary" id="ctx-add-var-btn" onclick="openVarCreateModal()"
             style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Variable</button>
         </div>
 
@@ -715,7 +715,7 @@
       </div>
 
       <div class="builder-viewport" id="builder-viewport"
-        style="width:100%; height:100%; cursor:grab; overflow:hidden; position:relative;">
+        style="width:100%; height:100%; overflow:hidden; position:relative;">
         <div class="builder-canvas no-drag-transition" id="builder-canvas"
           style="width:8000px; height:8000px; background-image:radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px); background-size:30px 30px; position:absolute; top:0; left:0; transform-origin:0 0; transform:translate(-2000px, -2000px) scale(1);">
           <svg class="builder-svg-layer" id="builder-svg-layer">
@@ -729,9 +729,16 @@
 
       <!-- Builder Zoom HUD -->
       <div class="builder-zoom-hud" id="builder-zoom-hud"
-        style="position:fixed; bottom:30px; right:30px; z-index:1000; display:flex; align-items:center; gap:12px; padding:6px 12px; background:rgba(23,23,23,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:8px; backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:none;">
+        style="position:fixed; bottom:30px; right:30px; z-index:1000; display:flex; align-items:center; gap:8px; padding:6px 12px; background:rgba(23,23,23,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:8px; backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:none; transition: all 0.3s ease;">
         <span id="zoom-value"
           style="font-size:12px; font-weight:700; color:var(--text-secondary); min-width:35px; text-align:right;">100%</span>
+        
+        <div class="zoom-slider-container" style="width: 140px; margin: 0 8px; overflow: visible;">
+          <input type="range" id="zoom-slider" min="0" max="100" step="1" value="50" 
+            style="width: 140px;"
+            oninput="setZoom(sliderToZoom(this.value))" />
+        </div>
+
         <div style="width:1px; height:14px; background:rgba(255,255,255,0.1);"></div>
         <button class="btn btn-ghost" onclick="resetBuilderZoom()"
           style="padding:4px 8px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; pointer-events:auto;">Reset</button>
@@ -1524,10 +1531,10 @@
             Changes</button>
         </div>
       </div>
-    </div>
+        </div>
   </div>
 
-  <script src="/static/app.js?v=34"></script>
+  <script src="/static/app.js?v=51"></script>
   <!-- ── Save Flow Modal ─────────────────────────────── -->
   <div class="modal-overlay" id="save-flow-modal" style="display:none" onclick="closeSaveFlowModal(event)">
     <div class="modal-box" style="max-width:500px">
