@@ -827,12 +827,30 @@ function renderBuilderNodes() {
                 group.appendChild(label);
 
                 if (cfg.type === 'text') {
-                    const input = document.createElement('input');
-                    input.className = 'node-input';
-                    input.value = node.config[cfg.key] || '';
-                    input.placeholder = cfg.placeholder || '';
-                    input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
-                    group.appendChild(input);
+                    const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
+                    
+                    if (isJson) {
+                        const textarea = document.createElement('textarea');
+                        textarea.className = 'inline-json-editor';
+                        textarea.style.minHeight = '100px';
+                        textarea.style.marginTop = '8px';
+                        textarea.value = node.config[cfg.key] || '';
+                        textarea.placeholder = cfg.placeholder || '';
+                        textarea.oninput = (e) => {
+                            updateNodeConfig(node.id, cfg.key, e.target.value);
+                            validateInlineJson(e.target);
+                        };
+                        group.appendChild(textarea);
+                        // Trigger initial validation
+                        setTimeout(() => validateInlineJson(textarea), 0);
+                    } else {
+                        const input = document.createElement('input');
+                        input.className = 'node-input';
+                        input.value = node.config[cfg.key] || '';
+                        input.placeholder = cfg.placeholder || '';
+                        input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                        group.appendChild(input);
+                    }
                 } else if (cfg.type === 'select') {
                     const select = document.createElement('select');
                     select.className = 'node-select';
@@ -3752,6 +3770,20 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
                 <input type="checkbox" id="${id}" ${def ? 'checked' : ''} style="width:16px;height:16px">
                 <span style="font-size:14px">${inp.label || inp.name}</span>
             </label>`;
+        } else if (inp.type === 'generator') {
+            const funcOpts = state.functions.map(f => 
+                `<option value="{{${f.name}()}}" ${`{{${f.name}()}}` === String(def) ? 'selected' : ''}>${f.name}</option>`
+            ).join('');
+            field = `<select id="${id}" class="inp"><option value="">-- Select Generator Function --</option>${funcOpts}</select>`;
+        } else if (inp.type === 'list') {
+            const varOpts = state.variables.filter(v => v.value_type === 'json').map(v => 
+                `<option value="{{${v.key}}}" ${`{{${v.key}}}` === String(def) ? 'selected' : ''}>[Var] ${v.key}</option>`
+            ).join('');
+            const listId = `dl-${id}`;
+            field = `
+            <input type="text" id="${id}" data-ptype="list" class="inp" list="${listId}" value="${def}" placeholder='e.g. ["url1"] or {{var}}'>
+            <datalist id="${listId}">${varOpts}</datalist>
+            `;
         } else {
             const t = inp.type === 'number' ? 'number' : 'text';
             field = `<input type="${t}" id="${id}" class="inp" value="${def}" placeholder="${inp.label || inp.name}">`;
@@ -3781,6 +3813,14 @@ async function submitRunInputs() {
         const name = el.id.replace('ri-', '');
         if (el.type === 'checkbox') inputValues[name] = el.checked;
         else if (el.type === 'number') inputValues[name] = el.value !== '' ? Number(el.value) : null;
+        else if (el.dataset.ptype === 'list') {
+            const val = el.value.trim();
+            if (val.startsWith('[')) {
+                try { inputValues[name] = JSON.parse(val); } catch(e) { inputValues[name] = val; }
+            } else {
+                inputValues[name] = val;
+            }
+        }
         else inputValues[name] = el.value;
     });
 
@@ -4063,10 +4103,10 @@ function renderVariablesList() {
             return `
             <tr class="editing-row" style="background:rgba(99,102,241,0.03)">
                 <td>
-                    <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px">
+                    <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
                 </td>
                 <td>
-                    <select id="inline-var-type-${idx}" style="width:100%; height:34px;" onchange="state.variables[${idx}].value_type = this.value">
+                    <select id="inline-var-type-${idx}" style="width:100%; height:34px; font-size:12.5px; padding:0 8px" onchange="state.variables[${idx}].value_type = this.value; renderVariablesList()">
                         <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
                         <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
                         <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
@@ -4074,10 +4114,18 @@ function renderVariablesList() {
                     </select>
                 </td>
                 <td>
-                    <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." oninput="state.variables[${idx}].value = this.value" style="width:100%; height:34px">
+                    ${v.value_type === 'json' ? `
+                        <textarea id="inline-var-value-${idx}" 
+                            class="inline-json-editor"
+                            placeholder='["url1", "url2"]' 
+                            oninput="state.variables[${idx}].value = this.value; validateInlineJson(this)"
+                        >${v.value || ''}</textarea>
+                    ` : `
+                        <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." oninput="state.variables[${idx}].value = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
+                    `}
                 </td>
                 <td>
-                    <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Description..." oninput="state.variables[${idx}].description = this.value" style="width:100%; height:34px">
+                    <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Description..." oninput="state.variables[${idx}].description = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
                 </td>
                 <td style="text-align:right">
                     <div style="display:flex; justify-content:flex-end; gap:6px;">
@@ -4111,19 +4159,20 @@ function renderVariablesList() {
         </tr>`;
     }).join('');
 
-    list.innerHTML = `
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th style="width:200px">Key</th>
-                    <th style="width:100px">Type</th>
-                    <th>Value</th>
-                    <th>Description</th>
-                    <th style="width:150px; text-align:right">Actions</th>
-                </tr>
-            </thead>
-            <tbody>${tableRows}</tbody>
-        </table>`;
+    list.innerHTML = tableRows;
+}
+
+function validateInlineJson(el) {
+    if (!el.value.trim()) {
+        el.style.borderColor = '';
+        return;
+    }
+    try {
+        JSON.parse(el.value);
+        el.style.borderColor = 'var(--success)';
+    } catch (e) {
+        el.style.borderColor = 'var(--failure)';
+    }
 }
 
 async function stopScraperRun(taskId, btn) {
