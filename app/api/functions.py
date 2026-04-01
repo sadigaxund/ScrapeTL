@@ -28,6 +28,7 @@ class FunctionResponse(FunctionBase):
     name: str
     description: Optional[str]
     code: Optional[str]
+    is_generator: bool
     doc_md: Optional[str]
     created_at: datetime
     updated_at: datetime
@@ -45,10 +46,13 @@ def create_function(payload: FunctionCreate, db: Session = Depends(get_db)):
     """Create or overwrite a custom user function."""
     # Check for name collision
     existing = db.query(UserFunction).filter(UserFunction.name == payload.name).first()
+    is_gen = _detect_is_generator(payload.code)
+    
     if existing:
         # Overwrite if exists
         existing.description = payload.description
         existing.code = payload.code
+        existing.is_generator = is_gen
         existing.doc_md = payload.doc_md
         db.commit()
         db.refresh(existing)
@@ -58,6 +62,7 @@ def create_function(payload: FunctionCreate, db: Session = Depends(get_db)):
         name=payload.name,
         description=payload.description,
         code=payload.code,
+        is_generator=is_gen,
         doc_md=payload.doc_md
     )
     db.add(func)
@@ -83,6 +88,8 @@ def update_function(func_id: int, payload: FunctionUpdate, db: Session = Depends
         func.description = payload.description
     if payload.code is not None:
         func.code = payload.code
+        func.is_generator = _detect_is_generator(payload.code)
+        
     if payload.doc_md is not None:
         func.doc_md = payload.doc_md
         
@@ -100,3 +107,22 @@ def delete_function(func_id: int, db: Session = Depends(get_db)):
     db.delete(func)
     db.commit()
     return {"message": "Function deleted successfully."}
+
+def _detect_is_generator(code: str) -> bool:
+    """Simplified check: looks for the 'yield' keyword in the source code."""
+    if not code: return False
+    return "yield " in code or "yield\n" in code or "yield(" in code
+
+# Re-run detection for all functions (Migration)
+@router.post("/migrate_generators")
+def migrate_generators(db: Session = Depends(get_db)):
+    """Scans all existing functions to update the is_generator flag."""
+    funcs = db.query(UserFunction).all()
+    count = 0
+    for f in funcs:
+        is_gen = _detect_is_generator(f.code)
+        if f.is_generator != is_gen:
+            f.is_generator = is_gen
+            count += 1
+    db.commit()
+    return {"message": f"Updated {count} functions."}
