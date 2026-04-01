@@ -143,16 +143,24 @@ def process_catchup_queue():
 def enqueue_missed_runs(db, schedule, scraper_id: int):
     from app.models import ScrapeLog, TaskQueue
 
-    last_success = (
+    last_run = (
         db.query(ScrapeLog)
-        .filter(ScrapeLog.scraper_id == scraper_id, ScrapeLog.status == "success")
+        .filter(ScrapeLog.scraper_id == scraper_id)
+        .filter(ScrapeLog.schedule_id == schedule.id)
         .order_by(ScrapeLog.run_at.desc())
         .first()
     )
 
     app_tz = get_app_timezone()
     now_utc = datetime.utcnow()
-    since_utc = last_success.run_at if last_success else (now_utc - timedelta(days=7))
+    
+    # 24-hour expiration limit for missed catch-up tasks
+    cutoff_utc = now_utc - timedelta(hours=24)
+    since_utc = last_run.run_at if last_run else cutoff_utc
+    
+    # Ignore missed schedules older than our cutoff window
+    if since_utc < cutoff_utc:
+        since_utc = cutoff_utc
 
     since_local = pytz.utc.localize(since_utc).astimezone(app_tz)
     now_local   = pytz.utc.localize(now_utc).astimezone(app_tz)

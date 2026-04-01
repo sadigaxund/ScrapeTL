@@ -22,8 +22,8 @@ class BaseScraper:
     Override `inputs` with a list of parameter descriptor dicts. Each dict:
       {
         "name": "chapter",          # str — kwarg name passed to scrape()
-        "label": "Start Chapter",   # str — label shown in the UI form
-        "type": "number",           # "text" | "number" | "select" | "boolean"
+        "label": "Start Chapter",   # str — label shown in the UI
+        "type": "number",           # "text" | "number" | "select" | "boolean" | "list" | "generator"
         "default": 1,               # default value (any JSON-serialisable type)
         "options": [1, 2, 3],       # list of allowed values (only for "select")
         "required": False,          # bool — if True, form enforces a value

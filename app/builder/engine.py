@@ -35,6 +35,26 @@ class BuilderEngine:
             if src not in self.adj: self.adj[src] = []
             self.adj[src].append(tgt)
             self.in_degree[tgt] += 1
+            
+    def setup(self):
+        """Lifecycle hook called by Runner before batch execution to share browser context."""
+        try:
+            from playwright.sync_api import sync_playwright
+            self._p = sync_playwright().start()
+            self._browser = self._p.chromium.launch(headless=True)
+            self._page = self._browser.new_page()
+            self._page.on('dialog', lambda dialog: dialog.accept()) # Auto-accept alerts
+        except Exception as e:
+            print(f"[BuilderEngine] Playwright setup failed: {e}")
+
+    def teardown(self):
+        """Lifecycle hook called by Runner after batch execution."""
+        if hasattr(self, '_browser'):
+            try: self._browser.close()
+            except: pass
+        if hasattr(self, '_p'):
+            try: self._p.stop()
+            except: pass
 
     def execute(self, runtime_inputs: Dict[str, Any], stop_event: Optional[threading.Event] = None) -> List[Dict[str, Any]]:
         """
@@ -212,87 +232,64 @@ class BuilderEngine:
             
             actions = data.get("actions", [])
             auto_dismiss = data.get("auto_dismiss", [])
-            
-            # Legacy fallback
+                      # Legacy fallback
             wait_sel = data.get("wait_for_selector") or data.get("wait_for")
             if not actions and wait_sel:
                 actions = [{"type": "wait_for_selector", "value": wait_sel}]
-            
-            with sync_playwright() as p:
-                if cdp_url:
-                    browser = p.chromium.connect_over_cdp(cdp_url)
-                else:
-                    browser = p.chromium.launch(headless=headless)
-                
-                page = browser.new_page()
-                
-                # Setup Auto-Dismiss watchdog (Native Alert & DOM Banners)
-                page.on('dialog', lambda dialog: dialog.accept()) # Auto-accept alerts
-                
+
+            def _run_playwright_logic(page):
                 if auto_dismiss:
-                    # Inject an aggressive setInterval to click dismiss selectors in background
                     script = f"""
                     setInterval(() => {{
                         const selectors = {json.dumps(auto_dismiss)};
                         selectors.forEach(sel => {{
-                            try {{
-                                document.querySelectorAll(sel).forEach(el => {{
-                                    el.click();
-                                }});
-                            }} catch(e) {{}}
+                            try {{ document.querySelectorAll(sel).forEach(el => el.click()); }} catch(e) {{}}
                         }});
                     }}, 1500);
                     """
                     page.add_init_script(script)
-                
-                # Default behavior: Always navigate to the root URL first unless overriden
+
                 page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 
-                # Execute Action Macro
+                # Execute actions
                 for action in actions:
                     atype = action.get("type", "")
                     aval = str(action.get("value", ""))
                     
                     try:
-                        if atype == "click":
+                        if atype == "wait_for_selector" and aval:
+                            page.wait_for_selector(aval, timeout=10000)
+                        elif atype == "click" and aval:
                             page.locator(aval).first.click(timeout=10000)
-                        elif atype == "wait":
+                        elif atype == "wait_for_timeout" or atype == "wait":
                             page.wait_for_timeout(int(aval) if aval.isdigit() else 2000)
-                        elif atype == "wait_for_selector":
-                            page.wait_for_selector(aval, timeout=15000)
                         elif atype == "scroll_bottom":
-                            # Incremental scroll to trigger lazy loading
-                            page.evaluate("""
-                                async () => {
-                                    await new Promise((resolve) => {
-                                        let totalHeight = 0;
-                                        let distance = 600;
-                                        let timer = setInterval(() => {
-                                            let scrollHeight = document.body.scrollHeight;
-                                            window.scrollBy(0, distance);
-                                            totalHeight += distance;
-                                            if(totalHeight >= scrollHeight){
-                                                clearInterval(timer);
-                                                resolve();
-                                            }
-                                        }, 150);
-                                    });
-                                }
-                            """)
+                            page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                            page.wait_for_timeout(1000)
                         elif atype == "scroll_to":
                             page.locator(aval).first.scroll_into_view_if_needed(timeout=10000)
                         elif atype == "goto":
                             page.goto(aval, wait_until="domcontentloaded", timeout=30000)
                         elif atype == "type":
-                            # For POC: assume simple active typing or specific selector format if needed
                             page.keyboard.type(aval)
                     except Exception as e:
-                        print(f"[BuilderEngine] Warning: Action '{atype}' failed on value '{aval}': {e}")
-                        # Silent continue for POC to emulate resilience
-                        
-                content = page.content()
-                browser.close()
-                return content
+                        print(f"[BuilderEngine] Playwright Action Failed ({atype}): {e}")
+                
+                return page.content()
+
+            if hasattr(self, '_page'):
+                print("[BuilderEngine] Reusing shared Playwright session.")
+                return _run_playwright_logic(self._page)
+            else:
+                with sync_playwright() as p:
+                    if cdp_url:
+                        browser = p.chromium.connect_over_cdp(cdp_url)
+                    else:
+                        browser = p.chromium.launch(headless=headless)
+                    
+                    page = browser.new_page()
+                    page.on('dialog', lambda dialog: dialog.accept())
+                    return _run_playwright_logic(page)
 
         elif ntype == "action_bs4_select":
             html_input = data.get("html") or node_inputs.get("html")
