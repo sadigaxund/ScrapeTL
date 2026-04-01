@@ -3089,6 +3089,7 @@ input:checked+.slider {
   width: 100%;
   height: 100%;
   z-index: 5;
+  pointer-events: none;
 }
 
 .connection-path {
@@ -3098,17 +3099,16 @@ input:checked+.slider {
   stroke-linecap: round;
   transition: stroke 0.2s;
   cursor: pointer;
-  pointer-events: none;
-  /* Let hit-area handle events */
+  pointer-events: none; /* Let hit-area handle events */
   filter: drop-shadow(0 0 3px rgba(99, 102, 241, 0.4));
 }
 
 .connection-hit-area {
   fill: none;
   stroke: transparent;
-  stroke-width: 12;
+  stroke-width: 15;
   cursor: pointer;
-  pointer-events: stroke;
+  pointer-events: stroke !important;
 }
 
 .connection-path.selected {
@@ -3380,3 +3380,48 @@ input:checked+.slider {
   font-size: 11px;
   opacity: 0.5;
 }
+
+/* ── Zoom HUD & Slider ───────────────────────────── */
+.builder-zoom-hud {
+  pointer-events: auto !important;
+}
+
+.zoom-slider-container {
+  width: 140px;
+  margin: 0 8px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  height: 20px;
+}
+
+#zoom-slider {
+  width: 140px;
+  height: 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 2px;
+  outline: none;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+
+#zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  background: #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4), 0 0 20px rgba(99, 102, 241, 0.2);
+  transition: transform 0.2s, box-shadow 0.2s;
+  border: 2px solid var(--primary);
+}
+
+#zoom-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+  box-shadow: 0 0 15px rgba(255, 255, 255, 0.6), 0 0 25px var(--accent-glow);
+}
+

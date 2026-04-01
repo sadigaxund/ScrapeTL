@@ -346,8 +346,10 @@ function switchTab(name) {
     document.getElementById('page-subtitle').textContent = TAB_META[name].subtitle;
 
     const addBtn = document.getElementById('main-add-btn');
-    if (name === 'scrapers') { addBtn.style.display = 'inline-block'; }
-    else { addBtn.style.display = 'none'; }
+    if (addBtn) {
+        if (name === 'scrapers') { addBtn.style.display = 'inline-block'; }
+        else { addBtn.style.display = 'none'; }
+    }
 }
 
 document.querySelectorAll('.nav-item').forEach(btn => {
@@ -497,91 +499,80 @@ function initBuilder() {
     const canvas = document.getElementById('builder-canvas');
     if (!viewport || !canvas) return;
 
-    // Apply saved offset
-    canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px)`;
+    // Apply saved offset and initial zoom
+    canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+    updateZoomHUD();
 
     // Only attach events once
-    if (viewport.dataset.initialized) return;
-    viewport.dataset.initialized = "true";
+    if (canvas.dataset.initialized) return;
+    canvas.dataset.initialized = "true";
 
+    // Unified Interaction Handler on viewport to ensure NO CLICKS ARE MISSED
     viewport.addEventListener('mousedown', (e) => {
-        // Ignore if clicking a node or port
-        if (e.target.closest('.builder-node') || e.target.closest('.node-port')) return;
+        const node = e.target.closest('.builder-node');
+        const port = e.target.closest('.node-port');
+        
+        // A. If clicking a node or port, let their specific listeners handle it
+        if (node || port) {
+            console.log("[Builder] Clicked a node or port", node, port);
+            return;
+        }
 
-        if (state.builder.activeTool !== 'pan') return;
-        if (e.button !== 0) return; // Left click only (panning)
-        state.builder.isDragging = true;
-        state.builder.startX = e.clientX - state.builder.x;
-        state.builder.startY = e.clientY - state.builder.y;
-        viewport.style.cursor = 'grabbing';
-    });
+        // B. It's a workspace interaction (Background)
+        const vRect = viewport.getBoundingClientRect();
+        
+        // Calculate canvas-space coordinates from viewport-relative click
+        let x = (e.clientX - vRect.left - state.builder.x) / state.builder.zoom;
+        let y = (e.clientY - vRect.top - state.builder.y) / state.builder.zoom;
 
-    // Mouse interaction logic (Panning/Move) moved to consolidated global handlers at bottom of file
-
-    // Zooming logic (Ctrl + Scroll, Zoom-to-mouse)
-    viewport.addEventListener('wheel', (e) => {
-        if (e.ctrlKey) {
-            e.preventDefault();
-            const delta = -e.deltaY;
-            const factor = 1.1;
-            const oldZoom = state.builder.zoom;
-            let newZoom = delta > 0 ? oldZoom * factor : oldZoom / factor;
-
-            // Limit zoom
-            newZoom = Math.min(Math.max(newZoom, 0.2), 3.0);
-
-            if (newZoom !== oldZoom) {
-                // Calculate cursor position in unscaled canvas space
-                const mouseX = (e.clientX - state.builder.x) / oldZoom;
-                const mouseY = (e.clientY - state.builder.y) / oldZoom;
-
-                // Update zoom and shift origin so the cursor point stays fixed
-                state.builder.zoom = newZoom;
-                state.builder.x = e.clientX - mouseX * newZoom;
-                state.builder.y = e.clientY - mouseY * newZoom;
-
-                canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
-                updateZoomHUD();
+        // B1. Handle Panning
+        if (state.builder.activeTool === 'pan') {
+            if (e.button === 0) { // Left Click
+                state.builder.isDragging = true;
+                state.builder.startX = e.clientX - state.builder.x;
+                state.builder.startY = e.clientY - state.builder.y;
+                viewport.style.cursor = 'grabbing';
+                
+                deselectAll();
+                renderBuilderNodes();
+                renderConnections();
             }
-        }
-    }, { passive: false });
-
-    // Node Placement (Click on Viewport)
-    viewport.addEventListener('mousedown', (e) => {
-        if (state.builder.activeTool === 'pan') return;
-        if (e.target !== viewport && e.target !== canvas && e.target.id !== 'builder-svg-layer') return; // Only if clicking background
-
-        const rect = canvas.getBoundingClientRect();
-        let x = (e.clientX - rect.left) / state.builder.zoom;
-        let y = (e.clientY - rect.top) / state.builder.zoom;
-
-        if (state.builder.snapToGrid) {
-            x = Math.round(x / 30) * 30;
-            y = Math.round(y / 30) * 30;
+            return;
         }
 
-        const newNode = {
-            id: Date.now(),
-            x: x - 80,
-            y: y - 50,
-            type: state.builder.activeTool.type,
-            preset: state.builder.activeTool.preset,
-            config: {}
-        };
+        // B2. Handle Node Placement
+        if (typeof state.builder.activeTool === 'object' && state.builder.activeTool !== null) {
+            // Calculate target top-left while centering node on click
+            let tx = x - 80;
+            let ty = y - 50;
 
-        state.builder.nodes.push(newNode);
-        renderBuilderNodes();
+            if (state.builder.snapToGrid) {
+                tx = Math.round(tx / 30) * 30;
+                ty = Math.round(ty / 30) * 30;
+            }
 
-        // Auto-switch back to pan after placement
-        setBuilderTool('pan');
-    });
+            const newNode = {
+                id: Date.now(),
+                x: tx,
+                y: ty,
+                type: state.builder.activeTool.type,
+                preset: state.builder.activeTool.preset,
+                config: {}
+            };
 
-    // Deselect on background click
-    viewport.addEventListener('mousedown', (e) => {
-        if (e.target === viewport || e.target === canvas || e.target.id === 'builder-svg-layer') {
-            deselectAll();
-            renderBuilderNodes();
-            renderConnections();
+            state.builder.nodes.push(newNode);
+            toast(`Node Pushed: ${newNode.preset}`, 'success');
+            
+            try {
+                renderBuilderNodes();
+            } catch(err) {
+                console.error("[Builder] Render nodes crash after placement:", err);
+                toast(`Render Crash: ${err.message}`, 'error');
+            }
+            
+            // Auto-switch back to pan after placement
+            setBuilderTool('pan');
+            return;
         }
     });
 
@@ -626,18 +617,83 @@ function initBuilder() {
             document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
         }
     });
+
+    // Ctrl + Scroll Zooming
+    viewport.addEventListener('wheel', (e) => {
+        if (e.ctrlKey) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            const newZoom = Math.min(Math.max(state.builder.zoom * delta, 0.1), 3.0);
+            setZoom(newZoom, e.clientX, e.clientY);
+        }
+    }, { passive: false });
+
+    // Sync initial visuals
+    updateZoomHUD();
+}
+
+function sliderToZoom(val) {
+    val = parseFloat(val);
+    if (val <= 50) {
+        // 0 to 50 maps to 0.1 to 1.0 (10% to 100%)
+        return 0.1 + (val / 50) * 0.9;
+    } else {
+        // 50 to 100 maps to 1.0 to 3.0 (100% to 300%)
+        return 1.0 + ((val - 50) / 50) * 2.0;
+    }
+}
+
+function zoomToSlider(zoom) {
+    if (zoom <= 1.0) {
+        // 0.1 to 1.0 maps to 0 to 50
+        return ((zoom - 0.1) / 0.9) * 50;
+    } else {
+        // 1.0 to 3.0 maps to 50 to 100
+        return 50 + ((zoom - 1.0) / 2.0) * 50;
+    }
+}
+
+function setZoom(newZoom, mouseX = null, mouseY = null) {
+    const canvas = document.getElementById('builder-canvas');
+    const viewport = document.getElementById('builder-viewport');
+    if (!canvas || !viewport) return;
+
+    const oldZoom = state.builder.zoom;
+    
+    if (mouseX !== null && mouseY !== null) {
+        const vRect = viewport.getBoundingClientRect();
+        const mx = mouseX - vRect.left;
+        const my = mouseY - vRect.top;
+        const cx = (mx - state.builder.x) / oldZoom;
+        const cy = (my - state.builder.y) / oldZoom;
+
+        state.builder.x = mx - cx * newZoom;
+        state.builder.y = my - cy * newZoom;
+    }
+
+    state.builder.zoom = newZoom;
+    canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+    
+    updateZoomHUD();
+    renderConnections();
 }
 
 function updateZoomHUD() {
-    const el = document.getElementById('zoom-value');
-    if (el) el.textContent = `${Math.round(state.builder.zoom * 100)}%`;
+    const textEl = document.getElementById('zoom-value');
+    const sliderEl = document.getElementById('zoom-slider');
+    const bubbleEl = document.getElementById('zoom-bubble');
+    const percentage = Math.round(state.builder.zoom * 100);
+
+    if (textEl) textEl.textContent = `${percentage}%`;
+    if (sliderEl) {
+        sliderEl.value = zoomToSlider(state.builder.zoom);
+    }
 }
 
 function resetBuilderZoom() {
-    state.builder.zoom = 1.0;
-    const canvas = document.getElementById('builder-canvas');
-    if (canvas) canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(1)`;
-    updateZoomHUD();
+    state.builder.x = -2000;
+    state.builder.y = -2000;
+    setZoom(1.0);
 }
 
 function deselectAll() {
@@ -666,18 +722,25 @@ function deleteSelected() {
 }
 
 function setBuilderTool(tool) {
-    state.builder.activeTool = typeof tool === 'string' ? tool : state.builder.activeTool;
+    state.builder.activeTool = tool;
     document.querySelectorAll('.builder-tool-btn').forEach(b => b.classList.remove('active'));
 
-    // If it's just 'pan'
+    const viewport = document.getElementById('builder-viewport');
+    const canvas = document.getElementById('builder-canvas');
+    
+    // Highlight the correct tool button
     if (tool === 'pan') {
         const panBtn = document.getElementById('tool-pan');
         if (panBtn) panBtn.classList.add('active');
-    }
-
-    const viewport = document.getElementById('builder-viewport');
-    if (viewport) {
-        viewport.style.cursor = tool === 'pan' ? 'grab' : 'crosshair';
+        if (viewport) viewport.style.cursor = 'grab';
+        if (canvas) canvas.style.cursor = 'grab';
+    } else if (tool && typeof tool === 'object') {
+        const toolBtn = document.getElementById(`tool-${tool.type}`);
+        if (toolBtn) {
+            toolBtn.classList.add('active');
+        }
+        if (viewport) viewport.style.cursor = 'crosshair';
+        if (canvas) canvas.style.cursor = 'crosshair';
     }
 }
 
@@ -696,16 +759,8 @@ function toggleBuilderToolDropdown(e, toolId) {
 }
 
 function selectBuilderPreset(type, presetKey) {
-    state.builder.activeTool = { type, preset: presetKey };
-    document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
-    document.querySelectorAll('.builder-tool-btn').forEach(btn => btn.classList.remove('active'));
-
-    const toolBtn = document.getElementById(`tool-${type}`);
-    if (toolBtn) {
-        toolBtn.classList.add('active');
-    }
-
     setBuilderTool({ type, preset: presetKey });
+    document.querySelectorAll('.bt-dropdown').forEach(d => d.classList.remove('open'));
 }
 function renderBuilderNodes() {
     const container = document.getElementById('nodes-container');
@@ -715,159 +770,173 @@ function renderBuilderNodes() {
     container.innerHTML = '';
 
     state.builder.nodes.forEach(node => {
-        const preset = NODE_PRESETS[node.type][node.preset];
-        const el = document.createElement('div');
-        el.className = `builder-node builder-node--${node.type}`;
-        el.id = `node-${node.id}`;
-        el.style.left = `${node.x}px`;
-        el.style.top = `${node.y}px`;
+        try {
+            const nodeTypes = NODE_PRESETS[node.type];
+            if (!nodeTypes) {
+                console.warn(`[Builder] Missing node type: ${node.type}`, node);
+                return;
+            }
+            const preset = nodeTypes[node.preset];
+            if (!preset) {
+                console.warn(`[Builder] Missing node preset: ${node.preset} for type ${node.type}`, node);
+                return;
+            }
 
-        if (state.builder.selected && state.builder.selected.type === 'node' && state.builder.selected.id === node.id) {
-            el.classList.add('selected');
-        }
+            const el = document.createElement('div');
+            el.className = `builder-node builder-node--${node.type}`;
+            el.id = `node-${node.id}`;
+            el.style.left = `${node.x}px`;
+            el.style.top = `${node.y}px`;
 
-        el.addEventListener('mousedown', (e) => {
-            // Prevent if clicking port or interactive elements
-            if (e.target.classList.contains('node-port') || 
-                ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(e.target.tagName) || 
-                e.target.classList.contains('btn-node-action')) return;
+            if (state.builder.selected && state.builder.selected.type === 'node' && state.builder.selected.id === node.id) {
+                el.classList.add('selected');
+            }
 
-            e.stopPropagation();
-            
-            // Standardize coordinate math for canvas space
-            const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
-            const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
+            el.addEventListener('mousedown', (e) => {
+                // Prevent if clicking port or interactive elements
+                if (e.target.closest('.node-port') || 
+                    ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'LABEL'].includes(e.target.tagName) || 
+                    e.target.classList.contains('btn-node-action')) return;
 
-            state.builder.draggedNode = node;
-            state.builder.startX = mouseCanvasX - node.x;
-            state.builder.startY = mouseCanvasY - node.y;
+                e.stopPropagation();
+                
+                const viewport = document.getElementById('builder-viewport');
+                const vRect = viewport ? viewport.getBoundingClientRect() : { left: 0, top: 0 };
 
-            el.classList.add('dragging');
+                // Standardize coordinate math for canvas space
+                const mouseCanvasX = (e.clientX - vRect.left - state.builder.x) / state.builder.zoom;
+                const mouseCanvasY = (e.clientY - vRect.top - state.builder.y) / state.builder.zoom;
 
-            // Handle selection visually without full re-render during drag start for performance
-            deselectAll();
-            state.builder.selected = { type: 'node', id: node.id };
-            el.classList.add('selected');
-            
-            renderConnections();
-        });
+                state.builder.draggedNode = node;
+                state.builder.startX = mouseCanvasX - node.x;
+                state.builder.startY = mouseCanvasY - node.y;
 
-        // Ensure config exists
-        node.config = node.config || {};
+                el.classList.add('dragging');
 
-        // 1. Title
-        const title = document.createElement('div');
-        title.className = 'builder-node__title';
-        title.textContent = preset.title;
-        el.appendChild(title);
+                // Handle selection visually without full re-render during drag start for performance
+                deselectAll();
+                state.builder.selected = { type: 'node', id: node.id };
+                el.classList.add('selected');
+                
+                renderConnections();
+            });
 
-        // 2. Universal Node Label (NEW) - Processors only
-        if (node.type === 'node') {
-            const nameGroup = document.createElement('div');
-            nameGroup.className = 'node-label-container';
-            const nameInput = document.createElement('input');
-            nameInput.className = 'node-label-input';
-            nameInput.placeholder = 'Custom Label...';
-            nameInput.value = node.config.internalLabel || '';
-            nameInput.oninput = (e) => updateNodeConfig(node.id, 'internalLabel', e.target.value);
-            nameGroup.appendChild(nameInput);
-            el.appendChild(nameGroup);
-        }
+            // Ensure config exists
+            node.config = node.config || {};
 
-        // 3. Inputs (Left)
-        preset.inputs.forEach((label, idx) => {
-            const row = document.createElement('div');
-            row.className = 'node-port-row node-port-row--input';
+            // 1. Title
+            const title = document.createElement('div');
+            title.className = 'builder-node__title';
+            title.textContent = preset.title;
+            el.appendChild(title);
 
-            const port = document.createElement('div');
-            port.className = 'node-port node-port--input';
-            port.id = `node-${node.id}-input-${idx}`;
-            port.onmousedown = (e) => startConnection(e, node.id, 'input', idx);
+            // 2. Universal Node Label - Processors only (Type 'action')
+            if (node.type === 'action') {
+                const nameGroup = document.createElement('div');
+                nameGroup.className = 'node-label-container';
+                const nameInput = document.createElement('input');
+                nameInput.className = 'node-label-input';
+                nameInput.placeholder = 'Custom Label...';
+                nameInput.value = node.config.internalLabel || '';
+                nameInput.oninput = (e) => updateNodeConfig(node.id, 'internalLabel', e.target.value);
+                nameGroup.appendChild(nameInput);
+                el.appendChild(nameGroup);
+            }
 
-            const lbl = document.createElement('span');
-            lbl.className = 'node-port-label';
-            lbl.textContent = label;
+            // 3. Inputs (Left)
+            (preset.inputs || []).forEach((label, idx) => {
+                const row = document.createElement('div');
+                row.className = 'node-port-row node-port-row--input';
 
-            row.appendChild(port);
-            row.appendChild(lbl);
-            el.appendChild(row);
-        });
+                const port = document.createElement('div');
+                port.className = 'node-port node-port--input';
+                port.id = `node-${node.id}-input-${idx}`;
+                port.onmousedown = (e) => startConnection(e, node.id, 'input', idx);
 
-        // 4. Outputs (Right)
-        preset.outputs.forEach((label, idx) => {
-            const row = document.createElement('div');
-            row.className = 'node-port-row node-port-row--output';
+                const lbl = document.createElement('span');
+                lbl.className = 'node-port-label';
+                lbl.textContent = label;
 
-            const port = document.createElement('div');
-            port.className = 'node-port node-port--output';
-            port.id = `node-${node.id}-output-${idx}`;
-            port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
+                row.appendChild(port);
+                row.appendChild(lbl);
+                el.appendChild(row);
+            });
 
-            const lbl = document.createElement('span');
-            lbl.className = 'node-port-label';
-            lbl.textContent = label;
+            // 4. Outputs (Right)
+            (preset.outputs || []).forEach((label, idx) => {
+                const row = document.createElement('div');
+                row.className = 'node-port-row node-port-row--output';
 
-            row.appendChild(lbl);
-            row.appendChild(port);
-            el.appendChild(row);
-        });
+                const port = document.createElement('div');
+                port.className = 'node-port node-port--output';
+                port.id = `node-${node.id}-output-${idx}`;
+                port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
 
-        // 5. Configuration UI (Moved to bottom for stability)
-        if (preset.configs) {
-            const configContainer = document.createElement('div');
-            configContainer.className = 'node-config-container';
+                const lbl = document.createElement('span');
+                lbl.className = 'node-port-label';
+                lbl.textContent = label;
 
-            preset.configs.forEach(cfg => {
-                const group = document.createElement('div');
-                group.className = 'node-config-group';
+                row.appendChild(lbl);
+                row.appendChild(port);
+                el.appendChild(row);
+            });
 
-                const label = document.createElement('label');
-                label.className = 'node-config-label';
-                label.textContent = cfg.label;
-                group.appendChild(label);
+            // 5. Configuration UI (Moved to bottom for stability)
+            if (preset.configs) {
+                const configContainer = document.createElement('div');
+                configContainer.className = 'node-config-container';
 
-                if (cfg.type === 'text') {
-                    const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
-                    
-                    if (isJson) {
-                        const textarea = document.createElement('textarea');
-                        textarea.className = 'inline-json-editor';
-                        textarea.style.minHeight = '100px';
-                        textarea.style.marginTop = '8px';
-                        textarea.value = node.config[cfg.key] || '';
-                        textarea.placeholder = cfg.placeholder || '';
-                        textarea.oninput = (e) => {
-                            updateNodeConfig(node.id, cfg.key, e.target.value);
-                            validateInlineJson(e.target);
-                        };
-                        group.appendChild(textarea);
-                        // Trigger initial validation
-                        setTimeout(() => validateInlineJson(textarea), 0);
-                    } else {
+                preset.configs.forEach(cfg => {
+                    const group = document.createElement('div');
+                    group.className = 'node-config-group';
+
+                    const label = document.createElement('label');
+                    label.className = 'node-config-label';
+                    label.textContent = cfg.label;
+                    group.appendChild(label);
+
+                    if (cfg.type === 'text') {
+                        const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
+                        
+                        if (isJson) {
+                            const textarea = document.createElement('textarea');
+                            textarea.className = 'inline-json-editor';
+                            textarea.style.minHeight = '100px';
+                            textarea.style.marginTop = '8px';
+                            textarea.value = node.config[cfg.key] || '';
+                            textarea.placeholder = cfg.placeholder || '';
+                            textarea.oninput = (e) => {
+                                updateNodeConfig(node.id, cfg.key, e.target.value);
+                                validateInlineJson(e.target);
+                            };
+                            group.appendChild(textarea);
+                            // Trigger initial validation
+                            setTimeout(() => validateInlineJson(textarea), 0);
+                        } else {
+                            const input = document.createElement('input');
+                            input.className = 'node-input';
+                            input.value = node.config[cfg.key] || '';
+                            input.placeholder = cfg.placeholder || '';
+                            input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                            group.appendChild(input);
+                        }
+                    } else if (cfg.type === 'select') {
+                        const select = document.createElement('select');
+                        select.className = 'node-select';
+                        (cfg.options || []).forEach(opt => {
+                            const o = document.createElement('option');
+                            o.value = opt;
+                            o.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
+                            if ((node.config[cfg.key] || cfg.options[0]) === opt) o.selected = true;
+                            select.appendChild(o);
+                        });
+                        select.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                        group.appendChild(select);
+                    } else if (cfg.type === 'expression') {
+                        const row = document.createElement('div');
+                        row.className = 'node-config-row';
+
                         const input = document.createElement('input');
-                        input.className = 'node-input';
-                        input.value = node.config[cfg.key] || '';
-                        input.placeholder = cfg.placeholder || '';
-                        input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
-                        group.appendChild(input);
-                    }
-                } else if (cfg.type === 'select') {
-                    const select = document.createElement('select');
-                    select.className = 'node-select';
-                    cfg.options.forEach(opt => {
-                        const o = document.createElement('option');
-                        o.value = opt;
-                        o.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
-                        if ((node.config[cfg.key] || cfg.options[0]) === opt) o.selected = true;
-                        select.appendChild(o);
-                    });
-                    select.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
-                    group.appendChild(select);
-                } else if (cfg.type === 'expression') {
-                    const row = document.createElement('div');
-                    row.className = 'node-config-row';
-
-                    const input = document.createElement('input');
                     input.className = 'node-input';
                     input.style.flex = '1';
                     input.value = node.config[cfg.key] || '';
@@ -909,7 +978,10 @@ function renderBuilderNodes() {
             el.appendChild(configContainer);
         }
 
-        container.appendChild(el);
+            container.appendChild(el);
+        } catch (err) {
+            console.error("[Builder] Failed to render node:", node, err);
+        }
     });
 
     renderConnections();
@@ -918,7 +990,8 @@ function renderBuilderNodes() {
 // Global mousemove for canvas panning AND node dragging
 window.addEventListener('mousemove', (e) => {
     const canvas = document.getElementById('builder-canvas');
-    if (!canvas) return;
+    const viewport = document.getElementById('builder-viewport');
+    if (!canvas || !viewport) return;
 
     if (state.builder.isDragging) {
         state.builder.x = e.clientX - state.builder.startX;
@@ -926,9 +999,10 @@ window.addEventListener('mousemove', (e) => {
         canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
         renderConnections();
     } else if (state.builder.draggedNode) {
+        const vRect = viewport.getBoundingClientRect();
         // Mouse canvas-space position
-        const mouseCanvasX = (e.clientX - state.builder.x) / state.builder.zoom;
-        const mouseCanvasY = (e.clientY - state.builder.y) / state.builder.zoom;
+        const mouseCanvasX = (e.clientX - vRect.left - state.builder.x) / state.builder.zoom;
+        const mouseCanvasY = (e.clientY - vRect.top - state.builder.y) / state.builder.zoom;
 
         let nextX = mouseCanvasX - state.builder.startX;
         let nextY = mouseCanvasY - state.builder.startY;
@@ -1159,6 +1233,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             item.onclick = () => {
                 inputEl.value += `{{${n.config.name}}}`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
+                renderBuilderNodes();
+                renderConnections();
                 menu.remove();
             };
             menu.appendChild(item);
@@ -1176,6 +1252,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         item.onclick = () => {
             inputEl.value += `{{${v.key}}}`;
             updateNodeConfig(nodeId, configKey, inputEl.value);
+            renderBuilderNodes();
+            renderConnections();
             menu.remove();
         };
         menu.appendChild(item);
@@ -1190,6 +1268,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             item.onclick = () => {
                 inputEl.value += `${f.name}()`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
+                renderBuilderNodes();
+                renderConnections();
                 menu.remove();
             };
             menu.appendChild(item);
@@ -1218,6 +1298,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             item.onclick = () => {
                 inputEl.value += `${b.name}()`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
+                renderBuilderNodes();
+                renderConnections();
                 menu.remove();
             };
             menu.appendChild(item);
@@ -1356,6 +1438,7 @@ function renderConnections() {
 
     // Draw existing edges
     state.builder.edges.forEach((edge, index) => {
+        if (!edge || edge.from === undefined || edge.to === undefined) return;
         const fromPos = getPortPos(edge.from, 'output', edge.fromIdx);
         const toPos = getPortPos(edge.to, 'input', edge.toIdx);
 
@@ -1651,14 +1734,18 @@ async function editInBuilder(id) {
 
         // Hydrate state
         deselectAll();
-        state.builder.nodes = (flowData.nodes || []).map(node => {
+        const flowNodes = Array.isArray(flowData.nodes) ? flowData.nodes : [];
+        const flowEdges = Array.isArray(flowData.edges) ? flowData.edges : [];
+
+        state.builder.nodes = flowNodes.map(node => {
+            if (!node || typeof node !== 'object') return null;
             // Backward compatibility for nodes moved from Action to Source
-            if (node.type === 'action' && ['fetch_url', 'fetch_playwright'].includes(node.preset)) {
+            if (node.type === 'action' && node.preset && ['fetch_url', 'fetch_playwright'].includes(node.preset)) {
                 node.type = 'source';
             }
             return node;
-        });
-        state.builder.edges = flowData.edges || [];
+        }).filter(n => n !== null);
+        state.builder.edges = flowEdges.filter(e => e && typeof e === 'object');
 
         // Reset viewport for consistency
         state.builder.x = -2000;
@@ -1691,7 +1778,7 @@ async function editInBuilder(id) {
         toast(`Loaded "${s.name}" into Builder`, 'info');
     } catch (e) {
         console.error("[Builder] Load Error:", e);
-        toast('Failed to load flow data.', 'error');
+        toast(`Failed to load flow data: ${e.message}`, 'error');
     }
 }
 
@@ -3781,12 +3868,12 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
                 </optgroup>`;
 
             const streamOpts = streams.length ? `
-                <optgroup label="Custom Streams (📡)">
+                <optgroup label="Custom Generators (📡 GEN)">
                     ${streams.map(f => `<option value="{{${f.name}()}}" ${`{{${f.name}()}}` === String(def) ? 'selected' : ''}>${f.name}</option>`).join('')}
                 </optgroup>` : '';
 
             const staticOpts = statics.length ? `
-                <optgroup label="Static Functions (📦)">
+                <optgroup label="Static Values (📦 VAL)">
                     ${statics.map(f => `<option value="{{${f.name}()}}" ${`{{${f.name}()}}` === String(def) ? 'selected' : ''}>${f.name}</option>`).join('')}
                 </optgroup>` : '';
 
@@ -4090,6 +4177,12 @@ function handleWizThumbFile(input) {
 function switchContextTab(tab, btn) {
     document.getElementById('ctx-vars-view').style.display = tab === 'vars' ? 'block' : 'none';
     document.getElementById('ctx-funcs-view').style.display = tab === 'funcs' ? 'block' : 'none';
+    
+    // Toggle variable button visibility
+    const addVarBtn = document.getElementById('ctx-add-var-btn');
+    if (addVarBtn) {
+        addVarBtn.style.display = (tab === 'vars') ? 'block' : 'none';
+    }
 
     const nav = btn.parentElement;
     nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
@@ -4501,19 +4594,16 @@ function renderFunctionsList() {
                 ${state.functions.map(f => {
             const safeDesc = (f.description || '').replace(/'/g, "\\'");
             return `
-                    <div class="ctx-item-card">
-                        <div class="ctx-item-header" style="margin:0; display:flex; align-items:center;">
-                            <div style="flex:1; cursor:pointer;" onclick="openContextDrawer('func', ${f.id})">
+                    <div class="ctx-item-card" style="border-left: 4px solid ${f.is_generator ? 'var(--success)' : 'var(--text-muted)'}; background: ${f.is_generator ? 'rgba(34, 197, 94, 0.03)' : 'var(--bg-input)'}; padding: 12px 16px;">
+                        <div class="ctx-item-header" style="margin:0; display:flex; align-items:center; gap:16px;">
+                            <div style="flex:1; min-width:0; cursor:pointer;" onclick="openContextDrawer('func', ${f.id})">
                                 <div style="display:flex; align-items:center; gap:8px">
-                                    <span style="font-size:18px; color:var(--success)">ƒ</span>
-                                    <code class="var-key" style="font-size:14px">${f.name}</code>
-                                    <span class="status-badge ${f.is_generator ? 'badge-pending' : 'badge-success'}" style="font-size:9px; padding:1px 6px; letter-spacing:0.05em">
-                                        ${f.is_generator ? '📡 STREAM' : '📦 STATIC'}
-                                    </span>
+                                    <span style="font-size:18px; color:${f.is_generator ? 'var(--success)' : 'var(--text-secondary)'}">${f.is_generator ? '📡' : '📦'}</span>
+                                    <code class="var-key" style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">${f.name}</code>
                                 </div>
-                                <div class="ctx-subtext" style="margin-top:4px">${f.description || 'No description.'}</div>
+                                <div class="ctx-subtext" style="margin-top:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0.6;">${f.description || 'No description.'}</div>
                             </div>
-                            <div class="item-actions">
+                            <div class="item-actions" style="flex-shrink:0;">
                                 <div class="action-btn-group">
                                     <button class="icon-btn" onclick="openEditFuncModal(${f.id})" title="Edit Metadata & Docs">✏️</button>
                                     <button class="icon-btn" onclick="document.getElementById('func-name').value='${f.name}'; document.getElementById('func-code-file').click();" title="Replace Python Code">📄</button>
@@ -4547,7 +4637,7 @@ function openContextDrawer(type, id) {
         const f = state.functions.find(x => x.id === id);
         if (!f) return;
         title = f.name;
-        subtitle = 'Custom UDF';
+        subtitle = f.is_generator ? 'Custom Generator (📡 GEN)' : 'Static Value Function (📦 VAL)';
         md = f.doc_md || 'No documentation provided.';
     } else if (type === 'builtin') {
         const builtins = [
@@ -4567,7 +4657,7 @@ function openContextDrawer(type, id) {
         const b = builtins.find(x => x.name === id);
         if (!b) return;
         title = b.name;
-        subtitle = 'Built-in Function';
+        subtitle = b.name.includes('stream') || b.name === 'range' ? 'Built-in Generator' : 'Built-in Function';
         md = `${b.desc}\n\n**Example:**\n\`${b.example}\``;
     }
 
