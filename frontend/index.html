@@ -605,7 +605,7 @@
             </form>
           </div>
 
-          <div id="functions-list" class="item-list">
+          <div id="functions-list" class="item-list" style="margin-top:24px;">
             <!-- Built-in and Custom functions documentation -->
           </div>
         </div>
@@ -615,112 +615,112 @@
     <!-- ── Builder Tab ────────────────────────────── -->
     <section class="tab-panel" id="tab-builder"
       style="padding:0; height:calc(100vh - 110px); overflow:hidden; position:relative;">
-      <!-- Builder Context Indicator (Fixed & Premium) -->
-      <div id="builder-context-bar"
-        style="position:absolute; top:20px; left:20px; z-index:100; display:flex; align-items:center; gap:10px; padding:5px 14px 5px 10px; background:rgba(20,20,20,0.85); border:1px solid rgba(255,255,255,0.1); border-radius:30px; backdrop-filter:blur(12px); pointer-events:none; box-shadow:0 8px 32px rgba(0,0,0,0.4); transition:all 0.3s cubic-bezier(0.4, 0, 0.2, 1);">
+      
+      <!-- Unified Builder Top Bar (Pinned to workspace box) -->
+      <div class="builder-top-bar">
+        <!-- Status & Type -->
         <div id="builder-context-dot"
-          style="width:7px; height:7px; border-radius:50%; background:var(--primary); box-shadow:0 0 10px var(--primary); margin-right:2px;">
+          style="width:7px; height:7px; border-radius:50%; background:var(--primary); box-shadow:0 0 10px var(--primary); margin:0 4px;">
         </div>
         <span id="builder-context-type"
-          style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--primary); letter-spacing:0.08em; line-height:1;">NEW</span>
-        <div style="width:1px; height:12px; background:rgba(255,255,255,0.15); margin:0 2px;"></div>
+          style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--primary); letter-spacing:0.08em; line-height:1; margin-right:4px;">NEW</span>
+        
+        <div class="bar-divider"></div>
+        
+        <!-- Scraper Name -->
         <div id="builder-name-container" onclick="startRenameBuilderScraper()"
-          style="display:flex; align-items:center; gap:6px; cursor:pointer; pointer-events:auto;"
+          style="display:flex; align-items:center; gap:6px; cursor:pointer; pointer-events:auto; padding:0 8px;"
           title="Click to rename scraper">
           <span id="builder-current-name"
-            style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New
-            Scraper Flow</span>
-          <span id="builder-name-edit-icon" style="font-size:10px; opacity:0; transition:opacity 0.2s;">✏️</span>
+            style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New Scraper Flow</span>
         </div>
-      </div>
 
-      <!-- Builder Toolbar -->
-      <div class="builder-toolbar">
+        <div class="bar-divider"></div>
+
+        <!-- File Actions -->
         <button class="btn btn-ghost builder-tool-btn" onclick="createNewFlow()" title="New Flow (Clear Canvas)"
-          style="padding:0 12px; height:36px; display:flex; align-items:center; gap:6px;">
-          <span style="font-size:16px;">➕</span>
-          <span
-            style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.05em; opacity:0.8;">New</span>
+          style="padding:0 10px; height:28px;">New</button>
+        <button class="btn btn-primary builder-tool-btn" onclick="openSaveFlowModal()"
+          style="padding:0 12px; height:28px; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 10px rgba(16,185,129,0.2);">
+          Save
         </button>
 
-        <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
+        <div class="bar-divider"></div>
 
-        <!-- Input Menu -->
+        <!-- Node Library -->
         <div class="bt-dropdown" id="dropdown-input">
           <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'input')"
             id="tool-input">
-            <span>📐</span> Input <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+            Input <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">⚡ External Parameter</button>
-            <button class="menu-item" onclick="selectBuilderPreset('input', 'expression')">📦 Expression</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">External Parameter</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'expression')">Expression</button>
           </div>
         </div>
 
         <div class="bt-dropdown" id="dropdown-source">
           <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'source')"
             id="tool-source">
-            <span>🌐</span> Source <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+            Source <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_url')">🌐 Fetch HTML</button>
-            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">🎭 Playwright
-              Fetch</button>
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_url')">Fetch HTML</button>
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">Playwright Fetch</button>
           </div>
         </div>
 
         <div class="bt-dropdown" id="dropdown-action">
           <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'action')"
             id="tool-action">
-            <span>⚙️</span> Action <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+            Action <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'bs4_select')">🥣 BeautifulSoup
-              Selector</button>
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'html_children')">🌿 HTML Children</button>
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'regex_extract')">🔍 Regex
-              Extraction</button>
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'text_transform')">📝 Text
-              Transform</button>
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'type_convert')">🔢 Type Converter</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'bs4_select')">BeautifulSoup Selector</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'html_children')">HTML Children</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'regex_extract')">Regex Extraction</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'text_transform')">Text Transform</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'type_convert')">Type Converter</button>
+          </div>
+        </div>
+
+        <div class="bt-dropdown" id="dropdown-logic">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'logic')"
+            id="tool-logic"
+            style="border-color:rgba(168, 85, 247, 0.4); color:#a855f7;">
+            Logic <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
+          </button>
+          <div class="bt-menu">
+            <button class="menu-item" onclick="selectBuilderPreset('logic', 'logic_gate')">Logical Gate</button>
+            <button class="menu-item" onclick="selectBuilderPreset('logic', 'comparison')">Comparison</button>
+            <button class="menu-item" onclick="selectBuilderPreset('logic', 'string_match')">String Match</button>
+            <button class="menu-item" onclick="selectBuilderPreset('logic', 'status_check')">Status Check</button>
+            <button class="menu-item" onclick="selectBuilderPreset('logic', 'custom_logic')">Custom Logic</button>
           </div>
         </div>
 
         <div class="bt-dropdown" id="dropdown-sink">
           <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'sink')"
             id="tool-sink">
-            <span>🏁</span> Sink <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
+            Sink <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('sink', 'system_output')">🏁 System Output</button>
-            <button class="menu-item" onclick="selectBuilderPreset('sink', 'context')">🧩 Context Registry</button>
-            <button class="menu-item" onclick="selectBuilderPreset('sink', 'debug')">🐛 Debug Sink</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'system_output')">System Output</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'context')">Context Registry</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'debug')">Debug Sink</button>
           </div>
         </div>
 
-        <!-- Logic Menu -->
-        <div class="bt-dropdown" id="dropdown-logic">
-          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'logic')"
-            id="tool-logic"
-            style="border-color:rgba(34,197,94,0.3); color:#4ade80;">
-            <span>🔀</span> Logic <small style="margin-left:4px; opacity:0.5; font-size:10px">▼</small>
-          </button>
-          <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('logic', 'conditional')">🔀 Conditional Branch</button>
-          </div>
-        </div>
+        <div class="bar-divider"></div>
 
-        <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
-
-        <button class="btn btn-primary" onclick="openSaveFlowModal()"
-          style="height:36px; padding:0 16px; font-size:12px; font-weight:700; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 15px rgba(16,185,129,0.3);">
-          💾 Save Flow
+        <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderFullscreen()" id="toggle-fs-btn" 
+          title="Focus Mode (Maximize Workspace)" style="padding:0 10px; height:28px;">
+          <span style="font-size:15px; opacity:0.8;">⛶</span>
         </button>
 
-        <div style="width:1px; background:rgba(255,255,255,0.1); margin:4px 0;"></div>
-
+        <!-- Viewport Controls -->
         <label
-          style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; font-weight:600; color:var(--text-secondary); padding:0 8px;">
+          style="display:flex; align-items:center; gap:6px; cursor:pointer; font-size:10px; font-weight:700; color:var(--text-secondary); padding:0 8px; text-transform:uppercase; letter-spacing:0.04em;">
           <input type="checkbox" id="builder-snap" checked onchange="state.builder.snapToGrid = this.checked" />
           Snap
         </label>
