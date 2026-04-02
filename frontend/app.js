@@ -554,7 +554,7 @@ function parseFuncArgs(code, funcName) {
     const match = code.match(defRegex);
     if (match && match[1]) {
         args = match[1].split(',')
-            .map(a => a.split(':')[0].split('=')[0].trim()) // Strip hints and defaults
+            .map(a => a.trim().split(/[:=]/)[0].trim()) // Strictly capture only the identifier
             .filter(a => a && a !== 'self' && a !== 'cls');
     }
     return args;
@@ -562,26 +562,111 @@ function parseFuncArgs(code, funcName) {
 
 function discoverDynamicPorts(nodeId) {
     const node = state.builder.nodes.find(n => n.id === nodeId);
-    if (!node || node.type !== 'logic' || node.preset !== 'custom_logic') return;
-    
-    if (node.config.mode === 'custom' && node.config.custom_func) {
+    if (!node) return;
+
+    // Detect function expression based on node preset
+    let funcExpr = null;
+    if (node.preset === 'custom_logic') {
+        funcExpr = node.config.custom_func;
+    } else if (node.preset === 'expression') {
+        funcExpr = node.config.value;
+    }
+
+    if (funcExpr) {
         // Extract function name from {{my_func(...)}} or just my_func
-        let funcName = node.config.custom_func.replace(/[{}]/g, '').split('(')[0].trim();
+        let funcName = funcExpr.replace(/[{}]/g, '').split('(')[0].trim();
         const f = state.functions.find(x => x.name === funcName);
+        
         if (f) {
-            const args = parseFuncArgs(f.code, f.name);
+            let args = parseFuncArgs(f.code, f.name);
+            
+            // Critical Sync: Always sanitize immediately to prevent 'dirty' state
+            args = args.map(a => a.split(/[:=]/)[0].trim());
+
             if (JSON.stringify(node.dynamic_ports) !== JSON.stringify(args)) {
                 node.dynamic_ports = args;
                 console.log(`[Builder] Discovered dynamic ports for ${nodeId}:`, args);
                 renderBuilderNodes();
                 renderConnections();
             }
+            return; // Exit early if we found a valid function
         }
-    } else if (node.dynamic_ports) {
+    }
+
+    // If we reach here, no valid function with args was detected -> Cleanup existing ports
+    if (node.dynamic_ports && node.dynamic_ports.length > 0) {
         delete node.dynamic_ports;
+        console.log(`[Builder] Cleared dynamic ports for ${nodeId}`);
         renderBuilderNodes();
         renderConnections();
     }
+}
+
+/**
+ * 🧹 Project Migration / Sanitization
+ * Retroactively cleans up 'dirty' port handles and edge metadata (legacy type hints)
+ */
+function sanitizeBuilderState() {
+    if (!state.builder || !state.builder.nodes) return;
+    
+    let changed = false;
+    
+    // 1. Clean dynamic_ports on nodes
+    state.builder.nodes.forEach(node => {
+        if (node.dynamic_ports && node.dynamic_ports.length > 0) {
+            const clean = node.dynamic_ports.map(p => p.split(/[:=]/)[0].trim());
+            if (JSON.stringify(clean) !== JSON.stringify(node.dynamic_ports)) {
+                node.dynamic_ports = clean;
+                changed = true;
+            }
+        }
+    });
+    
+    // 2. Clean targetHandle on edges
+    state.builder.edges.forEach(edge => {
+        if (edge.targetHandle && edge.targetHandle.includes(':') || edge.targetHandle && edge.targetHandle.includes(' ')) {
+            const clean = edge.targetHandle.split(/[:=]/)[0].trim();
+            if (clean !== edge.targetHandle) {
+                edge.targetHandle = clean;
+                changed = true;
+            }
+        }
+    });
+
+    if (changed) {
+        console.log("[Builder] Sanitized legacy state (stripped type hints from ports/edges)");
+        renderBuilderNodes();
+        renderConnections();
+    }
+}
+
+/**
+ * 💡 Auto-Injection Helper
+ * Replaces the N-th argument in an expression with the given variable name.
+ */
+function injectVariableIntoExpression(expr, portName, portIdx) {
+    if (!expr) return expr;
+
+    // Detect standard {{func(arg1, arg2)}} pattern
+    const regex = /({{[a-zA-Z0-9_]+\()([^)]*)(\)}})/;
+    const match = expr.match(regex);
+    if (!match) return expr;
+
+    const prefix = match[1]; // {{func(
+    const argsStr = match[2]; // a, b
+    const suffix = match[3]; // )}}
+    
+    let args = argsStr.split(',').map(a => a.trim());
+    
+    // Inject port name as the variable instead of a literal
+    if (portIdx < args.length) {
+        args[portIdx] = portName;
+    } else {
+        // Fallback for custom logic growth
+        args[portIdx] = portName;
+    }
+    
+    return `${prefix}${args.join(', ')}${suffix}`;
 }
 
 /* ── Conditional Node Helpers ───────────────────────── */
@@ -1076,19 +1161,17 @@ function renderBuilderNodes() {
 
             // 3. Inputs (Left)
             let nodeInputs = [];
-            if (node.preset === 'conditional') {
+            if (node.dynamic_ports && node.dynamic_ports.length > 0) {
+                nodeInputs = node.dynamic_ports;
+            } else if (node.preset === 'conditional') {
                 const mode = node.config.mode || 'logical';
-                if (mode === 'custom' && node.dynamic_ports) {
-                    nodeInputs = node.dynamic_ports;
-                } else if (mode === 'logical') {
+                if (mode === 'logical') {
                     const count = Number(node.config.logicalInputs || 2);
                     for (let i = 1; i <= count; i++) nodeInputs.push(`IN ${i}`);
-                } else if (['unary', 'string'].includes(mode)) {
-                    nodeInputs = node.dynamic_ports;
                 } else if (node.preset === 'comparison') {
                     nodeInputs = ['Input A', 'Input B'];
                 } else if (node.preset === 'status_check' || node.preset === 'string_match') {
-                    nodeInputs = [preset.inputs[0]]; // Single input
+                    nodeInputs = [preset.inputs[0]];
                 } else {
                     nodeInputs = ['Input A', 'Input B'];
                 }
@@ -1106,12 +1189,11 @@ function renderBuilderNodes() {
                 
                 // Variadic/Dynamic handle mapping
                 let handle = null;
-                if (node.type === 'logic') {
-                    if (node.preset === 'custom_logic' && node.dynamic_ports) {
-                        handle = label;
-                    } else if (node.preset === 'logic_gate') {
-                        handle = `input_${idx}`; // Systematic for N-inputs
-                    }
+                if (node.dynamic_ports) {
+                    handle = node.dynamic_ports[idx];
+                    port.dataset.namedHandle = handle; // Store for drop-detection
+                } else if (node.preset === 'logic_gate') {
+                    handle = `input_${idx}`;
                 }
                 port.onmousedown = (e) => startConnection(e, node.id, 'input', idx, handle);
 
@@ -1337,7 +1419,7 @@ function updateNodeConfig(nodeId, key, value) {
         node.config[key] = value;
         
         // Semantic Contract: Trigger port discovery if relevant fields changed
-        if (key === 'mode' || key === 'custom_func') {
+        if (key === 'mode' || key === 'custom_func' || key === 'value') {
             discoverDynamicPorts(nodeId);
         }
     }
@@ -1759,6 +1841,9 @@ function startConnection(e, fromId, portType, portIdx) {
                 );
 
                 if (!exists && outNodeId !== inNodeId) {
+                    // Detect target handle (argument name) from DOM if it was a drop-onto-named-port
+                    const targetedHandle = targetPort.dataset.namedHandle || conn.targetHandle;
+
                     // For conditional nodes, tag the edge with its branch handle
                     const srcNode = state.builder.nodes.find(n => n.id === outNodeId);
                     let sourceHandle = undefined;
@@ -1766,11 +1851,24 @@ function startConnection(e, fromId, portType, portIdx) {
                     if (srcNode && srcNode.type === 'logic') {
                         sourceHandle = outPortIdx === 0 ? 'true' : 'false';
                     }
+
                     const edge = { from: outNodeId, fromIdx: outPortIdx, to: inNodeId, toIdx: inPortIdx };
                     if (sourceHandle !== undefined) edge.sourceHandle = sourceHandle;
-                    if (conn.targetHandle) edge.targetHandle = conn.targetHandle;
+                    if (targetedHandle) edge.targetHandle = targetedHandle;
+                    
                     state.builder.edges.push(edge);
                     toast('Connection created', 'success');
+
+                    // 💡 AUTO-INJECTION: If wiring TO an Expression node's named port, update its text value
+                    const destNode = state.builder.nodes.find(n => n.id === inNodeId);
+                    if (destNode && destNode.preset === 'expression' && targetedHandle) {
+                        const newVal = injectVariableIntoExpression(destNode.config.value, targetedHandle, inPortIdx);
+                        if (newVal !== destNode.config.value) {
+                            destNode.config.value = newVal;
+                            console.log(`[Builder] Auto-injected variable '${targetedHandle}' into Expression node`);
+                            renderBuilderNodes(); // Re-render to show updated string in text field
+                        }
+                    }
                 }
             }
         }
@@ -2158,6 +2256,12 @@ async function editInBuilder(id) {
             }
         }, 80);
 
+        // Force re-validation of dynamic ports for loaded flows
+        state.builder.nodes.forEach(n => discoverDynamicPorts(n.id));
+        
+        // Final sanity check for legacy string artifacts
+        sanitizeBuilderState();
+        
         toast(`Loaded "${s.name}" into Builder`, 'info');
     } catch (e) {
         console.error("[Builder] Load Error:", e);

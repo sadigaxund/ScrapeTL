@@ -5,6 +5,12 @@ from datetime import datetime, timedelta
 
 from app.models import UserFunction
 
+def _detect_func_name(code):
+    """Extracts the first 'def name(' identifier from a code block."""
+    if not code: return None
+    match = re.search(r"def\s+([a-zA-Z0-9_]+)\s*\(", code)
+    return match.group(1) if match else None
+
 def resolve_expressions(payload, context_vars, custom_funcs=None):
     """
     Resolves {{expression}} patterns in a string or nested JSON object.
@@ -42,14 +48,37 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
         "false": False,
     }
     
-    # 2. Inject static variables
-    ns.update(context_vars)
+    # 2. Inject static variables with best-effort numeric casting
+    for k, v in context_vars.items():
+        if isinstance(v, str):
+            # Try to cast to float/int if it looks numeric
+            try:
+                if '.' in v: ns[k] = float(v)
+                else: ns[k] = int(v)
+            except: ns[k] = v
+        else:
+            ns[k] = v
 
-    # 3. Compile and inject custom UDFs
     if custom_funcs:
         for fname, fcode in custom_funcs.items():
             try:
-                exec(fcode, ns)
+                # Isolated namespace per-UDF prevents cross-contamination
+                func_ns = {"__builtins__": __builtins__}
+                exec(fcode, func_ns)
+
+                # Extract all callables defined in this code block
+                new_funcs = {k: v for k, v in func_ns.items()
+                             if callable(v) and not k.startswith("_")}
+
+                # Register them into the main namespace by their def-name
+                ns.update(new_funcs)
+
+                # Also register under the registry name if it differs
+                if fname not in ns and new_funcs:
+                    primary_func = list(new_funcs.values())[0]
+                    ns[fname] = primary_func
+                    print(f"[Expressions] Aliased UDF '{fname}' -> '{list(new_funcs.keys())[0]}'")
+
             except Exception as e:
                 print(f"[Expressions] Error compiling UDF '{fname}': {e}")
 
@@ -77,7 +106,7 @@ def _resolve_string(text, ns):
         except Exception as e:
             if expr in ns: return ns[expr]
             print(f"[Expressions] Direct eval failed for '{expr}': {e}")
-            # Fall through to standard substitution if direct eval fails
+            return f"[Error: {str(e)}]"
 
     def replace(match):
         expr = match.group(1).strip()
@@ -95,7 +124,15 @@ def _resolve_string(text, ns):
                 if isinstance(val, (dict, list)):
                     return json.dumps(val)
                 return str(val)
-            print(f"[Expressions] Eval failed for '{expr}': {e}")
-            return match.group(0)
+            
+            # Help user debug by checking for name existence
+            suggestion = ""
+            if fname_match := re.match(r"([a-zA-Z0-9_]+)\(", expr):
+                name = fname_match.group(1)
+                if name not in ns:
+                    suggestion = f" (Function '{name}' not found in Registry or Built-ins)"
+            
+            print(f"[Expressions] Eval failed for '{expr}': {e}{suggestion}")
+            return f"[Error: {str(e)}]"
 
     return re.sub(pattern, replace, text)

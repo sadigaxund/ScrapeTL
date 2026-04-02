@@ -82,6 +82,11 @@ class BuilderEngine:
 
             try:
                 res = self._execute_node(node, runtime_inputs)
+                
+                # Global check: If a node returns an error string, escalate it as a failure
+                if isinstance(res, str) and res.startswith("[Error: "):
+                    raise ValueError(f"Node execution failed: {res[8:-1]}")
+
                 self.results_cache[current_id] = res
                 print(f"[BuilderEngine] Ran node {current_id} ({node['type']}) -> result type: {type(res).__name__}")
 
@@ -181,8 +186,11 @@ class BuilderEngine:
         elif ntype == "input_expression":
             expr = (data.get("value") or data.get("expression", "")).strip()
             context = {**self.global_vars, **node_inputs}
-            print(f"[BuilderEngine] Resolving expression: '{expr}'")
-            return resolve_expressions(expr, context, custom_funcs=self.custom_funcs)
+            print(f"[BuilderEngine] Resolving expression: '{expr}' | context keys: {list(context.keys())}")
+            res = resolve_expressions(expr, context, custom_funcs=self.custom_funcs)
+            if isinstance(res, str) and res.startswith("[Error: "):
+                raise ValueError(f"Expression evaluation failed: {res[8:-1]}")
+            return res
 
         # ── Sources ──────────────────────────────────────────────────────
         elif ntype == "action_fetch_url":
@@ -571,7 +579,7 @@ class BuilderEngine:
             if isinstance(sink_data, dict):
                 label = sink_data.get("label") or sink_data.get("internalLabel")
             if not label:
-                label = str(node.get("config", {}).get("label") or "result")
+                label = str(node.get("config", {}).get("label") or "Results")
 
             if isinstance(sink_data, list):
                 return [(d if isinstance(d, dict) else {label: str(d)}) for d in sink_data]
