@@ -175,6 +175,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                     except Exception as exc:
                         error_msg = str(exc)
                         if attempt < max_retries:
+                            retry_count += 1
                             wait = backoff_seconds * (2 ** attempt)
                             print(f"[Runner] ⚠️ Iteration failed: {error_msg}. Retrying in {wait:.0f}s…")
                             if stop_event and stop_event.wait(timeout=wait):
@@ -184,6 +185,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                         else:
                             print(f"[Runner] ❌ Iteration failed after {attempt+1} attempts: {error_msg}")
                             attempt_status = "failure"
+                            status = "failure"
 
                 if attempt_status == "failure" and not is_streaming:
                     # In a static batch, fail the whole batch
@@ -217,7 +219,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                     db.add(chunk_log)
                     db.commit()
 
-            if status not in ("cancelled", "skipped"):
+            if status not in ("cancelled", "skipped", "failure"):
                 status = "success"
 
         except Exception as exc:
