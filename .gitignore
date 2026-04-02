@@ -1,4 +1,6 @@
 # Custom ignores
+.cursorrules
+*.bak
 *.db
 data/
 tmp/
