@@ -17,8 +17,8 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 31. ability to Select which fields to send to integrations.
 37. add validation
 33. scraper connected dashboard
-35. add an external api access to run or overall control the scraper like (1) start (2) stop (3) create/delete/pause schedule (4) list all schedules/scrapers/integrations
-(5) get status of each scraper/schedule/integration (6) and etc...
+35. add an external api access to run or overall control the scraper like (1) start (2) stop (3) create/delete/pause schedule (4) list all schedules/scrapers/integrations (5) get status of each scraper/schedule/integration (6) and etc...
+36. add schema to the context registry
 
 
 28. add return types to the functions [TEST]

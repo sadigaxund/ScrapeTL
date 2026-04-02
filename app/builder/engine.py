@@ -101,7 +101,7 @@ class BuilderEngine:
             for neighbor in self.adj.get(current_id, []):
                 node_type = self._get_full_type(node)
 
-                if node_type == "logic_conditional":
+                if node_type in ["logic_conditional", "logic_logic_gate", "logic_comparison", "logic_string_match", "logic_status_check", "logic_custom_logic"]:
                     # Find the specific edge(s) from current to this neighbor
                     matching_edges = [
                         e for e in self.edges
@@ -400,15 +400,19 @@ class BuilderEngine:
             return results
 
         # ── Conditional Logic ─────────────────────────────────────────────
-        elif ntype == "logic_conditional":
+        elif ntype in ["logic_conditional", "logic_logic_gate", "logic_comparison", "logic_string_match", "logic_status_check", "logic_custom_logic"]:
             mode = data.get("mode", "logical")
             operation = data.get("operation", "AND")
 
-            # Collect all connected inputs
-            input_vals = list(node_inputs.values())
+            # Collect all connected inputs, ensuring sorted order for binary/unary fallback
+            sorted_handles = sorted(node_inputs.keys(), key=lambda x: int(x.split('_')[1]) if '_' in x and x.split('_')[1].isdigit() else 0)
+            input_vals = [node_inputs[h] for h in sorted_handles]
+            
             a = input_vals[0] if len(input_vals) > 0 else None
-            b = input_vals[1] if len(input_vals) > 1 else None
-
+            # For non-indexed handles (custom mode), node_inputs contains named args
+            if mode == "custom":
+                a = node_inputs.get("input_a", a)
+            
             compare_val = data.get("compare_value", "")
 
             def _is_truthy(v):
@@ -416,7 +420,7 @@ class BuilderEngine:
                 if v is None: return False
                 if isinstance(v, bool): return v
                 if isinstance(v, (int, float)): return v != 0
-                if isinstance(v, str): return v.strip() not in ("", "false", "0", "null", "none")
+                if isinstance(v, str): return v.strip().lower() not in ("", "false", "0", "null", "none")
                 if isinstance(v, (list, dict)): return len(v) > 0
                 return bool(v)
 

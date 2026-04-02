@@ -101,8 +101,8 @@ async function apiFetch(url, options = {}) {
 function toast(msg, type = 'info') {
     const el = document.createElement('div');
     el.className = `toast toast-${type}`;
-    const icon = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
-    el.textContent = `${icon}  ${msg}`;
+    const icon = '';
+    el.textContent = `${msg}`;
     document.getElementById('toast-container').appendChild(el);
     setTimeout(() => el.remove(), 4000);
 }
@@ -168,18 +168,18 @@ function formatRelativeDate(isoStr) {
 function statusBadge(status) {
     if (!status) return `<span class="status-badge badge-pending">• UNKNOWN</span>`;
     const map = {
-        success: ['✅', 'success'],
-        failure: ['❌', 'failure'],
-        pending: ['⏳', 'pending'],
-        running: ['⚡', 'running'],
-        done: ['✅', 'done'],
-        failed: ['❌', 'failed'],
-        manual: ['🖱️', 'manual'],
-        catchup: ['⚠️', 'catchup'],
-        scheduler: ['🕐', 'scheduler'],
-        skipped: ['⏭', 'skipped'],
-        scheduled: ['🗓️', 'pending'],
-        cancelled: ['🛑', 'failure'],
+        success: ['•', 'success'],
+        failure: ['•', 'failure'],
+        pending: ['•', 'pending'],
+        running: ['•', 'running'],
+        done: ['•', 'done'],
+        failed: ['•', 'failed'],
+        manual: ['•', 'manual'],
+        catchup: ['•', 'catchup'],
+        scheduler: ['•', 'scheduler'],
+        skipped: ['•', 'skipped'],
+        scheduled: ['•', 'pending'],
+        cancelled: ['•', 'failure'],
     };
     const [icon, cls] = map[status] || ['•', 'pending'];
     return `<span class="status-badge badge-${cls}">${icon} ${status.toUpperCase()}</span>`;
@@ -378,7 +378,7 @@ function loadTab(tab) {
 const NODE_PRESETS = {
     input: {
         external: {
-            title: '⚡ External Parameter',
+            title: 'External Parameter',
             inputs: [],
             outputs: ['Val Out'],
             configs: [
@@ -387,7 +387,7 @@ const NODE_PRESETS = {
             ]
         },
         expression: {
-            title: '📦 Expression',
+            title: 'Expression',
             inputs: [],
             outputs: ['Val Out'],
             configs: [
@@ -397,7 +397,7 @@ const NODE_PRESETS = {
     },
     source: {
         fetch_url: {
-            title: '🌐 Fetch HTML',
+            title: 'Fetch HTML',
             inputs: ['URL'],
             outputs: ['HTML'],
             configs: [
@@ -406,7 +406,7 @@ const NODE_PRESETS = {
             ]
         },
         fetch_playwright: {
-            title: '🎭 Playwright Fetch',
+            title: 'Playwright Fetch',
             inputs: ['URL'],
             outputs: ['HTML'],
             configs: [
@@ -418,7 +418,7 @@ const NODE_PRESETS = {
     },
     action: {
         bs4_select: {
-            title: '🥣 BeautifulSoup Selector',
+            title: 'BeautifulSoup Selector',
             inputs: ['HTML'],
             outputs: ['Result'],
             configs: [
@@ -430,7 +430,7 @@ const NODE_PRESETS = {
             ]
         },
         regex_extract: {
-            title: '🔍 Regex Extraction',
+            title: 'Regex Extraction',
             inputs: ['Text'],
             outputs: ['Match'],
             configs: [
@@ -439,7 +439,7 @@ const NODE_PRESETS = {
             ]
         },
         text_transform: {
-            title: '📝 Text Transform',
+            title: 'Text Transform',
             inputs: ['Text'],
             outputs: ['Result'],
             configs: [
@@ -449,7 +449,7 @@ const NODE_PRESETS = {
             ]
         },
         type_convert: {
-            title: '🔢 Type Converter',
+            title: 'Type Converter',
             inputs: ['Data'],
             outputs: ['Typed'],
             configs: [
@@ -457,7 +457,7 @@ const NODE_PRESETS = {
             ]
         },
         html_children: {
-            title: '🌿 HTML Children',
+            title: 'HTML Children',
             inputs: ['HTML'],
             outputs: ['List'],
             configs: [
@@ -467,7 +467,7 @@ const NODE_PRESETS = {
     },
     sink: {
         system_output: {
-            title: '🏁 System Output',
+            title: 'System Output',
             inputs: ['Data Rows'],
             outputs: [],
             configs: [
@@ -475,7 +475,7 @@ const NODE_PRESETS = {
             ]
         },
         context: {
-            title: '🧩 Context Registry',
+            title: 'Context Registry',
             inputs: ['Data'],
             outputs: [],
             configs: [
@@ -483,7 +483,7 @@ const NODE_PRESETS = {
             ]
         },
         debug: {
-            title: '🐛 Debug Sink',
+            title: 'Debug Sink',
             inputs: ['Log Data'],
             outputs: [],
             configs: [
@@ -492,20 +492,51 @@ const NODE_PRESETS = {
         }
     },
     logic: {
-        conditional: {
-            title: '🔀 Conditional',
+        logic_gate: {
+            title: 'Logical Gate',
+            inputs: ['IN 1', 'IN 2'],
+            outputs: ['True', 'False'],
+            logicalInputs: 2,
+            configs: [
+                { key: 'mode', type: 'hidden', value: 'logical' },
+                { key: 'operation', type: 'conditional_op', label: 'Gate Type', rerender: true }
+            ]
+        },
+        comparison: {
+            title: 'Comparison',
             inputs: ['Input A', 'Input B'],
             outputs: ['True', 'False'],
-            dynamicInputs: true, // Specific flag for targeted adaptation
             configs: [
-                {
-                    key: 'mode', type: 'select', label: 'Operation Mode',
-                    options: ['logical', 'unary', 'string', 'binary', 'custom'],
-                    rerender: true
-                },
-                { key: 'operation', type: 'conditional_op', label: 'Operation' },
-                { key: 'compare_value', type: 'text', label: 'Compare Value', placeholder: 'e.g. 42 or hello' },
-                { key: 'custom_func', type: 'expression', label: 'Custom Function (custom mode)' },
+                { key: 'mode', type: 'hidden', value: 'binary' },
+                { key: 'operation', type: 'conditional_op', label: 'Comparison', rerender: true }
+            ]
+        },
+        string_match: {
+            title: 'String Match',
+            inputs: ['Text'],
+            outputs: ['True', 'False'],
+            configs: [
+                { key: 'mode', type: 'hidden', value: 'string' },
+                { key: 'operation', type: 'conditional_op', label: 'Match Type', rerender: true },
+                { key: 'compare_value', type: 'text', label: 'Match Pattern / Value', placeholder: 'e.g. apple or ^[0-9]+$' }
+            ]
+        },
+        status_check: {
+            title: 'Status Check',
+            inputs: ['Value'],
+            outputs: ['True', 'False'],
+            configs: [
+                { key: 'mode', type: 'hidden', value: 'unary' },
+                { key: 'operation', type: 'conditional_op', label: 'Check', rerender: true }
+            ]
+        },
+        custom_logic: {
+            title: 'Custom Logic',
+            inputs: [], 
+            outputs: ['True', 'False'],
+            configs: [
+                { key: 'mode', type: 'hidden', value: 'custom' },
+                { key: 'custom_func', type: 'expression', label: 'Target Function', filter: 'comparator' }
             ]
         }
     }
@@ -531,7 +562,7 @@ function parseFuncArgs(code, funcName) {
 
 function discoverDynamicPorts(nodeId) {
     const node = state.builder.nodes.find(n => n.id === nodeId);
-    if (!node || node.type !== 'logic' || node.preset !== 'conditional') return;
+    if (!node || node.type !== 'logic' || node.preset !== 'custom_logic') return;
     
     if (node.config.mode === 'custom' && node.config.custom_func) {
         // Extract function name from {{my_func(...)}} or just my_func
@@ -554,7 +585,16 @@ function discoverDynamicPorts(nodeId) {
 }
 
 /* ── Conditional Node Helpers ───────────────────────── */
-function getConditionalOps(mode) {
+function getConditionalOps(modeOrPreset) {
+    // Mapping preset keys to engine modes for convenience
+    const presetToMode = {
+        'logic_gate': 'logical',
+        'comparison': 'binary',
+        'string_match': 'string',
+        'status_check': 'unary'
+    };
+    const mode = presetToMode[modeOrPreset] || modeOrPreset;
+
     const ops = {
         logical: [
             { value: 'AND',  label: 'AND — All inputs truthy' },
@@ -675,6 +715,7 @@ function initBuilder() {
                 ty = Math.round(ty / 30) * 30;
             }
 
+            const presetData = NODE_PRESETS[state.builder.activeTool.type][state.builder.activeTool.preset];
             const newNode = {
                 id: Date.now(),
                 x: tx,
@@ -684,8 +725,15 @@ function initBuilder() {
                 config: {}
             };
 
+            // Pre-initialize hidden config fields to avoid render-time re-renders
+            if (presetData.configs) {
+                presetData.configs.forEach(c => {
+                    if (c.type === 'hidden') newNode.config[c.key] = c.value;
+                });
+            }
+
             state.builder.nodes.push(newNode);
-            toast(`Node Pushed: ${newNode.preset}`, 'success');
+            toast(`${presetData.title} Added`, 'success');
             
             try {
                 renderBuilderNodes();
@@ -967,9 +1015,88 @@ function renderBuilderNodes() {
                 el.appendChild(nameGroup);
             }
 
+            // Natural Header Control Bar for Logical nodes (STATIONARY)
+            if (node.preset === 'conditional' && (node.config.mode || 'logical') === 'logical') {
+                const count = Number(node.config.logicalInputs || 2);
+                const controls = document.createElement('div');
+                controls.className = 'node-port-controls node-port-controls--top';
+
+                // Subtract Button
+                // Subtract Button
+                const subBtn = document.createElement('button');
+                subBtn.className = 'btn-port-footer btn-port-footer-sub';
+                subBtn.textContent = '−'; 
+                subBtn.title = 'Remove Last Input';
+                if (count <= 2) subBtn.disabled = true;
+
+                subBtn.onmousedown = (e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation();
+                    const targetNode = state.builder.nodes.find(n => n.id === node.id);
+                    if (!targetNode) return;
+
+                    const curCount = Number(targetNode.config.logicalInputs || 2);
+                    if (curCount <= 2) return;
+
+                    const newVal = curCount - 1;
+                    targetNode.config.logicalInputs = newVal;
+
+                    // Cleanup connections for the removed port index (EDGES is the correct property)
+                    state.builder.edges = state.builder.edges.filter(edge => 
+                        !(edge.to === node.id && Number(edge.toIdx) === curCount - 1)
+                    );
+
+                    renderBuilderNodes();
+                    renderConnections();
+                };
+
+                // Add Button
+                const addBtn = document.createElement('button');
+                addBtn.className = 'btn-port-footer btn-port-footer-add';
+                addBtn.textContent = '+';
+                addBtn.title = 'Add More Inputs';
+                
+                addBtn.onmousedown = (e) => {
+                    if (e.button !== 0) return;
+                    e.stopPropagation();
+                    const targetNode = state.builder.nodes.find(n => n.id === node.id);
+                    if (!targetNode) return;
+
+                    const curCount = Number(targetNode.config.logicalInputs || 2);
+                    targetNode.config.logicalInputs = curCount + 1;
+
+                    renderBuilderNodes(); 
+                    renderConnections();
+                };
+
+                controls.appendChild(subBtn);
+                controls.appendChild(addBtn);
+                el.appendChild(controls);
+            }
+
             // 3. Inputs (Left)
-            const nodeInputs = (node.dynamic_ports && node.config.mode === 'custom') ? node.dynamic_ports : preset.inputs;
-            (nodeInputs || []).forEach((label, idx) => {
+            let nodeInputs = [];
+            if (node.preset === 'conditional') {
+                const mode = node.config.mode || 'logical';
+                if (mode === 'custom' && node.dynamic_ports) {
+                    nodeInputs = node.dynamic_ports;
+                } else if (mode === 'logical') {
+                    const count = Number(node.config.logicalInputs || 2);
+                    for (let i = 1; i <= count; i++) nodeInputs.push(`IN ${i}`);
+                } else if (['unary', 'string'].includes(mode)) {
+                    nodeInputs = node.dynamic_ports;
+                } else if (node.preset === 'comparison') {
+                    nodeInputs = ['Input A', 'Input B'];
+                } else if (node.preset === 'status_check' || node.preset === 'string_match') {
+                    nodeInputs = [preset.inputs[0]]; // Single input
+                } else {
+                    nodeInputs = ['Input A', 'Input B'];
+                }
+            } else {
+                nodeInputs = preset.inputs || [];
+            }
+
+            nodeInputs.forEach((label, idx) => {
                 const row = document.createElement('div');
                 row.className = 'node-port-row node-port-row--input';
 
@@ -977,8 +1104,15 @@ function renderBuilderNodes() {
                 port.className = 'node-port node-port--input';
                 port.id = `node-${node.id}-input-${idx}`;
                 
-                // For dynamic ports, the handle is the label (argument name)
-                const handle = (node.dynamic_ports && node.config.mode === 'custom') ? label : null;
+                // Variadic/Dynamic handle mapping
+                let handle = null;
+                if (node.type === 'logic') {
+                    if (node.preset === 'custom_logic' && node.dynamic_ports) {
+                        handle = label;
+                    } else if (node.preset === 'logic_gate') {
+                        handle = `input_${idx}`; // Systematic for N-inputs
+                    }
+                }
                 port.onmousedown = (e) => startConnection(e, node.id, 'input', idx, handle);
 
                 const lbl = document.createElement('span');
@@ -987,6 +1121,7 @@ function renderBuilderNodes() {
 
                 row.appendChild(port);
                 row.appendChild(lbl);
+
                 el.appendChild(row);
             });
 
@@ -998,7 +1133,7 @@ function renderBuilderNodes() {
                 const port = document.createElement('div');
                 // Colour True/False ports on conditional nodes
                 let portClass = 'node-port node-port--output';
-                if (node.type === 'logic' && node.preset === 'conditional') {
+                if (node.type === 'logic') {
                     portClass += idx === 0 ? ' node-port--true' : ' node-port--false';
                 }
                 port.className = portClass;
@@ -1020,6 +1155,10 @@ function renderBuilderNodes() {
                 configContainer.className = 'node-config-container';
 
                 preset.configs.forEach(cfg => {
+                    // Conditional Visibility & Skip Hidden fields (already initialized)
+                    if (cfg.type === 'hidden') return;
+                    if (cfg.visible && !cfg.visible(node)) return;
+
                     const group = document.createElement('div');
                     group.className = 'node-config-group';
 
@@ -1100,11 +1239,11 @@ function renderBuilderNodes() {
                         e.stopPropagation();
                         openContextRegistry(node.id, cfg.key, input, cfg.filter);
                     };
-
                     row.appendChild(input);
                     row.appendChild(pickBtn);
                     group.appendChild(row);
-                } else if (cfg.type === 'checkbox') {
+
+                    } else if (cfg.type === 'checkbox') {
                     const wrap = document.createElement('label');
                     wrap.style = 'display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary); margin-top:4px';
                     
@@ -1124,12 +1263,12 @@ function renderBuilderNodes() {
                     renderStringArrayUI(node.id, cfg.key, group);
                 }
 
-                configContainer.appendChild(group);
-            });
-            el.appendChild(configContainer);
-        }
+                    configContainer.appendChild(group);
+                });
+                el.appendChild(configContainer);
+            }
 
-            container.appendChild(el);
+        container.appendChild(el);
         } catch (err) {
             console.error("[Builder] Failed to render node:", node, err);
         }
@@ -1373,42 +1512,43 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     menu.style.top = `${top + 5}px`;
     menu.style.left = `${left}px`;
 
-    // Header
+    // 1. Header
     const head = document.createElement('div');
     head.style = 'font-size:10px; font-weight:700; color:var(--accent); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:4px;';
     head.textContent = 'Context Registry';
     menu.appendChild(head);
 
+    // 2. Input Parameters (External Inputs)
     state.builder.nodes.forEach(n => {
         if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
             const item = document.createElement('div');
             item.className = 'context-item';
-            const dtype = n.config.dataType ? `<small class="item-badge" style="background:rgba(52,211,153,0.1); color:#34d399">Param</small>` : '';
             item.innerHTML = `
-                <div class="item-icon">⚡</div>
+                <div class="item-icon">IN</div>
                 <div class="item-content">
                     <span class="item-title">${n.config.name}</span>
                     <span class="item-subtitle">${n.config.dataType || 'string'}</span>
                 </div>
+                <small class="item-badge" style="background:rgba(52,211,153,0.1); color:#34d399">Param</small>
             `;
             item.onclick = () => {
                 inputEl.value = `{{${n.config.name}}}`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
-                renderBuilderNodes();
-                renderConnections();
+                renderBuilderNodes(); renderConnections();
                 menu.remove();
             };
             menu.appendChild(item);
         }
     });
 
+    // 3. Global Variables
     state.variables.forEach(v => {
         if (filter === 'writable' && v.is_readonly) return;
         
         const item = document.createElement('div');
         item.className = 'context-item';
         item.innerHTML = `
-            <div class="item-icon">🌍</div>
+            <div class="item-icon">VAR</div>
             <div class="item-content">
                 <span class="item-title">${v.key}</span>
                 <span class="item-subtitle">${v.value || 'No value set'}</span>
@@ -1418,30 +1558,42 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         item.onclick = () => {
             inputEl.value = `{{${v.key}}}`;
             updateNodeConfig(nodeId, configKey, inputEl.value);
-            renderBuilderNodes();
-            renderConnections();
+            renderBuilderNodes(); renderConnections();
             menu.remove();
         };
         menu.appendChild(item);
     });
 
+    // 4. Custom User Functions (With Category Filtering)
     if (filter !== 'writable') {
         state.functions.forEach(f => {
+            // Functional Filtering
+            if (filter === 'comparator' && f.category !== 'comparator') return;
+            if (filter === 'generator' && f.category !== 'generator') return;
+            if (filter === 'transformer' && f.category !== 'transformer') return;
+
             const item = document.createElement('div');
             item.className = 'context-item';
             const argNames = parseFuncArgs(f.code || '');
             const displaySig = argNames.length > 0 ? `${f.name}(${argNames.join(', ')})` : `${f.name}()`;
+            
+            const catMap = {
+                generator: { label: 'GEN', color: '#10b981' },
+                comparator: { label: 'LOGIC', color: '#6366f1' },
+                transformer: { label: 'UDF', color: '#f59e0b' }
+            };
+            const meta = catMap[f.category] || { label: 'UDF', color: '#a855f7' };
+
             item.innerHTML = `
-                <div class="item-icon" style="color:var(--accent)">ƒ</div>
+                <div class="item-icon" style="color:${meta.color}">ƒ</div>
                 <div class="item-content">
                     <span class="item-title">${displaySig}</span>
                     <span class="item-subtitle">${f.description || 'Custom Function'}</span>
                 </div>
-                <small class="item-badge" style="background:rgba(168,85,247,0.1); color:#a855f7">UDF</small>
+                <small class="item-badge" style="background:${meta.color}1a; color:${meta.color}">${meta.label}</small>
             `;
 
             if (argNames.length === 0) {
-                // Zero-arg function — insert directly
                 item.onclick = () => {
                     inputEl.value = `{{${f.name}()}}`;
                     updateNodeConfig(nodeId, configKey, inputEl.value);
@@ -1449,18 +1601,12 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
                     menu.remove();
                 };
             } else {
-                // Parameterized — show inline arg inputs
                 item.onclick = (ev) => {
                     ev.stopPropagation();
-                    // Replace item body with arg form
                     item.innerHTML = '';
                     const formWrap = document.createElement('div');
                     formWrap.style = 'padding:6px 0; display:flex; flex-direction:column; gap:6px; width:100%;';
-                    const header = document.createElement('div');
-                    header.style = 'font-size:10px; font-weight:700; color:var(--accent); margin-bottom:2px;';
-                    header.textContent = displaySig;
-                    formWrap.appendChild(header);
-
+                    
                     const argInputs = [];
                     argNames.forEach(argName => {
                         const argRow = document.createElement('div');
@@ -1496,9 +1642,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             }
             menu.appendChild(item);
         });
-    }
 
-    if (filter !== 'writable') {
+        // 5. Built-in Functions
         const builtins = [
             { name: 'now', desc: 'Current timestamp' },
             { name: 'today', desc: 'Current date' },
@@ -1526,8 +1671,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             item.onclick = () => {
                 inputEl.value = `{{${b.name}()}}`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
-                renderBuilderNodes();
-                renderConnections();
+                renderBuilderNodes(); renderConnections();
                 menu.remove();
             };
             menu.appendChild(item);
@@ -1618,7 +1762,8 @@ function startConnection(e, fromId, portType, portIdx) {
                     // For conditional nodes, tag the edge with its branch handle
                     const srcNode = state.builder.nodes.find(n => n.id === outNodeId);
                     let sourceHandle = undefined;
-                    if (srcNode && srcNode.type === 'logic' && srcNode.preset === 'conditional') {
+                    // Any node in the 'logic' category has True (0) and False (1) outputs
+                    if (srcNode && srcNode.type === 'logic') {
                         sourceHandle = outPortIdx === 0 ? 'true' : 'false';
                     }
                     const edge = { from: outNodeId, fromIdx: outPortIdx, to: inNodeId, toIdx: inPortIdx };
@@ -1774,12 +1919,12 @@ function updateBuilderContextUI() {
         }
     } else {
         typeLabel.textContent = 'NEW';
-        typeLabel.style.color = 'var(--primary)'; // Blue/Theme for new
+        typeLabel.style.color = 'var(--primary)';
         if (dot) {
             dot.style.background = 'var(--primary)';
             dot.style.boxShadow = '0 0 10px var(--primary)';
         }
-        nameDisplay.textContent = 'New Scraper Flow';
+        nameDisplay.textContent = state.builder.currentScraperName || 'New Scraper Flow';
     }
 }
 
@@ -5010,3 +5155,41 @@ function closeDebugInspector() {
     drawer.style.right = '-600px';
     drawer.classList.remove('open');
 }
+
+/**
+ * ── Builder Focus Mode (Fullscreen) ──────────────────
+ * Maximizes the builder workspace by hiding the sidebar and topbar.
+ */
+function toggleBuilderFullscreen(forceState) {
+    const body = document.body;
+    const isFS = forceState !== undefined ? forceState : !body.classList.contains('is-builder-fullscreen');
+    body.classList.toggle('is-builder-fullscreen', isFS);
+    
+    // Update toggle button icon/state
+    const btn = document.getElementById('toggle-fs-btn');
+    if (btn) {
+        // Toggle between "Maximize" (⛶) and "Restore" (❐) icons
+        btn.innerHTML = isFS ? '<span style="font-size:15px; opacity:0.8;">❐</span>' : '<span style="font-size:15px; opacity:0.8;">⛶</span>';
+        btn.title = isFS ? 'Exit Focus Mode' : 'Focus Mode (Maximize Workspace)';
+    }
+    
+    if (isFS) {
+        toast('Focus Mode Active — ESC to exit', 'info');
+    }
+    
+    // Re-verify viewport dimensions after layout shift to ensure nodes/edges align
+    setTimeout(() => {
+        if (typeof renderBuilderNodes === 'function') renderBuilderNodes();
+        if (typeof renderConnections === 'function') renderConnections();
+        
+        // Dispatch resize event to trigger internal canvas recalibrations
+        window.dispatchEvent(new Event('resize'));
+    }, 400);
+}
+
+// Global KeyDown listener for Focus Mode exit
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('is-builder-fullscreen')) {
+        toggleBuilderFullscreen(false);
+    }
+});
