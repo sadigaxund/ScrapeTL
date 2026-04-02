@@ -1,30 +1,19 @@
 NOTE: If you are AI, do not read this file, it is only for human reference.
 
 7. schema registry
-9. might break most of the stuff but, a variable registry where one can define maybe tokens or commonly used strings, and then use them in the scraper code or input fields everywhere
-1. rework the queue system, make is more user handable
-* , maybe when schedule is active, it displays in a queue the next execution of the schedule
-5. more complex workflows
 6. AI html scraping that detects schema
 ---
 2. more integrations: SQL: sqlite, postgres, microsoft sql server, mysql
 "an sqlite integration where I can provide all the connection parameters, as well as, the schema and table and whatever is needed to save the data. Also I want you implement the "
 6. somehow a logic to paginate maybe thru UI inputs
 11. when iteration/loop/ pagination is implemented: an ability to pass list of inputs to execute individually | Note: make sure to create groups within queue in this case
-5. fix catchup logic
 
-12. somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. MAke sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain
+12. somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain
 
 13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
-
-
 19. When a scraper contains some new library thats not in the app's environment, scraper does not run, maybe a way of dynamically installing libraries.
 
-20. investigate why is there 2 retries when i manually ran the scraper, it should be applied only to the integration, where if and only if after the message is scraped, it retries the message sending process not the scraping process, which has to be idempotent unless stated otherwise.
-25. catchup ignores inputs
-
-
-22. option to be able to hide urls as Link or show full maybe shortened [NOT SURE]
+20. investigate why is there 2 retries when i manually ran the scraper, it should be applied only to the integration, where if and only if after the message is scraped, it retries the message sending process not the scraping process, which has to be idempotent unless stated otherwise.[NOT SURE]
 14. rework the integration part to be similar to scraper/schedules creation part, but where at the top  [NOT SURE]
 26. Rename Schedules to Routines[NOT SURE]
 
@@ -32,13 +21,9 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 
 
 28. add return types to the functions
-29. Lines disappear when switching between menus, only comes back if I do something like drag, pan but not zoom
-30. add action to duplicate a scraper
 31. ability to Select which fields to send to integrations.
-32. ability to force stop running scraper/integration
 
-34. make filters in logs menu wider, 
 33. scraper connected dashboard
-
+34. fix fucking timezone selector
 DONE: 
 

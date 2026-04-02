@@ -116,7 +116,7 @@ class Scraper(BaseScraper):
             # Title
             title_span = a.find("span", class_="chapternum")
             title = title_span.get_text(strip=True) if title_span else f"Chapter {ep_no}"
-            
+                
             # Date
             date_span = a.find("span", class_="chapterdate")
             rel_date = date_span.get_text(strip=True) if date_span else ""
@@ -126,7 +126,7 @@ class Scraper(BaseScraper):
                 "release_date": rel_date,
                 "website_url": link,
                 "episode_number": ep_no,
-                "thumbnail_url": kwargs['thumbnail_url']
+                "thumbnail": kwargs['thumbnail_url']
             })
             
             # Record it
@@ -140,6 +140,7 @@ class Scraper(BaseScraper):
 if __name__ == "__main__":
     import json
     # Replace with a real series URL to test
-    test_url = "https://asurascanz.com/manga/the-constellation-that-returned-from-hell/"
-    results = Scraper().scrape(website_url=test_url, manhwa_name="Test Constellation")
+    test_url = "https://asurascans.com/comics/revenge-of-the-iron-blooded-sword-hound"
+    thumbnail_url="https://cdn.asurascans.com/asura-images/covers/revenge-of-the-iron-blooded-sword-hound.41b6fb-400.webp"
+    results = Scraper().scrape(website_url=test_url, manhwa_name="Revenge of the Iron-Blooded Sword Hound", thumbnail_url = thumbnail_url)
     print(json.dumps(results, indent=2))
