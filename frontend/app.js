@@ -2812,6 +2812,7 @@ async function loadLogs(page = null) {
                     <div class="log-tabs" style="display:flex; gap:8px; margin-bottom:12px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
                         <button class="log-tab-btn active" onclick="switchLogTab('${log.id}', 'results', this)">Results</button>
                         <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'debug', this)">Debug Assets (${log.debug_payload.length})</button>
+                        <button class="btn btn-ghost btn-sm" style="margin-left:auto; color:var(--accent); font-size:10px; display:flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid var(--accent-glow);" onclick="openDebugInspector(${log.id})">🔬 Inspect Raw Data</button>
                     </div>
                     ` : ''}
 
@@ -2833,6 +2834,9 @@ async function loadLogs(page = null) {
                 </div>` : ''}
             </div>`;
         }).join('');
+
+        // Store for inspector
+        state.lastRenderedLogs = data.items;
 
         // Pagination
         const totalPages = Math.ceil(data.total / state.logsPageSize);
@@ -2881,20 +2885,27 @@ function renderDebugPayload(artifacts) {
         const isHtml = typeof a.data === 'string' && (a.data.trim().startsWith('<') || a.data.includes('</'));
         let content = '';
         if (isHtml) {
+            // Encode HTML for srcdoc to prevent accidental breaks
+            const srcdoc = a.data.replace(/"/g, '&quot;').replace(/'/g, '&apos;');
             content = `
             <div class="debug-html-wrapper">
                 <div class="debug-html-actions" style="margin-bottom:8px; display:flex; gap:8px;">
                     <button class="btn btn-ghost btn-sm" onclick="toggleDebugSource(this)">👁 View Source</button>
                     <button class="btn btn-ghost btn-sm active" onclick="toggleDebugPreview(this)">🖼 Preview</button>
                 </div>
-                <div class="debug-html-preview" style="background:#fff; border-radius:var(--radius-sm); overflow:auto; max-height:400px; padding:10px;">
-                    ${a.data}
+                <div class="debug-html-preview" style="background:#fff; border-radius:var(--radius-sm); overflow:hidden; height:400px; border:1px solid var(--border);">
+                    <iframe 
+                        sandbox="allow-popups allow-popups-to-escape-sandbox" 
+                        srcdoc="${srcdoc}" 
+                        style="width:100%; height:100%; border:none; background:#fff;"
+                        loading="lazy">
+                    </iframe>
                 </div>
-                <pre class="debug-html-source" style="display:none; background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:400px;">${a.data.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+                <pre class="debug-html-source" style="display:none; background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:400px; white-space:pre-wrap; word-break:break-all;">${a.data.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
             </div>`;
         } else {
             const pretty = typeof a.data === 'object' ? JSON.stringify(a.data, null, 2) : String(a.data);
-            content = `<pre style="background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:400px;">${pretty}</pre>`;
+            content = `<pre style="background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:400px; white-space:pre-wrap; word-break:break-all;">${pretty}</pre>`;
         }
         
         return `
@@ -2978,8 +2989,13 @@ function showHtmlModal(encoded) {
                 <button class="btn btn-ghost btn-sm" onclick="toggleDebugSource(this)">👁 View Source</button>
                 <button class="btn btn-ghost btn-sm active" onclick="toggleDebugPreview(this)">🖼 Preview</button>
             </div>
-            <div class="debug-html-preview" style="background:#fff; color:#000; border-radius:var(--radius-sm); overflow:auto; max-height:70vh; padding:12px; border:1px solid var(--border);">
-                ${html}
+            <div class="debug-html-preview" style="background:#fff; color:#000; border-radius:var(--radius-sm); overflow:hidden; height:70vh; border:1px solid var(--border);">
+                <iframe 
+                    sandbox="allow-popups allow-popups-to-escape-sandbox" 
+                    srcdoc="${html.replace(/"/g, '&quot;').replace(/'/g, '&apos;')}" 
+                    style="width:100%; height:100%; border:none; background:#fff;"
+                    loading="lazy">
+                </iframe>
             </div>
             <pre class="debug-html-source" style="display:none; background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all;">${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
         </div>
@@ -4716,4 +4732,29 @@ function openContextDrawer(type, id) {
 function closeContextDrawer() {
     document.getElementById('ctx-drawer').classList.remove('active');
     document.getElementById('ctx-drawer-backdrop').classList.remove('active');
+}
+
+/* 🔬 Debug Inspector Drawer Logic */
+function openDebugInspector(logId) {
+    const log = state.lastRenderedLogs ? state.lastRenderedLogs.find(l => l.id === logId) : null;
+    if (!log || !log.debug_payload) {
+        toast('Log context not available.', 'error');
+        return;
+    }
+
+    const drawer = document.getElementById('debug-inspector-drawer');
+    const body = document.getElementById('debug-inspector-body');
+    const title = document.getElementById('debug-inspector-title');
+
+    title.innerHTML = `🔬 Debug Inspector — <span style="color:var(--text-muted); font-weight:400; font-size:13px;">#${log.id} ${log.scraper_name}</span>`;
+    body.innerHTML = renderDebugPayload(log.debug_payload);
+
+    drawer.style.right = '0px';
+    drawer.classList.add('open');
+}
+
+function closeDebugInspector() {
+    const drawer = document.getElementById('debug-inspector-drawer');
+    drawer.style.right = '-600px';
+    drawer.classList.remove('open');
 }

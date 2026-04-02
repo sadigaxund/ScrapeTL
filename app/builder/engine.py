@@ -122,48 +122,41 @@ class BuilderEngine:
 
         # Store debug artifacts in a special key if they exist
         # We can pass this back to the runner later
-        self._debug_info = debug_artifacts
-        
-        # Aggregate and Auto-Zip results from all sink_system_output nodes
-        sink_results = []
+        # 4. Aggregation
+        main_outputs = []
         for n_id, node in self.nodes.items():
             nt_raw = str(node.get("type", "")).strip()
             pr_raw = str(node.get("preset", "")).strip()
             nt = f"{nt_raw}_{pr_raw}" if pr_raw and pr_raw not in nt_raw else nt_raw
             if nt == "sink_system_output":
                 res = self.results_cache.get(n_id)
-                if res:
-                    sink_results.append(res)
-                    
+                if res: main_outputs.append(res)
+        
         columns = {}
-        for res in sink_results:
+        for res in main_outputs:
             if isinstance(res, list):
                 for item in res:
                     if isinstance(item, dict):
-                        for k, v in item.items():
-                            columns.setdefault(k, []).append(v)
+                        for k, v in item.items(): columns.setdefault(k, []).append(v)
             elif isinstance(res, dict):
-                for k, v in res.items():
-                    columns.setdefault(k, []).append(v)
-                    
+                for k, v in res.items(): columns.setdefault(k, []).append(v)
+        
+        merged = []
         if columns:
             max_len = max(len(col) for col in columns.values())
-            merged = []
             for i in range(max_len):
                 row = {}
                 for k, col in columns.items():
-                    if len(col) == 1:
-                        row[k] = col[0] # broadcast scalar value to all rows
-                    elif i < len(col):
-                        row[k] = col[i] # zip array value
-                    else:
-                        row[k] = None
+                    if len(col) == 1: row[k] = col[0]
+                    elif i < len(col): row[k] = col[i]
+                    else: row[k] = None
                 merged.append(row)
-            print(f"[BuilderEngine] Execution finished. Zipped {len(sink_results)} sink(s) into {len(merged)} row(s).")
-            return merged
 
-        print(f"[BuilderEngine] Execution finished. 0 item(s)")
-        return []
+        print(f"[BuilderEngine] Flow Finished. Extracted {len(merged)} items. Captured {len(debug_artifacts)} debug points.")
+        return {
+            "main": merged,
+            "debug": debug_artifacts
+        }
 
     def _execute_node(self, node: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
         ntype = str(node.get("type", "")).strip()
@@ -456,7 +449,9 @@ class BuilderEngine:
 
         elif ntype == "sink_debug":
             # Simply pass through its input
-            return node_inputs.get("data")
+            val = node_inputs.get("data")
+            print(f"[BuilderEngine] DEBUG [{node['id']}]: {val}")
+            return val
 
         return None
 

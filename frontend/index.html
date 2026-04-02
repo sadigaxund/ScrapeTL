@@ -1534,7 +1534,17 @@
         </div>
   </div>
 
-  <script src="/static/app.js?v=53"></script>
+  <div class="side-drawer" id="debug-inspector-drawer" style="width: 600px; right: -600px;">
+    <div class="side-drawer__header">
+      <h3 id="debug-inspector-title">🔬 Debug Inspector</h3>
+      <button class="btn btn-ghost" onclick="closeDebugInspector()">✕</button>
+    </div>
+    <div class="side-drawer__body" id="debug-inspector-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+      <!-- Content populated by JS -->
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=55"></script>
   <!-- ── Save Flow Modal ─────────────────────────────── -->
   <div class="modal-overlay" id="save-flow-modal" style="display:none" onclick="closeSaveFlowModal(event)">
     <div class="modal-box" style="max-width:500px">
