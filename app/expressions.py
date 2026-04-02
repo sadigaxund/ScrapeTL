@@ -21,15 +21,18 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
             yield py_random.randint(min_val, max_val)
 
     ns = {
-        "today": datetime.now().strftime("%Y-%m-%d"),
-        "now": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "yesterday": (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
+        "today": lambda: datetime.now().strftime("%Y-%m-%d"),
+        "now": lambda: datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "yesterday": lambda: (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d"),
         "env": lambda key, default="": os.environ.get(key, default),
-        "random": lambda min_val, max_val: py_random.randint(min_val, max_val),
+        "random": lambda min_val=0, max_val=100: py_random.randint(min_val, max_val),
         "random_stream": py_random_stream,
         "range": range,
         "uuid": lambda: str(py_uuid.uuid4()),
-        "json": json.dumps,
+        "json": lambda x=None: (json.dumps(x, indent=2) if not isinstance(x, str) else json.loads(x)) if x is not None else "",
+        "str": str,
+        "int": int,
+        "len": lambda x="": len(x),
         "upper": lambda s: str(s).upper(),
         "lower": lambda s: str(s).lower(),
         "strip": lambda s: str(s).strip(),
@@ -70,7 +73,7 @@ def _resolve_string(text, ns):
     if match:
         expr = match.group(1).strip()
         try:
-            return eval(expr, {"__builtins__": {}}, ns)
+            return eval(expr, ns)
         except Exception as e:
             if expr in ns: return ns[expr]
             print(f"[Expressions] Direct eval failed for '{expr}': {e}")
@@ -80,7 +83,7 @@ def _resolve_string(text, ns):
         expr = match.group(1).strip()
         try:
             # Use eval for complex expressions within the populated namespace
-            result = eval(expr, {"__builtins__": {}}, ns)
+            result = eval(expr, ns)
             
             if isinstance(result, (dict, list)):
                 return json.dumps(result)

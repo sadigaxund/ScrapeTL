@@ -1223,15 +1223,20 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     head.textContent = 'Context Registry';
     menu.appendChild(head);
 
-    // 1. External Params defined in this flow
     state.builder.nodes.forEach(n => {
         if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
             const item = document.createElement('div');
             item.className = 'context-item';
-            const dtype = n.config.dataType ? `<small style="opacity:0.4; margin-left:8px">(${n.config.dataType})</small>` : '';
-            item.innerHTML = `<b>{{${n.config.name}}}</b> ${dtype}`;
+            const dtype = n.config.dataType ? `<small class="item-badge" style="background:rgba(52,211,153,0.1); color:#34d399">Param</small>` : '';
+            item.innerHTML = `
+                <div class="item-icon">⚡</div>
+                <div class="item-content">
+                    <span class="item-title">${n.config.name}</span>
+                    <span class="item-subtitle">${n.config.dataType || 'string'}</span>
+                </div>
+            `;
             item.onclick = () => {
-                inputEl.value += `{{${n.config.name}}}`;
+                inputEl.value = `{{${n.config.name}}}`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
                 renderBuilderNodes();
                 renderConnections();
@@ -1241,16 +1246,21 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         }
     });
 
-    // 2. Global Variables
     state.variables.forEach(v => {
         if (filter === 'writable' && v.is_readonly) return;
         
         const item = document.createElement('div');
         item.className = 'context-item';
-        const valPreview = v.value ? `<small style="opacity:0.4; margin-left:auto; max-width:80px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.value}</small>` : '';
-        item.innerHTML = `<b>{{${v.key}}}</b> ${valPreview}`;
+        item.innerHTML = `
+            <div class="item-icon">🌍</div>
+            <div class="item-content">
+                <span class="item-title">${v.key}</span>
+                <span class="item-subtitle">${v.value || 'No value set'}</span>
+            </div>
+            <small class="item-badge" style="background:rgba(59,130,246,0.1); color:#3b82f6">${v.is_readonly ? 'READONLY' : 'VAR'}</small>
+        `;
         item.onclick = () => {
-            inputEl.value += `{{${v.key}}}`;
+            inputEl.value = `{{${v.key}}}`;
             updateNodeConfig(nodeId, configKey, inputEl.value);
             renderBuilderNodes();
             renderConnections();
@@ -1259,14 +1269,20 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         menu.appendChild(item);
     });
 
-    // 3. Global Functions (UDfs)
     if (filter !== 'writable') {
         state.functions.forEach(f => {
             const item = document.createElement('div');
             item.className = 'context-item';
-            item.innerHTML = `<b>${f.name}()</b> <small style="margin-left:auto; opacity:0.5">${f.description || ''}</small>`;
+            item.innerHTML = `
+                <div class="item-icon" style="color:var(--accent)">ƒ</div>
+                <div class="item-content">
+                    <span class="item-title">${f.name}()</span>
+                    <span class="item-subtitle">${f.description || 'Custom Function'}</span>
+                </div>
+                <small class="item-badge" style="background:rgba(168,85,247,0.1); color:#a855f7">UDF</small>
+            `;
             item.onclick = () => {
-                inputEl.value += `${f.name}()`;
+                inputEl.value = `{{${f.name}()}}`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
                 renderBuilderNodes();
                 renderConnections();
@@ -1294,9 +1310,15 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         builtins.forEach(b => {
             const item = document.createElement('div');
             item.className = 'context-item';
-            item.innerHTML = `<b>${b.name}()</b> <small style="margin-left:auto; opacity:0.5">${b.desc}</small>`;
+            item.innerHTML = `
+                <div class="item-icon" style="color:var(--text-muted)">⚙️</div>
+                <div class="item-content">
+                    <span class="item-title">${b.name}()</span>
+                    <span class="item-subtitle">${b.desc}</span>
+                </div>
+            `;
             item.onclick = () => {
-                inputEl.value += `${b.name}()`;
+                inputEl.value = `{{${b.name}()}}`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
                 renderBuilderNodes();
                 renderConnections();

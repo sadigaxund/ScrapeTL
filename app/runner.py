@@ -112,7 +112,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         if scraper_record.scraper_type == "builder":
             from app.builder.engine import BuilderEngine
             flow_data = json.loads(scraper_record.flow_data) if scraper_record.flow_data else json.loads(scraper_record.versions[0].code)
-            engine = BuilderEngine(flow_data, global_vars, db_session=db)
+            engine = BuilderEngine(flow_data, global_vars, db_session=db, custom_funcs=custom_funcs)
             scraper_instance = engine
         else:
             from app.scrapers import load_scraper_class_from_code
@@ -237,17 +237,22 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         payload_dict = payload_list[0] if payload_list else None
 
         # Persist log entry
+        def _safe_json(obj):
+            import types
+            if isinstance(obj, types.GeneratorType): return list(obj)
+            return str(obj)
+
         log = ScrapeLog(
             scraper_id=scraper_id,
             status=status,
-            payload=json.dumps(payload_list[:10]) if payload_list else (json.dumps([payload_dict]) if payload_dict else None),
+            payload=json.dumps(payload_list[:10], default=_safe_json) if payload_list else (json.dumps([payload_dict], default=_safe_json) if payload_dict else None),
             episode_count=episode_count,
             error_msg=error_msg,
             run_at=datetime.utcnow(),
             triggered_by=triggered_by,
             retry_count=retry_count,
             schedule_id=schedule_id,
-            debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", [])) if 'scraper_instance' in locals() else None
+            debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", []), default=_safe_json) if 'scraper_instance' in locals() else None
         )
         db.add(log)
 
