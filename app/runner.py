@@ -98,6 +98,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         # The Yield Rule: We only iterate if it's an explicit Stream (Generator)
         # OR it's a manual array from the Registry (wrapped in Batch)
         # Standard lists from return statements are treated as single values.
+        all_debug_data = []
         for k, v in _input_values.items():
             is_iter = isinstance(v, types.GeneratorType) or (hasattr(v, "__class__") and v.__class__.__name__ == "Batch")
             if is_iter:
@@ -152,7 +153,11 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
                     try:
                         if scraper_record.scraper_type == "builder":
-                            iter_episodes = engine.execute(iter_inputs, stop_event=stop_event)
+                            res_bundle = engine.execute(iter_inputs, stop_event=stop_event)
+                            # res_bundle is now { "main": [], "debug": [] }
+                            iter_episodes = res_bundle.get("main", [])
+                            # Add to global debug state
+                            all_debug_data.extend(res_bundle.get("debug", []))
                         else:
                             kwargs = {**iter_inputs, "vars": global_vars, "db": db}
                             import inspect
@@ -252,7 +257,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             triggered_by=triggered_by,
             retry_count=retry_count,
             schedule_id=schedule_id,
-            debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", []), default=_safe_json) if 'scraper_instance' in locals() else None
+            debug_payload=json.dumps(all_debug_data, default=_safe_json)
         )
         db.add(log)
 

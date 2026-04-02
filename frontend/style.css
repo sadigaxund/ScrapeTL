@@ -3460,4 +3460,29 @@ input:checked+.slider {
   transform: scale(1.2);
   box-shadow: 0 0 15px rgba(255, 255, 255, 0.6), 0 0 25px var(--accent-glow);
 }
+
+/* 🔬 Debug Inspector Side Drawer */
+#debug-inspector-drawer {
+    background: #0f111a;
+    border-left: 1px solid var(--border-strong);
+    box-shadow: -20px 0 50px rgba(0,0,0,0.8);
+    display: flex !important;
+    flex-direction: column;
+    z-index: 2100; /* Above regular modals */
+}
+
+.side-drawer__header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(255,255,255,0.02);
+}
+
+.side-drawer__header h3 {
+    font-size: 16px;
+    font-weight: 700;
+    margin: 0;
+}
 
