@@ -490,8 +490,132 @@ const NODE_PRESETS = {
                 { key: 'label', type: 'text', label: 'Artifact Label', placeholder: 'Debug' }
             ]
         }
+    },
+    logic: {
+        conditional: {
+            title: '🔀 Conditional',
+            inputs: ['Input A', 'Input B'],
+            outputs: ['True', 'False'],
+            dynamicInputs: true, // Specific flag for targeted adaptation
+            configs: [
+                {
+                    key: 'mode', type: 'select', label: 'Operation Mode',
+                    options: ['logical', 'unary', 'string', 'binary', 'custom'],
+                    rerender: true
+                },
+                { key: 'operation', type: 'conditional_op', label: 'Operation' },
+                { key: 'compare_value', type: 'text', label: 'Compare Value', placeholder: 'e.g. 42 or hello' },
+                { key: 'custom_func', type: 'expression', label: 'Custom Function (custom mode)' },
+            ]
+        }
     }
 };
+
+/* ── Semantic Function Helper ────────────────────── */
+function parseFuncArgs(code, funcName) {
+    if (!code || !funcName) return [];
+    // 1. Clean the code of comments
+    const lines = code.split('\n');
+    let args = [];
+    
+    // 2. Find the def line
+    const defRegex = new RegExp(`def\\s+${funcName}\\s*\\(([^)]*)\\)`);
+    const match = code.match(defRegex);
+    if (match && match[1]) {
+        args = match[1].split(',')
+            .map(a => a.split(':')[0].split('=')[0].trim()) // Strip hints and defaults
+            .filter(a => a && a !== 'self' && a !== 'cls');
+    }
+    return args;
+}
+
+function discoverDynamicPorts(nodeId) {
+    const node = state.builder.nodes.find(n => n.id === nodeId);
+    if (!node || node.type !== 'logic' || node.preset !== 'conditional') return;
+    
+    if (node.config.mode === 'custom' && node.config.custom_func) {
+        // Extract function name from {{my_func(...)}} or just my_func
+        let funcName = node.config.custom_func.replace(/[{}]/g, '').split('(')[0].trim();
+        const f = state.functions.find(x => x.name === funcName);
+        if (f) {
+            const args = parseFuncArgs(f.code, f.name);
+            if (JSON.stringify(node.dynamic_ports) !== JSON.stringify(args)) {
+                node.dynamic_ports = args;
+                console.log(`[Builder] Discovered dynamic ports for ${nodeId}:`, args);
+                renderBuilderNodes();
+                renderConnections();
+            }
+        }
+    } else if (node.dynamic_ports) {
+        delete node.dynamic_ports;
+        renderBuilderNodes();
+        renderConnections();
+    }
+}
+
+/* ── Conditional Node Helpers ───────────────────────── */
+function getConditionalOps(mode) {
+    const ops = {
+        logical: [
+            { value: 'AND',  label: 'AND — All inputs truthy' },
+            { value: 'OR',   label: 'OR — Any input truthy' },
+            { value: 'NAND', label: 'NAND — Not all truthy' },
+            { value: 'NOR',  label: 'NOR — None truthy' },
+            { value: 'XOR',  label: 'XOR — Odd count truthy' },
+            { value: 'XNOR', label: 'XNOR — Even count truthy' },
+            { value: 'NOT',  label: 'NOT — Negate Input A' },
+        ],
+        unary: [
+            { value: 'is_truthy',    label: 'Is Truthy' },
+            { value: 'is_falsy',     label: 'Is Falsy' },
+            { value: 'is_null',      label: 'Is Null / None' },
+            { value: 'is_not_null',  label: 'Is Not Null' },
+            { value: 'is_empty',     label: 'Is Empty (str/list/dict)' },
+            { value: 'is_not_empty', label: 'Is Not Empty' },
+            { value: 'is_boolean',   label: 'Is Boolean' },
+            { value: 'is_numeric',   label: 'Is Numeric' },
+            { value: 'is_list',      label: 'Is List' },
+        ],
+        string: [
+            { value: 'contains',     label: 'Contains' },
+            { value: 'not_contains', label: 'Does Not Contain' },
+            { value: 'starts_with',  label: 'Starts With' },
+            { value: 'ends_with',    label: 'Ends With' },
+            { value: 'equals',       label: 'Equals (case-sensitive)' },
+            { value: 'iequals',      label: 'Equals (ignore case)' },
+            { value: 'not_equals',   label: 'Not Equals' },
+            { value: 'matches_regex',label: 'Matches Regex' },
+            { value: 'length_gt',    label: 'Length > N' },
+            { value: 'length_lt',    label: 'Length < N' },
+        ],
+        binary: [
+            { value: 'eq',      label: '= Equal To' },
+            { value: 'neq',     label: '≠ Not Equal' },
+            { value: 'gt',      label: '> Greater Than' },
+            { value: 'gte',     label: '≥ Greater or Equal' },
+            { value: 'lt',      label: '< Less Than' },
+            { value: 'lte',     label: '≤ Less or Equal' },
+            { value: 'between', label: '↔ Between (min,max)' },
+        ],
+        custom: [
+            { value: 'custom_func', label: 'Custom Function → bool' },
+        ]
+    };
+    return ops[mode] || ops.logical;
+}
+
+/**
+ * Parse parameter names from a Python function's first line.
+ * e.g. "def my_func(arg1, arg2=None):" → ['arg1', 'arg2']
+ */
+function parseFuncArgs(code) {
+    if (!code) return [];
+    const match = code.match(/^\s*def\s+\w+\s*\(([^)]*)\)/m);
+    if (!match || !match[1].trim()) return [];
+    return match[1].split(',')
+        .map(p => p.trim().split('=')[0].trim())
+        .filter(p => p && p !== 'self');
+}
 
 /* ── Builder Logic ─────────────────────────────────── */
 function initBuilder() {
@@ -844,14 +968,18 @@ function renderBuilderNodes() {
             }
 
             // 3. Inputs (Left)
-            (preset.inputs || []).forEach((label, idx) => {
+            const nodeInputs = (node.dynamic_ports && node.config.mode === 'custom') ? node.dynamic_ports : preset.inputs;
+            (nodeInputs || []).forEach((label, idx) => {
                 const row = document.createElement('div');
                 row.className = 'node-port-row node-port-row--input';
 
                 const port = document.createElement('div');
                 port.className = 'node-port node-port--input';
                 port.id = `node-${node.id}-input-${idx}`;
-                port.onmousedown = (e) => startConnection(e, node.id, 'input', idx);
+                
+                // For dynamic ports, the handle is the label (argument name)
+                const handle = (node.dynamic_ports && node.config.mode === 'custom') ? label : null;
+                port.onmousedown = (e) => startConnection(e, node.id, 'input', idx, handle);
 
                 const lbl = document.createElement('span');
                 lbl.className = 'node-port-label';
@@ -868,7 +996,12 @@ function renderBuilderNodes() {
                 row.className = 'node-port-row node-port-row--output';
 
                 const port = document.createElement('div');
-                port.className = 'node-port node-port--output';
+                // Colour True/False ports on conditional nodes
+                let portClass = 'node-port node-port--output';
+                if (node.type === 'logic' && node.preset === 'conditional') {
+                    portClass += idx === 0 ? ' node-port--true' : ' node-port--false';
+                }
+                port.className = portClass;
                 port.id = `node-${node.id}-output-${idx}`;
                 port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
 
@@ -930,8 +1063,26 @@ function renderBuilderNodes() {
                             if ((node.config[cfg.key] || cfg.options[0]) === opt) o.selected = true;
                             select.appendChild(o);
                         });
-                        select.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                        select.onchange = (e) => {
+                            updateNodeConfig(node.id, cfg.key, e.target.value);
+                            if (cfg.rerender) { renderBuilderNodes(); renderConnections(); }
+                        };
                         group.appendChild(select);
+                    } else if (cfg.type === 'conditional_op') {
+                        const currentMode = node.config.mode || 'logical';
+                        const ops = getConditionalOps(currentMode);
+                        const currentOp = node.config[cfg.key] || ops[0].value;
+                        const opSelect = document.createElement('select');
+                        opSelect.className = 'node-select';
+                        ops.forEach(op => {
+                            const o = document.createElement('option');
+                            o.value = op.value;
+                            o.textContent = op.label;
+                            if (currentOp === op.value) o.selected = true;
+                            opSelect.appendChild(o);
+                        });
+                        opSelect.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                        group.appendChild(opSelect);
                     } else if (cfg.type === 'expression') {
                         const row = document.createElement('div');
                         row.className = 'node-config-row';
@@ -1045,6 +1196,11 @@ function updateNodeConfig(nodeId, key, value) {
     const node = state.builder.nodes.find(n => n.id === nodeId);
     if (node) {
         node.config[key] = value;
+        
+        // Semantic Contract: Trigger port discovery if relevant fields changed
+        if (key === 'mode' || key === 'custom_func') {
+            discoverDynamicPorts(nodeId);
+        }
     }
 }
 
@@ -1273,21 +1429,71 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         state.functions.forEach(f => {
             const item = document.createElement('div');
             item.className = 'context-item';
+            const argNames = parseFuncArgs(f.code || '');
+            const displaySig = argNames.length > 0 ? `${f.name}(${argNames.join(', ')})` : `${f.name}()`;
             item.innerHTML = `
                 <div class="item-icon" style="color:var(--accent)">ƒ</div>
                 <div class="item-content">
-                    <span class="item-title">${f.name}()</span>
+                    <span class="item-title">${displaySig}</span>
                     <span class="item-subtitle">${f.description || 'Custom Function'}</span>
                 </div>
                 <small class="item-badge" style="background:rgba(168,85,247,0.1); color:#a855f7">UDF</small>
             `;
-            item.onclick = () => {
-                inputEl.value = `{{${f.name}()}}`;
-                updateNodeConfig(nodeId, configKey, inputEl.value);
-                renderBuilderNodes();
-                renderConnections();
-                menu.remove();
-            };
+
+            if (argNames.length === 0) {
+                // Zero-arg function — insert directly
+                item.onclick = () => {
+                    inputEl.value = `{{${f.name}()}}`;
+                    updateNodeConfig(nodeId, configKey, inputEl.value);
+                    renderBuilderNodes(); renderConnections();
+                    menu.remove();
+                };
+            } else {
+                // Parameterized — show inline arg inputs
+                item.onclick = (ev) => {
+                    ev.stopPropagation();
+                    // Replace item body with arg form
+                    item.innerHTML = '';
+                    const formWrap = document.createElement('div');
+                    formWrap.style = 'padding:6px 0; display:flex; flex-direction:column; gap:6px; width:100%;';
+                    const header = document.createElement('div');
+                    header.style = 'font-size:10px; font-weight:700; color:var(--accent); margin-bottom:2px;';
+                    header.textContent = displaySig;
+                    formWrap.appendChild(header);
+
+                    const argInputs = [];
+                    argNames.forEach(argName => {
+                        const argRow = document.createElement('div');
+                        argRow.style = 'display:flex; align-items:center; gap:6px;';
+                        const argLbl = document.createElement('span');
+                        argLbl.style = 'font-size:10px; color:var(--text-muted); min-width:50px;';
+                        argLbl.textContent = argName + ':';
+                        const argInp = document.createElement('input');
+                        argInp.className = 'node-input';
+                        argInp.placeholder = `{{var}} or "literal"`;
+                        argInp.style = 'flex:1; font-size:10px;';
+                        argRow.appendChild(argLbl);
+                        argRow.appendChild(argInp);
+                        formWrap.appendChild(argRow);
+                        argInputs.push(argInp);
+                    });
+
+                    const insertBtn = document.createElement('button');
+                    insertBtn.className = 'btn-node-action';
+                    insertBtn.style = 'margin-top:4px; width:100%;';
+                    insertBtn.textContent = '↩ Insert Call';
+                    insertBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        const argStr = argInputs.map(i => i.value.trim() || '""').join(', ');
+                        inputEl.value = `{{${f.name}(${argStr})}}`;
+                        updateNodeConfig(nodeId, configKey, inputEl.value);
+                        renderBuilderNodes(); renderConnections();
+                        menu.remove();
+                    };
+                    formWrap.appendChild(insertBtn);
+                    item.appendChild(formWrap);
+                };
+            }
             menu.appendChild(item);
         });
     }
@@ -1361,6 +1567,7 @@ function startConnection(e, fromId, portType, portIdx) {
         fromId,
         fromType: portType,
         fromPortIdx: portIdx,
+        targetHandle: arguments[4] || null, // Optional argument for named handles
         mouseX,
         mouseY
     };
@@ -1408,10 +1615,16 @@ function startConnection(e, fromId, portType, portIdx) {
                 );
 
                 if (!exists && outNodeId !== inNodeId) {
-                    state.builder.edges.push({
-                        from: outNodeId, fromIdx: outPortIdx,
-                        to: inNodeId, toIdx: inPortIdx
-                    });
+                    // For conditional nodes, tag the edge with its branch handle
+                    const srcNode = state.builder.nodes.find(n => n.id === outNodeId);
+                    let sourceHandle = undefined;
+                    if (srcNode && srcNode.type === 'logic' && srcNode.preset === 'conditional') {
+                        sourceHandle = outPortIdx === 0 ? 'true' : 'false';
+                    }
+                    const edge = { from: outNodeId, fromIdx: outPortIdx, to: inNodeId, toIdx: inPortIdx };
+                    if (sourceHandle !== undefined) edge.sourceHandle = sourceHandle;
+                    if (conn.targetHandle) edge.targetHandle = conn.targetHandle;
+                    state.builder.edges.push(edge);
                     toast('Connection created', 'success');
                 }
             }
@@ -1465,7 +1678,10 @@ function renderConnections() {
         const toPos = getPortPos(edge.to, 'input', edge.toIdx);
 
         const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-        path.setAttribute('class', 'connection-path');
+        let pathClass = 'connection-path';
+        if (edge.sourceHandle === 'true') pathClass += ' connection-path--true';
+        else if (edge.sourceHandle === 'false') pathClass += ' connection-path--false';
+        path.setAttribute('class', pathClass);
         path.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
 
         path.oncontextmenu = (e) => {
@@ -1821,7 +2037,7 @@ async function loadScrapers() {
     state.queueTasks = queue; // Update global state for 'Stop' button visibility
 
     const cacheKey = 'scrapers_' + state.activeTagFilter;
-    const dataHash = JSON.stringify({ scrapers, tags, activeFilter: state.activeTagFilter });
+    const dataHash = JSON.stringify({ scrapers, tags, activeFilter: state.activeTagFilter, tz: state.timezone });
     if (responseCache[cacheKey] === dataHash) return;
     responseCache[cacheKey] = dataHash;
 
@@ -2343,7 +2559,7 @@ async function loadSchedules(skipFetch = false) {
             });
         }
 
-        const dataHash = JSON.stringify({ filtered, tags: state.tags, activeFilter: state.activeScheduleTagFilter });
+        const dataHash = JSON.stringify({ filtered, tags: state.tags, activeFilter: state.activeScheduleTagFilter, tz: state.timezone });
         if (responseCache['schedules_rendered'] === dataHash) return;
         responseCache['schedules_rendered'] = dataHash;
 
@@ -2763,7 +2979,7 @@ async function loadLogs(page = null) {
     try {
         const data = await apiFetch(url);
 
-        const dataHash = JSON.stringify({ data, filters: state.logFilters, page: state.currentLogsPage });
+        const dataHash = JSON.stringify({ data, filters: state.logFilters, page: state.currentLogsPage, tz: state.timezone });
         if (responseCache['logs'] === dataHash) return;
         responseCache['logs'] = dataHash;
 
@@ -3078,7 +3294,7 @@ async function loadQueue() {
     try {
         const tasks = await apiFetch(API.queue);
 
-        const dataHash = JSON.stringify(tasks);
+        const dataHash = JSON.stringify({ tasks, tz: state.timezone });
         if (responseCache['queue'] === dataHash) return;
         responseCache['queue'] = dataHash;
 
@@ -3624,10 +3840,17 @@ async function loadSettings() {
         if (!_allTimezones.length) _allTimezones = timezones; // timezones is now array of objects {id, label}
 
         const current = settings.timezone || 'UTC';
+        state.timezone = current;
 
         const dl = document.getElementById('tz-list');
-        if (dl) dl.innerHTML = _allTimezones.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
-        document.getElementById('tz-input').value = current;
+        if (dl && (!_allTimezones.length || dl.children.length === 0)) {
+            dl.innerHTML = _allTimezones.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
+        }
+        
+        const tzInp = document.getElementById('tz-input');
+        if (tzInp && document.activeElement !== tzInp) {
+            tzInp.value = current;
+        }
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -4273,6 +4496,21 @@ function renderVariablesList() {
                             placeholder='["url1", "url2"]' 
                             oninput="state.variables[${idx}].value = this.value; validateInlineJson(this)"
                         >${v.value || ''}</textarea>
+                    ` : v.value_type === 'boolean' ? `
+                        <label class="bool-toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0">
+                            <input type="checkbox" id="inline-var-value-${idx}" 
+                                class="bool-toggle-checkbox"
+                                ${String(v.value).toLowerCase() === 'true' || v.value === '1' ? 'checked' : ''}
+                                onchange="state.variables[${idx}].value = this.checked ? 'true' : 'false'">
+                            <span class="bool-toggle-track"></span>
+                            <span style="font-size:11px;font-weight:700;color:${String(v.value).toLowerCase() === 'true' ? 'var(--success)' : 'var(--failure)'};transition:color 0.2s" id="bool-lbl-${idx}">${String(v.value).toLowerCase() === 'true' ? 'TRUE' : 'FALSE'}</span>
+                        </label>
+                        <script>
+                            document.getElementById('inline-var-value-${idx}')?.addEventListener('change', function(){
+                                const lbl = document.getElementById('bool-lbl-${idx}');
+                                if(lbl){lbl.textContent = this.checked ? 'TRUE':'FALSE'; lbl.style.color = this.checked ? 'var(--success)':'var(--failure)';}
+                            });
+                        <\/script>
                     ` : `
                         <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." oninput="state.variables[${idx}].value = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
                     `}
@@ -4443,15 +4681,20 @@ async function saveInlineVariable(idx) {
     const v = state.variables[idx];
     const key = document.getElementById(`inline-var-key-${idx}`).value.trim();
     const type = document.getElementById(`inline-var-type-${idx}`).value;
-    const value = document.getElementById(`inline-var-value-${idx}`).value.trim();
+
+    // Bool type reads from checkbox, others read text/textarea value
+    let value;
+    if (type === 'boolean') {
+        const cb = document.getElementById(`inline-var-value-${idx}`);
+        value = (cb && cb.checked) ? 'true' : 'false';
+    } else {
+        value = document.getElementById(`inline-var-value-${idx}`).value.trim();
+    }
     const description = document.getElementById(`inline-var-desc-${idx}`).value.trim();
 
     if (!key) { toast('Key is required', 'error'); return; }
 
     const payload = { key, value, value_type: type, is_secret: v.is_secret, is_readonly: v.is_readonly, description };
-    if (v._isNew) {
-        // payload already has key
-    }
 
     try {
         const url = v._isNew ? API.variables : `${API.variables}/${v.id}`;
@@ -4462,7 +4705,7 @@ async function saveInlineVariable(idx) {
         toast(v._isNew ? 'Variable created' : 'Variable updated', 'success');
         v._editing = false;
         v._isNew = false;
-        loadVariables(true); // Force refresh to get final state from DB
+        loadVariables(true);
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -4616,7 +4859,7 @@ function renderFunctionsList() {
                                 <span style="font-size:18px; color:var(--accent)">ƒ</span>
                                 <code class="var-key" style="font-size:14px">${f.name}</code>
                             </div>
-                            <div class="ctx-subtext" style="margin-top:4px">${f.desc}</div>
+                            <div class="ctx-subtext" style="margin-top:4px; opacity:0.9; font-size:11px; color:var(--text-secondary);">${f.desc}</div>
                         </div>
                     </div>
                 </div>`;
@@ -4631,15 +4874,24 @@ function renderFunctionsList() {
             <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;">
                 ${state.functions.map(f => {
             const safeDesc = (f.description || '').replace(/'/g, "\\'");
+            const cat = f.category || (f.is_generator ? 'generator' : 'transformer');
+            const colorMap = {
+                generator: { bg: 'rgba(34, 197, 94, 0.04)', border: 'var(--success)', icon: '📡', label: 'GEN' },
+                comparator: { bg: 'rgba(99, 102, 241, 0.04)', border: 'var(--accent)', icon: '💎', label: 'LOGIC' },
+                transformer: { bg: 'rgba(234, 179, 8, 0.04)', border: 'var(--warning)', icon: '🔧', label: 'UDF' }
+            };
+            const theme = colorMap[cat] || colorMap.transformer;
+            
             return `
-                    <div class="ctx-item-card" style="border-left: 4px solid ${f.is_generator ? 'var(--success)' : 'var(--text-muted)'}; background: ${f.is_generator ? 'rgba(34, 197, 94, 0.03)' : 'var(--bg-input)'}; padding: 12px 16px;">
+                    <div class="ctx-item-card" style="border-left: 4px solid ${theme.border}; background: ${theme.bg}; padding: 12px 16px;">
                         <div class="ctx-item-header" style="margin:0; display:flex; align-items:center; gap:16px;">
                             <div style="flex:1; min-width:0; cursor:pointer;" onclick="openContextDrawer('func', ${f.id})">
-                                <div style="display:flex; align-items:center; gap:8px">
-                                    <span style="font-size:18px; color:${f.is_generator ? 'var(--success)' : 'var(--text-secondary)'}">${f.is_generator ? '📡' : '📦'}</span>
-                                    <code class="var-key" style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block;">${f.name}</code>
+                                <div style="display:flex; align-items:center; width:100%; overflow:hidden;">
+                                    <span style="font-size:18px; margin-right:8px; flex-shrink:0;">${theme.icon}</span>
+                                    <code class="var-key" style="font-size:13px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; min-width:0;">${f.name}</code>
+                                    <span class="item-badge" style="background:${theme.border}; color:#000; font-size:9px; font-weight:800; padding:2px 6px; border-radius:4px; margin-left:8px; flex-shrink:0;">${theme.label}</span>
                                 </div>
-                                <div class="ctx-subtext" style="margin-top:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0.6;">${f.description || 'No description.'}</div>
+                                <div class="ctx-subtext" style="margin-top:4px; font-size:11px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; opacity:0.9; color:var(--text-secondary);">${f.description || 'No description.'}</div>
                             </div>
                             <div class="item-actions" style="flex-shrink:0;">
                                 <div class="action-btn-group">

@@ -192,7 +192,8 @@ class UserFunction(Base):
     name        = Column(String,  unique=True, nullable=False) # Function slug (e.g. calculate_date)
     description = Column(Text,    nullable=True)
     code        = Column(Text,    nullable=True)  # The Python source code
-    is_generator = Column(Boolean, default=False)  # True if it uses the 'yield' keyword
+    is_generator = Column(Boolean, default=False)  # Legacy: Use category instead
+    category    = Column(String,  default="transformer") # "comparator" | "generator" | "transformer"
     doc_md      = Column(Text,    nullable=True)  # Markdown handbook/docs
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

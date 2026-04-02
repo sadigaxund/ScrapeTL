@@ -28,36 +28,56 @@ You can define global variables in **Context Registry > Shared Variables**. Thes
 
 ---
 
-## 🐍 Custom functions (UDFs)
+---
 
-You can import your own Python logic into the database via **Context Registry > Expressive Functions**.
+## 💎 Semantic Function Contracts (UDF Upgrade)
 
-### How to Import
-1.  **Create a `.py` file**: Write standard Python functions.
-2.  **Import**: In the UI, set a **Function Name** (this is what you'll call in expressions) and upload your file.
-3.  **Execute**: Your code is stored in the database and executed in a sandboxed namespace.
+Functions are now intelligently categorized based on their Python signature and return logic. This allows the **Scraper Builder** to adapt its UI (ports) specifically to your code.
 
-### Code Example (`udf_example.py`)
-```python
-import re
+### 1. Categories & Usage
 
-def clean_price(text):
-    """Extracts digits and returns float"""
-    if not text: return 0.0
-    nums = re.findall(r"[\d\.]+", str(text).replace(',', ''))
-    return float(nums[0]) if nums else 0.0
+| Type | Icon | Contract | Builder Behavior |
+| :--- | :--- | :--- | :--- |
+| **Comparator** | 💎 | Returns `bool` | **Transforms** Conditional Node ports to match arguments. |
+| **Generator** | 📡 | Uses `yield` | Emits multiple values (for loops/streams). |
+| **Transformer**| 🔧 | Generic return | Used for data mapping and calculations. |
 
-def slugify(text):
-    return text.lower().replace(' ', '-')
-```
+### 2. Implementation & Auto-Detection
 
-### Calling UDFs
-Once imported with the name `clean_price`, you can use it like this:
-- **Input**: `{{clean_price(data.price_str)}}`
-- **Math**: `{{clean_price(data.price) * 1.2}}` (Add 20% tax)
+The system automatically detects the function type when you import or save your code:
+
+- **Comparator**: Scan for `-> bool` type hint or `return True / False`.
+  ```python
+  def is_valid_price(price: float, threshold=100.0) -> bool:
+      return price > 0 and price <= threshold
+  ```
+  *In the Builder: Selecting this automatically creates two input ports: `price` and `threshold`.*
+
+- **Generator**: Scan for the `yield` keyword or `-> Generator` / `-> Iterable`.
+  ```python
+  def sitemap_walker(url: str):
+      for i in range(1, 11):
+          yield f"{url}?page={i}"
+  ```
+
+- **Transformer**: The default for any standard value-returning function.
+  ```python
+  def clean_name(name: str):
+      return name.strip().title()
+  ```
+
+### 3. Named Port Mapping
+
+When using a **Comparator** in the **Conditional Branch** node (Custom Mode):
+1.  **Select the Function**: Pick your UDF from the registry.
+2.  **Automatic Transformation**: The node's generic `Input A/B` ports will be replaced by the actual argument names from your Python code.
+3.  **Connect & Execute**: Connect any data node to these named ports. The engine will automatically pass them as arguments to your function.
+
+> [!TIP]
+> Use **Type Hints** (like `: float` and `-> bool`) in your Python code. Not only does it make your logic clearer, but it also helps the Builder UI categorize your functions perfectly!
 
 > [!IMPORTANT]
-> Custom functions have access to the same environment as the main application. Ensure you only import trusted code.
+> If your function takes multiple arguments, ensure you connect a value to **every named port** in the builder to avoid execution errors.
 
 ---
 
