@@ -15,12 +15,12 @@ class BuilderEngine:
     Handles node caching, parallel branching, and multiple output merging.
     """
 
-    def __init__(self, flow_data: Dict[str, Any], global_vars: Dict[str, Any], db_session=None):
+    def __init__(self, flow_data: Dict[str, Any], global_vars: Dict[str, Any], db_session=None, custom_funcs: Dict[str, str] = None):
         self.nodes = {n["id"]: n for n in flow_data.get("nodes", [])}
         self.edges = flow_data.get("edges", [])
         self.global_vars = global_vars
         self.db = db_session
-        
+        self.custom_funcs = custom_funcs or {}        
         # Internal cache for node results to prevent redundant execution
         self.results_cache: Dict[str, Any] = {}
         
@@ -186,11 +186,13 @@ class BuilderEngine:
 
         elif ntype == "input_expression":
             # The frontend saves this as "value", previously it was "expression"
-            expr = data.get("value") or data.get("expression", "")
+            expr = (data.get("value") or data.get("expression", "")).strip()
+            
             # Merge global vars with results from parent nodes for expansion
             context = {**self.global_vars, **node_inputs}
+
             print(f"[BuilderEngine] Resolving expression: '{expr}'")
-            return resolve_expressions(expr, context)
+            return resolve_expressions(expr, context, custom_funcs=self.custom_funcs)
 
         elif ntype == "action_fetch_url":
             url = data.get("url") or node_inputs.get("url")
@@ -436,6 +438,10 @@ class BuilderEngine:
         elif ntype == "sink_system_output":
             # Pass through but wrap in dictionary if raw
             data = node_inputs.get("data")
+            import types
+            if isinstance(data, types.GeneratorType):
+                data = list(data)
+                
             label = data.get("label") if isinstance(data, dict) else (data.get("internalLabel") if isinstance(data, dict) else None)
             # Fallback to config label
             if not label:
