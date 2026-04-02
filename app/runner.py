@@ -268,7 +268,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
         # Fire assigned integrations
         if status in ("success", "failure", "skipped"):
-            results = _fire_integrations(scraper_record, status, episodes, error_msg, triggered_by)
+            results = _fire_integrations(scraper_record, status, all_episodes, error_msg, triggered_by)
             if results:
                 log.integration_details = json.dumps(results)
                 db.commit()

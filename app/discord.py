@@ -97,7 +97,7 @@ def _resolve_thumb(ep: dict, thumb_path: str, static_thumb: str, scraper_thumbna
     return thumb_url or ep.get("thumbnail") or scraper_thumbnail or None
 
 
-def _build_embed(ep: dict, scraper_name: str, thumb_url, shorten_urls: bool = False) -> dict:
+def _build_embed(ep: dict, scraper_name: str, thumb_url, shorten_urls: bool = False, integration_name: str = None) -> dict:
     import re
     url_pattern = re.compile(r"https?://[^\s<>\"']+")
 
@@ -131,6 +131,7 @@ def _build_embed(ep: dict, scraper_name: str, thumb_url, shorten_urls: bool = Fa
         "title": scraper_name,
         "color": STATUS_COLOR["success"],
         "fields": fields,
+        "footer": {"text": f"{integration_name or 'ScraperHub'} • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"},
     }
     if url_ep and str(url_ep).startswith("http"):
         embed["url"] = url_ep
@@ -158,7 +159,7 @@ def send_notification(
         return None
 
     dispatch_mode, format_style, send_as_file = _resolve_config(config)
-    display_name = integration_name or scraper_name
+    display_name = scraper_name
     tag_all = config.get("tag_all", False)
     thumb_path = config.get("thumbnail_path", "")
     static_thumb = config.get("thumbnail_url", "")
@@ -208,7 +209,7 @@ def send_notification(
         else:  # per_element embed (default)
             for ep in episodes:
                 thumb_url = _resolve_thumb(ep, thumb_path, static_thumb, scraper_thumbnail)
-                embed = _build_embed(ep, display_name, thumb_url, shorten_urls=shorten_urls)
+                embed = _build_embed(ep, display_name, thumb_url, shorten_urls=shorten_urls, integration_name=integration_name)
                 content = "@everyone" if tag_all else ""
                 post({"url": url, "json": {"content": content, "embeds": [embed]}})
                 time.sleep(delay_sec)
@@ -226,10 +227,11 @@ def send_notification(
 
         payload = {
             "embeds": [{
-                "title":  f"🎌 {display_name}",
+                "title":  scraper_name,
                 "color":  color,
                 "fields": fields,
-                "footer": {"text": f"ScrapeTL • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"},
+                "thumbnail": {"url": scraper_thumbnail} if scraper_thumbnail and scraper_thumbnail.startswith("http") else None,
+                "footer": {"text": f"{integration_name or 'ScraperHub'} • {datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')}"},
             }]
         }
         post({"url": url, "json": payload})

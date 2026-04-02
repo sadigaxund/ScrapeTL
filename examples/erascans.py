@@ -209,7 +209,7 @@ class Scraper(BaseScraper):
         if not episodes:
             raise RuntimeError("Chapter list found but no episodes could be parsed.")
 
-        episodes.sort(key=lambda e: e.get("episode_number") or 0)
+        episodes.sort(key=lambda e: float(e.get("episode_number")) or 0)
 
         retval = []
 
@@ -222,3 +222,11 @@ class Scraper(BaseScraper):
             raise ScrapeSkip(f"No new episodes.")
         else:
             return retval
+
+# if __name__ == "__main__":
+#     import json
+#     # Replace with a real series URL to test
+#     test_url = "https://erascans.com/series/the-old-prisoner-lives-in-solitude/"
+#     thumbnail_url="https://asura-scans.online/wp-content/uploads/2025/05/logo.webp"
+#     results = Scraper().scrape(website_url=test_url, manhwa_name="The Old Prisoner Lives in Solitude3", thumbnail_url = thumbnail_url)
+#     print(json.dumps(results, indent=2))
