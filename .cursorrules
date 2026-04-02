@@ -1,0 +1,6 @@
+- NEVER modify the .TODO file under any circumstances.
+- Always respect the rule that .TODO is for human reference only.
+- record all the application breaking bugs into PATCHES/FIXED_BUGS.md
+- do not use terminal commands unless explicitly asked
+- no need to verify the code with any kind of script or testing, user will manually test it.
+- no need to migrate the database, user will take care of it.

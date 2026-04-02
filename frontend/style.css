@@ -3485,4 +3485,157 @@ input:checked+.slider {
     font-weight: 700;
     margin: 0;
 }
+
+/* ── Conditional Node — True/False Port Colors ──────── */
+.node-port--true {
+  background: var(--success) !important;
+  border-color: var(--success) !important;
+  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+}
+
+.node-port--false {
+  background: var(--failure) !important;
+  border-color: var(--failure) !important;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+}
+
+/* ── Logic Node — Visual Identity ───────────────────── */
+.builder-node--logic {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.12), rgba(15, 15, 15, 0.98)) !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(16, 185, 129, 0.01) !important;
+}
+
+.builder-node--logic .builder-node__title {
+  color: #10b981 !important;
+  border-bottom-color: rgba(16, 185, 129, 0.1) !important;
+}
+
+/* ── Conditional Connection Paths ───────────────────── */
+.connection-path--true {
+  stroke: var(--success) !important;
+  filter: drop-shadow(0 0 4px rgba(34, 197, 94, 0.5)) !important;
+}
+
+.connection-path--false {
+  stroke: var(--failure) !important;
+  filter: drop-shadow(0 0 4px rgba(239, 68, 68, 0.5)) !important;
+}
+
+.connection-path--true.selected,
+.connection-path--false.selected {
+  stroke-width: 4 !important;
+}
+
+/* ── Boolean Toggle Switch ──────────────────────────── */
+.bool-toggle-wrap {
+  position: relative;
+}
+
+.bool-toggle-checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.bool-toggle-track {
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  background: rgba(239, 68, 68, 0.3);
+  border: 1px solid rgba(239, 68, 68, 0.5);
+  border-radius: 99px;
+  position: relative;
+  transition: all 0.25s ease;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.bool-toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: var(--failure);
+  border-radius: 50%;
+  transition: all 0.25s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.bool-toggle-checkbox:checked + .bool-toggle-track {
+  background: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.5);
+}
+
+.bool-toggle-checkbox:checked + .bool-toggle-track::after {
+  background: var(--success);
+  left: calc(100% - 18px);
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
+}
+
+.bool-toggle-wrap:hover .bool-toggle-track {
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ── Toolbar Category Tints ───────────────────────── */
+#tool-input { border-color: rgba(34, 197, 94, 0.25); color: #4ade80; }
+#tool-input.active { background: rgba(34, 197, 94, 0.15) !important; border-color: #22c55e !important; box-shadow: 0 0 15px rgba(34, 197, 94, 0.3); }
+
+#tool-source { border-color: rgba(14, 165, 233, 0.25); color: #0ea5e9; }
+#tool-source.active { background: rgba(14, 165, 233, 0.15) !important; border-color: #0ea5e9 !important; box-shadow: 0 0 15px rgba(14, 165, 233, 0.3); }
+
+#tool-action { border-color: rgba(99, 102, 241, 0.25); color: #818cf8; }
+#tool-action.active { background: rgba(99, 102, 241, 0.15) !important; border-color: #6366f1 !important; box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
+
+#tool-sink { border-color: rgba(245, 158, 11, 0.25); color: #f59e0b; }
+#tool-sink.active { background: rgba(245, 158, 11, 0.1) !important; border-color: #f59e0b !important; box-shadow: 0 0 15px rgba(245, 158, 11, 0.3); }
+
+#tool-logic { border-color: rgba(16, 185, 129, 0.25); color: #10b981; }
+#tool-logic.active { background: rgba(16, 185, 129, 0.15) !important; border-color: #10b981 !important; box-shadow: 0 0 15px rgba(16, 185, 129, 0.3); }
+
+/* Override menu hover to match category */
+#dropdown-input .menu-item:hover { background: rgba(34, 197, 94, 0.15); }
+#dropdown-source .menu-item:hover { background: rgba(14, 165, 233, 0.15); }
+#dropdown-action .menu-item:hover { background: rgba(99, 102, 241, 0.15); }
+#dropdown-sink .menu-item:hover { background: rgba(245, 158, 11, 0.1); }
+#dropdown-logic .menu-item:hover { background: rgba(16, 185, 129, 0.15); }
+
+/* ── Context Item Card (Functions) ───────────────── */
+.ctx-item-card {
+  position: relative !important;
+  overflow: hidden;
+  transition: all var(--transition);
+}
+
+.ctx-item-card .item-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  opacity: 0;
+  transform: translateX(8px);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  pointer-events: none;
+  z-index: 10;
+}
+
+.ctx-item-card:hover .item-actions {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.ctx-item-card .action-btn-group {
+  background: var(--bg-surface);
+  box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+  border: 1px solid var(--border-strong);
+}
+
+/* Ensure text doesn't hit the absolute buttons too early */
+.ctx-item-card .ctx-item-header {
+  padding-right: 8px;
+}
 

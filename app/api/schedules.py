@@ -47,9 +47,9 @@ def list_schedules(db: Session = Depends(get_db)):
             "thumbnail_url": thumb,
             "cron_expression": s.cron_expression,
             "enabled": s.enabled,
-            "last_run": s.last_run.isoformat() if s.last_run else None,
-            "next_run": s.next_run.isoformat() if s.next_run else None,
-            "created_at": s.created_at.isoformat() if s.created_at else None,
+            "last_run": s.last_run.isoformat() + "Z" if s.last_run else None,
+            "next_run": s.next_run.isoformat() + "Z" if s.next_run else None,
+            "created_at": s.created_at.isoformat() + "Z" if s.created_at else None,
             "input_values": json.loads(s.input_values) if s.input_values else None,
             "label": s.label or None,
             # For editing convenience, also return the raw override values
@@ -126,7 +126,7 @@ async def create_schedule(
         schedule.next_run = job.next_run_time.astimezone(pytz.utc).replace(tzinfo=None)
         db.commit()
 
-    return {"id": schedule.id, "next_run": schedule.next_run.isoformat() if schedule.next_run else None}
+    return {"id": schedule.id, "next_run": schedule.next_run.isoformat() + "Z" if schedule.next_run else None}
 
 
 @router.patch("/{schedule_id}/toggle")

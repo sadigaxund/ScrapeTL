@@ -70,8 +70,8 @@ def _scraper_dict(s: Scraper):
         "homepage_url": s.homepage_url,
         "thumbnail_url": f"/thumbnails/{s.local_thumbnail_path}" if s.local_thumbnail_path else s.thumbnail_url,
         "health": s.health or "untested",
-        "created_at": s.created_at.isoformat() if s.created_at else None,
-        "updated_at": s.updated_at.isoformat() if s.updated_at else None,
+        "created_at": s.created_at.isoformat() + "Z" if s.created_at else None,
+        "updated_at": s.updated_at.isoformat() + "Z" if s.updated_at else None,
         "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in s.tags],
         "integrations": [{"id": i.id, "name": i.name, "type": i.type} for i in s.integrations],
         "version_count": len(s.versions) if s.versions else 0,
@@ -79,7 +79,7 @@ def _scraper_dict(s: Scraper):
         "inputs": scraper_inputs,
         "scraper_type": s.scraper_type,
         "flow_data": json.loads(s.flow_data) if s.flow_data else None,
-        "last_run": s.logs[0].run_at.isoformat() if s.logs else None,
+        "last_run": s.logs[0].run_at.isoformat() + "Z" if s.logs else None,
     }
 
 
@@ -445,7 +445,7 @@ def list_versions(scraper_id: int, db: Session = Depends(get_db)):
             "id": v.id,
             "version_label": v.version_label or "—",
             "commit_message": v.commit_message or "",
-            "created_at": v.created_at.isoformat()
+            "created_at": v.created_at.isoformat() + "Z"
         }
         for v in reversed(scraper.versions)
     ]
@@ -456,7 +456,7 @@ def get_version_code(scraper_id: int, version_id: int, db: Session = Depends(get
     version = db.get(ScraperVersion, version_id)
     if not version or version.scraper_id != scraper_id:
         raise HTTPException(status_code=404, detail="Version not found.")
-    return {"version_label": version.version_label, "code": version.code, "created_at": version.created_at.isoformat()}
+    return {"version_label": version.version_label, "code": version.code, "created_at": version.created_at.isoformat() + "Z"}
 
 
 @router.post("/{scraper_id}/revert/{version_id}")
