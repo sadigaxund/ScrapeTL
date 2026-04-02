@@ -33,3 +33,9 @@ This file contains a record of identified and resolved bugs in the ScrapeTL Hub 
 - **File**: [app.js](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/frontend/app.js)
 - **Description**: The Scraper Builder was missing a `wheel` event listener, making it impossible for users to zoom in/out with `Ctrl + Scroll`. 
 - **Fix**: Implemented a unified `setZoom` engine in `app.js` and added a `wheel` listener to the builder viewport with zoom-to-cursor math.
+
+### 8. Discord Integration - Empty Results Data
+- **Status**: ✅ SOLVED
+- **File**: [runner.py](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/app/runner.py), [discord.py](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/app/discord.py)
+- **Description**: When the "Include Scraping Results" option was enabled in Discord integrations, only the execution state (Success/Failure) was being sent, even if data was successfully scraped. This was caused by `app/runner.py` passing an empty list instead of the actual results.
+- **Fix**: Updated the integration dispatcher to use the correct results list and refined the Discord notification logic to handle both data and state payloads consistently, including improved visual formatting (thumbnails/footers).
