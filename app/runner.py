@@ -56,7 +56,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
     try:
         max_retries, backoff_seconds = _get_retry_settings(db)
 
-        status        = "failure"
+        status        = "success"
         payload_dict  = None
         payload_list  = None
         episode_count = 0
@@ -86,7 +86,15 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                         class Batch(list): pass
                         val = Batch(val)
                 except: pass
+            # Flat access for broad compatibility
             global_vars[v.key] = val
+            # Namespace-grouped access for {{namespace.key}}
+            if v.namespace:
+                if v.namespace not in global_vars:
+                    global_vars[v.namespace] = {}
+                # Ensure the root variable is an object-like structure if it's already a dict
+                if isinstance(global_vars[v.namespace], dict):
+                    global_vars[v.namespace][v.key] = val
             
         # 3.5 Resolve Expressions in Input Values using current variables
         custom_funcs = {f.name: f.code for f in db.query(UserFunction).all()}
@@ -111,10 +119,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             raise ValueError("No code version found for this scraper.")
 
         if scraper_record.scraper_type == "builder":
-            from app.builder.engine import BuilderEngine
-            flow_data = json.loads(scraper_record.flow_data) if scraper_record.flow_data else json.loads(scraper_record.versions[0].code)
-            engine = BuilderEngine(flow_data, global_vars, db_session=db, custom_funcs=custom_funcs)
-            scraper_instance = engine
+            scraper_instance = None # Will be instantiated inside retry loop
         else:
             from app.scrapers import load_scraper_class_from_code
             scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
@@ -142,6 +147,13 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 else:
                     iter_inputs = item
 
+                # Parse flow data once for the iteration
+                flow_data = None
+                # Parse flow data once for the iteration
+                flow_data = None
+                if scraper_record.scraper_type == "builder":
+                    flow_data = json.loads(scraper_record.flow_data) if scraper_record.flow_data else json.loads(scraper_record.versions[0].code)
+
                 attempt_status = "failure"
                 iter_episodes = []
 
@@ -153,10 +165,11 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
                     try:
                         if scraper_record.scraper_type == "builder":
+                            from app.builder.engine import BuilderEngine
+                            # New engine every attempt = fresh brain
+                            engine = BuilderEngine(flow_data, global_vars, db_session=db, custom_funcs=custom_funcs)
                             res_bundle = engine.execute(iter_inputs, stop_event=stop_event)
-                            # res_bundle is now { "main": [], "debug": [] }
                             iter_episodes = res_bundle.get("main", [])
-                            # Add to global debug state
                             all_debug_data.extend(res_bundle.get("debug", []))
                         else:
                             kwargs = {**iter_inputs, "vars": global_vars, "db": db}

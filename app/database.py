@@ -89,6 +89,15 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE global_variables ADD COLUMN is_readonly BOOLEAN DEFAULT 0"))
             conn.commit()
             print("[DB] Added is_readonly to global_variables")
+        if cols and "namespace" not in cols:
+            conn.execute(text("ALTER TABLE global_variables ADD COLUMN namespace TEXT"))
+            conn.commit()
+            print("[DB] Added namespace to global_variables")
+        
+            if "schema" in cols:
+                conn.execute(text("UPDATE global_variables SET namespace = schema WHERE namespace IS NULL"))
+                conn.commit()
+                print("[DB] Ported data from schema to namespace")
 
         # Check user_functions
         res = conn.execute(text("PRAGMA table_info(user_functions)"))

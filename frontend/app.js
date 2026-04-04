@@ -27,6 +27,7 @@ const API = {
     reorderSchedules: '/api/schedules/reorder',
     reorderIntegrations: '/api/integrations/reorder',
     variables: '/api/variables',
+    variablesBatchRename: '/api/variables/batch/rename-namespace',
     functions: '/api/functions',
     stopRun: (id) => `/api/run/stop/${id}`,
     duplicateScraper: (id) => `/api/scrapers/${id}/duplicate`,
@@ -52,6 +53,9 @@ let state = {
     queueTasks: [],
     queueSort: { col: 'scheduled_for', order: 'asc' },
     variables: [],
+    virtualNamespaces: [],  // track namespaces with no variables yet
+    editingNamespace: null, // track which namespace header is being renamed
+    tempNamespaceName: '',  // buffer for typing new namespace
     functions: [],
     builder: {
         x: -2000,
@@ -161,7 +165,7 @@ function formatRelativeDate(isoStr) {
     if (minutes < 60) return `${minutes}m ago`;
     if (hours < 24) return `${hours}h ago`;
     if (days < 7) return `${days}d ago`;
-    
+
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit' });
 }
 
@@ -387,11 +391,11 @@ const NODE_PRESETS = {
             ]
         },
         expression: {
-            title: 'Expression',
+            title: 'Registry Pull',
             inputs: [],
             outputs: ['Val Out'],
             configs: [
-                { key: 'value', type: 'expression', label: 'Value / Registry' }
+                { key: 'value', type: 'expression', label: 'Registry Key / Expression' }
             ]
         },
     },
@@ -475,11 +479,11 @@ const NODE_PRESETS = {
             ]
         },
         context: {
-            title: 'Context Registry',
+            title: 'Registry Push',
             inputs: ['Data'],
             outputs: [],
             configs: [
-                { key: 'variable_key', type: 'expression', label: 'Registry Key', filter: 'writable' }
+                { key: 'variable_key', type: 'expression', label: 'Target Key', filter: 'writable' }
             ]
         },
         debug: {
@@ -532,7 +536,7 @@ const NODE_PRESETS = {
         },
         custom_logic: {
             title: 'Custom Logic',
-            inputs: [], 
+            inputs: [],
             outputs: ['True', 'False'],
             configs: [
                 { key: 'mode', type: 'hidden', value: 'custom' },
@@ -548,7 +552,7 @@ function parseFuncArgs(code, funcName) {
     // 1. Clean the code of comments
     const lines = code.split('\n');
     let args = [];
-    
+
     // 2. Find the def line
     const defRegex = new RegExp(`def\\s+${funcName}\\s*\\(([^)]*)\\)`);
     const match = code.match(defRegex);
@@ -576,10 +580,10 @@ function discoverDynamicPorts(nodeId) {
         // Extract function name from {{my_func(...)}} or just my_func
         let funcName = funcExpr.replace(/[{}]/g, '').split('(')[0].trim();
         const f = state.functions.find(x => x.name === funcName);
-        
+
         if (f) {
             let args = parseFuncArgs(f.code, f.name);
-            
+
             // Critical Sync: Always sanitize immediately to prevent 'dirty' state
             args = args.map(a => a.split(/[:=]/)[0].trim());
 
@@ -608,9 +612,9 @@ function discoverDynamicPorts(nodeId) {
  */
 function sanitizeBuilderState() {
     if (!state.builder || !state.builder.nodes) return;
-    
+
     let changed = false;
-    
+
     // 1. Clean dynamic_ports on nodes
     state.builder.nodes.forEach(node => {
         if (node.dynamic_ports && node.dynamic_ports.length > 0) {
@@ -621,7 +625,7 @@ function sanitizeBuilderState() {
             }
         }
     });
-    
+
     // 2. Clean targetHandle on edges
     state.builder.edges.forEach(edge => {
         if (edge.targetHandle && edge.targetHandle.includes(':') || edge.targetHandle && edge.targetHandle.includes(' ')) {
@@ -655,9 +659,9 @@ function injectVariableIntoExpression(expr, portName, portIdx) {
     const prefix = match[1]; // {{func(
     const argsStr = match[2]; // a, b
     const suffix = match[3]; // )}}
-    
+
     let args = argsStr.split(',').map(a => a.trim());
-    
+
     // Inject port name as the variable instead of a literal
     if (portIdx < args.length) {
         args[portIdx] = portName;
@@ -665,7 +669,7 @@ function injectVariableIntoExpression(expr, portName, portIdx) {
         // Fallback for custom logic growth
         args[portIdx] = portName;
     }
-    
+
     return `${prefix}${args.join(', ')}${suffix}`;
 }
 
@@ -682,44 +686,44 @@ function getConditionalOps(modeOrPreset) {
 
     const ops = {
         logical: [
-            { value: 'AND',  label: 'AND — All inputs truthy' },
-            { value: 'OR',   label: 'OR — Any input truthy' },
+            { value: 'AND', label: 'AND — All inputs truthy' },
+            { value: 'OR', label: 'OR — Any input truthy' },
             { value: 'NAND', label: 'NAND — Not all truthy' },
-            { value: 'NOR',  label: 'NOR — None truthy' },
-            { value: 'XOR',  label: 'XOR — Odd count truthy' },
+            { value: 'NOR', label: 'NOR — None truthy' },
+            { value: 'XOR', label: 'XOR — Odd count truthy' },
             { value: 'XNOR', label: 'XNOR — Even count truthy' },
-            { value: 'NOT',  label: 'NOT — Negate Input A' },
+            { value: 'NOT', label: 'NOT — Negate Input A' },
         ],
         unary: [
-            { value: 'is_truthy',    label: 'Is Truthy' },
-            { value: 'is_falsy',     label: 'Is Falsy' },
-            { value: 'is_null',      label: 'Is Null / None' },
-            { value: 'is_not_null',  label: 'Is Not Null' },
-            { value: 'is_empty',     label: 'Is Empty (str/list/dict)' },
+            { value: 'is_truthy', label: 'Is Truthy' },
+            { value: 'is_falsy', label: 'Is Falsy' },
+            { value: 'is_null', label: 'Is Null / None' },
+            { value: 'is_not_null', label: 'Is Not Null' },
+            { value: 'is_empty', label: 'Is Empty (str/list/dict)' },
             { value: 'is_not_empty', label: 'Is Not Empty' },
-            { value: 'is_boolean',   label: 'Is Boolean' },
-            { value: 'is_numeric',   label: 'Is Numeric' },
-            { value: 'is_list',      label: 'Is List' },
+            { value: 'is_boolean', label: 'Is Boolean' },
+            { value: 'is_numeric', label: 'Is Numeric' },
+            { value: 'is_list', label: 'Is List' },
         ],
         string: [
-            { value: 'contains',     label: 'Contains' },
+            { value: 'contains', label: 'Contains' },
             { value: 'not_contains', label: 'Does Not Contain' },
-            { value: 'starts_with',  label: 'Starts With' },
-            { value: 'ends_with',    label: 'Ends With' },
-            { value: 'equals',       label: 'Equals (case-sensitive)' },
-            { value: 'iequals',      label: 'Equals (ignore case)' },
-            { value: 'not_equals',   label: 'Not Equals' },
-            { value: 'matches_regex',label: 'Matches Regex' },
-            { value: 'length_gt',    label: 'Length > N' },
-            { value: 'length_lt',    label: 'Length < N' },
+            { value: 'starts_with', label: 'Starts With' },
+            { value: 'ends_with', label: 'Ends With' },
+            { value: 'equals', label: 'Equals (case-sensitive)' },
+            { value: 'iequals', label: 'Equals (ignore case)' },
+            { value: 'not_equals', label: 'Not Equals' },
+            { value: 'matches_regex', label: 'Matches Regex' },
+            { value: 'length_gt', label: 'Length > N' },
+            { value: 'length_lt', label: 'Length < N' },
         ],
         binary: [
-            { value: 'eq',      label: '= Equal To' },
-            { value: 'neq',     label: '≠ Not Equal' },
-            { value: 'gt',      label: '> Greater Than' },
-            { value: 'gte',     label: '≥ Greater or Equal' },
-            { value: 'lt',      label: '< Less Than' },
-            { value: 'lte',     label: '≤ Less or Equal' },
+            { value: 'eq', label: '= Equal To' },
+            { value: 'neq', label: '≠ Not Equal' },
+            { value: 'gt', label: '> Greater Than' },
+            { value: 'gte', label: '≥ Greater or Equal' },
+            { value: 'lt', label: '< Less Than' },
+            { value: 'lte', label: '≤ Less or Equal' },
             { value: 'between', label: '↔ Between (min,max)' },
         ],
         custom: [
@@ -760,7 +764,7 @@ function initBuilder() {
     viewport.addEventListener('mousedown', (e) => {
         const node = e.target.closest('.builder-node');
         const port = e.target.closest('.node-port');
-        
+
         // A. If clicking a node or port, let their specific listeners handle it
         if (node || port) {
             console.log("[Builder] Clicked a node or port", node, port);
@@ -769,7 +773,7 @@ function initBuilder() {
 
         // B. It's a workspace interaction (Background)
         const vRect = viewport.getBoundingClientRect();
-        
+
         // Calculate canvas-space coordinates from viewport-relative click
         let x = (e.clientX - vRect.left - state.builder.x) / state.builder.zoom;
         let y = (e.clientY - vRect.top - state.builder.y) / state.builder.zoom;
@@ -781,7 +785,7 @@ function initBuilder() {
                 state.builder.startX = e.clientX - state.builder.x;
                 state.builder.startY = e.clientY - state.builder.y;
                 viewport.style.cursor = 'grabbing';
-                
+
                 deselectAll();
                 renderBuilderNodes();
                 renderConnections();
@@ -819,14 +823,14 @@ function initBuilder() {
 
             state.builder.nodes.push(newNode);
             toast(`${presetData.title} Added`, 'success');
-            
+
             try {
                 renderBuilderNodes();
-            } catch(err) {
+            } catch (err) {
                 console.error("[Builder] Render nodes crash after placement:", err);
                 toast(`Render Crash: ${err.message}`, 'error');
             }
-            
+
             // Auto-switch back to pan after placement
             setBuilderTool('pan');
             return;
@@ -916,7 +920,7 @@ function setZoom(newZoom, mouseX = null, mouseY = null) {
     if (!canvas || !viewport) return;
 
     const oldZoom = state.builder.zoom;
-    
+
     if (mouseX !== null && mouseY !== null) {
         const vRect = viewport.getBoundingClientRect();
         const mx = mouseX - vRect.left;
@@ -930,7 +934,7 @@ function setZoom(newZoom, mouseX = null, mouseY = null) {
 
     state.builder.zoom = newZoom;
     canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
-    
+
     updateZoomHUD();
     renderConnections();
 }
@@ -984,7 +988,7 @@ function setBuilderTool(tool) {
 
     const viewport = document.getElementById('builder-viewport');
     const canvas = document.getElementById('builder-canvas');
-    
+
     // Highlight the correct tool button
     if (tool === 'pan') {
         const panBtn = document.getElementById('tool-pan');
@@ -1051,12 +1055,12 @@ function renderBuilderNodes() {
 
             el.addEventListener('mousedown', (e) => {
                 // Prevent if clicking port or interactive elements
-                if (e.target.closest('.node-port') || 
-                    ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'LABEL'].includes(e.target.tagName) || 
+                if (e.target.closest('.node-port') ||
+                    ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'LABEL'].includes(e.target.tagName) ||
                     e.target.classList.contains('btn-node-action')) return;
 
                 e.stopPropagation();
-                
+
                 const viewport = document.getElementById('builder-viewport');
                 const vRect = viewport ? viewport.getBoundingClientRect() : { left: 0, top: 0 };
 
@@ -1074,7 +1078,7 @@ function renderBuilderNodes() {
                 deselectAll();
                 state.builder.selected = { type: 'node', id: node.id };
                 el.classList.add('selected');
-                
+
                 renderConnections();
             });
 
@@ -1110,7 +1114,7 @@ function renderBuilderNodes() {
                 // Subtract Button
                 const subBtn = document.createElement('button');
                 subBtn.className = 'btn-port-footer btn-port-footer-sub';
-                subBtn.textContent = '−'; 
+                subBtn.textContent = '−';
                 subBtn.title = 'Remove Last Input';
                 if (count <= 2) subBtn.disabled = true;
 
@@ -1127,7 +1131,7 @@ function renderBuilderNodes() {
                     targetNode.config.logicalInputs = newVal;
 
                     // Cleanup connections for the removed port index (EDGES is the correct property)
-                    state.builder.edges = state.builder.edges.filter(edge => 
+                    state.builder.edges = state.builder.edges.filter(edge =>
                         !(edge.to === node.id && Number(edge.toIdx) === curCount - 1)
                     );
 
@@ -1140,7 +1144,7 @@ function renderBuilderNodes() {
                 addBtn.className = 'btn-port-footer btn-port-footer-add';
                 addBtn.textContent = '+';
                 addBtn.title = 'Add More Inputs';
-                
+
                 addBtn.onmousedown = (e) => {
                     if (e.button !== 0) return;
                     e.stopPropagation();
@@ -1150,7 +1154,7 @@ function renderBuilderNodes() {
                     const curCount = Number(targetNode.config.logicalInputs || 2);
                     targetNode.config.logicalInputs = curCount + 1;
 
-                    renderBuilderNodes(); 
+                    renderBuilderNodes();
                     renderConnections();
                 };
 
@@ -1186,7 +1190,7 @@ function renderBuilderNodes() {
                 const port = document.createElement('div');
                 port.className = 'node-port node-port--input';
                 port.id = `node-${node.id}-input-${idx}`;
-                
+
                 // Variadic/Dynamic handle mapping
                 let handle = null;
                 if (node.dynamic_ports) {
@@ -1251,7 +1255,7 @@ function renderBuilderNodes() {
 
                     if (cfg.type === 'text') {
                         const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
-                        
+
                         if (isJson) {
                             const textarea = document.createElement('textarea');
                             textarea.className = 'inline-json-editor';
@@ -1309,48 +1313,48 @@ function renderBuilderNodes() {
                         row.className = 'node-config-row';
 
                         const input = document.createElement('input');
-                    input.className = 'node-input';
-                    input.style.flex = '1';
-                    input.value = node.config[cfg.key] || '';
-                    input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                        input.className = 'node-input';
+                        input.style.flex = '1';
+                        input.value = node.config[cfg.key] || '';
+                        input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
 
-                    const pickBtn = document.createElement('button');
-                    pickBtn.className = 'btn-node-action';
-                    pickBtn.textContent = 'Pick';
-                    pickBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        openContextRegistry(node.id, cfg.key, input, cfg.filter);
-                    };
-                    row.appendChild(input);
-                    row.appendChild(pickBtn);
-                    group.appendChild(row);
+                        const pickBtn = document.createElement('button');
+                        pickBtn.className = 'btn-node-action';
+                        pickBtn.textContent = 'Pick';
+                        pickBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            openContextRegistry(node.id, cfg.key, input, cfg.filter);
+                        };
+                        row.appendChild(input);
+                        row.appendChild(pickBtn);
+                        group.appendChild(row);
 
                     } else if (cfg.type === 'checkbox') {
-                    const wrap = document.createElement('label');
-                    wrap.style = 'display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary); margin-top:4px';
-                    
-                    const cb = document.createElement('input');
-                    cb.type = 'checkbox';
-                    const currentVal = node.config[cfg.key];
-                    cb.checked = currentVal !== undefined ? currentVal : (cfg.default !== undefined ? cfg.default : true);
-                    cb.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.checked);
-                    
-                    wrap.appendChild(cb);
-                    wrap.appendChild(document.createTextNode(cfg.label));
-                    group.innerHTML = ''; // Replace label with this integrated toggle
-                    group.appendChild(wrap);
-                } else if (cfg.type === 'action_list') {
-                    renderActionListUI(node.id, cfg.key, group);
-                } else if (cfg.type === 'string_array') {
-                    renderStringArrayUI(node.id, cfg.key, group);
-                }
+                        const wrap = document.createElement('label');
+                        wrap.style = 'display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary); margin-top:4px';
+
+                        const cb = document.createElement('input');
+                        cb.type = 'checkbox';
+                        const currentVal = node.config[cfg.key];
+                        cb.checked = currentVal !== undefined ? currentVal : (cfg.default !== undefined ? cfg.default : true);
+                        cb.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.checked);
+
+                        wrap.appendChild(cb);
+                        wrap.appendChild(document.createTextNode(cfg.label));
+                        group.innerHTML = ''; // Replace label with this integrated toggle
+                        group.appendChild(wrap);
+                    } else if (cfg.type === 'action_list') {
+                        renderActionListUI(node.id, cfg.key, group);
+                    } else if (cfg.type === 'string_array') {
+                        renderStringArrayUI(node.id, cfg.key, group);
+                    }
 
                     configContainer.appendChild(group);
                 });
                 el.appendChild(configContainer);
             }
 
-        container.appendChild(el);
+            container.appendChild(el);
         } catch (err) {
             console.error("[Builder] Failed to render node:", node, err);
         }
@@ -1417,7 +1421,7 @@ function updateNodeConfig(nodeId, key, value) {
     const node = state.builder.nodes.find(n => n.id === nodeId);
     if (node) {
         node.config[key] = value;
-        
+
         // Semantic Contract: Trigger port discovery if relevant fields changed
         if (key === 'mode' || key === 'custom_func' || key === 'value') {
             discoverDynamicPorts(nodeId);
@@ -1428,23 +1432,23 @@ function updateNodeConfig(nodeId, key, value) {
 function renderActionListUI(nodeId, configKey, container) {
     const node = state.builder.nodes.find(n => n.id === nodeId);
     if (!node) return;
-    
+
     // Initialize if empty
     if (!Array.isArray(node.config[configKey])) {
         node.config[configKey] = [];
     }
-    
+
     const listContainer = document.createElement('div');
     listContainer.className = 'macro-list-container';
-    
+
     const renderList = () => {
         listContainer.innerHTML = '';
         const actions = node.config[configKey];
-        
+
         actions.forEach((action, idx) => {
             const row = document.createElement('div');
             row.className = 'macro-row';
-            
+
             const typeSelect = document.createElement('select');
             typeSelect.className = 'node-select macro-select';
             const types = {
@@ -1468,9 +1472,9 @@ function renderActionListUI(nodeId, configKey, container) {
                 updateNodeConfig(nodeId, configKey, actions);
                 renderList(); // Refresh to show/hide value input if needed
             };
-            
+
             row.appendChild(typeSelect);
-            
+
             if (action.type !== 'scroll_bottom') {
                 const valInput = document.createElement('input');
                 valInput.className = 'node-input macro-input';
@@ -1482,7 +1486,7 @@ function renderActionListUI(nodeId, configKey, container) {
                 };
                 row.appendChild(valInput);
             }
-            
+
             const delBtn = document.createElement('button');
             delBtn.className = 'btn-macro-del';
             delBtn.textContent = '✕';
@@ -1493,10 +1497,10 @@ function renderActionListUI(nodeId, configKey, container) {
                 renderList();
             };
             row.appendChild(delBtn);
-            
+
             listContainer.appendChild(row);
         });
-        
+
         const addBtn = document.createElement('button');
         addBtn.className = 'btn-macro-add';
         addBtn.textContent = '+ Add Action';
@@ -1508,7 +1512,7 @@ function renderActionListUI(nodeId, configKey, container) {
         };
         listContainer.appendChild(addBtn);
     };
-    
+
     renderList();
     container.appendChild(listContainer);
 }
@@ -1516,22 +1520,22 @@ function renderActionListUI(nodeId, configKey, container) {
 function renderStringArrayUI(nodeId, configKey, container) {
     const node = state.builder.nodes.find(n => n.id === nodeId);
     if (!node) return;
-    
+
     if (!Array.isArray(node.config[configKey])) {
         node.config[configKey] = [];
     }
-    
+
     const listContainer = document.createElement('div');
     listContainer.className = 'macro-list-container';
-    
+
     const renderList = () => {
         listContainer.innerHTML = '';
         const items = node.config[configKey];
-        
+
         items.forEach((item, idx) => {
             const row = document.createElement('div');
             row.className = 'macro-row';
-            
+
             const valInput = document.createElement('input');
             valInput.className = 'node-input macro-input';
             valInput.placeholder = '.close-modal-btn';
@@ -1541,7 +1545,7 @@ function renderStringArrayUI(nodeId, configKey, container) {
                 updateNodeConfig(nodeId, configKey, items);
             };
             row.appendChild(valInput);
-            
+
             const delBtn = document.createElement('button');
             delBtn.className = 'btn-macro-del';
             delBtn.textContent = '✕';
@@ -1552,10 +1556,10 @@ function renderStringArrayUI(nodeId, configKey, container) {
                 renderList();
             };
             row.appendChild(delBtn);
-            
+
             listContainer.appendChild(row);
         });
-        
+
         const addBtn = document.createElement('button');
         addBtn.className = 'btn-macro-add';
         addBtn.textContent = '+ Add Selector';
@@ -1567,7 +1571,7 @@ function renderStringArrayUI(nodeId, configKey, container) {
         };
         listContainer.appendChild(addBtn);
     };
-    
+
     renderList();
     container.appendChild(listContainer);
 }
@@ -1623,22 +1627,34 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         }
     });
 
-    // 3. Global Variables
-    state.variables.forEach(v => {
+    // 3. Global Variables (Sorted by Namespace)
+    const sortedVars = [...(state.variables || [])].sort((a, b) => {
+        const nsA = a.namespace || '';
+        const nsB = b.namespace || '';
+        if (nsA !== nsB) return nsA.localeCompare(nsB);
+        return a.key.localeCompare(b.key);
+    });
+
+    sortedVars.forEach(v => {
         if (filter === 'writable' && v.is_readonly) return;
-        
+
         const item = document.createElement('div');
         item.className = 'context-item';
+        const displayKey = v.namespace ? `${v.namespace}.${v.key}` : v.key;
+        
         item.innerHTML = `
             <div class="item-icon">VAR</div>
             <div class="item-content">
-                <span class="item-title">${v.key}</span>
+                <div style="display:flex; align-items:center; gap:6px">
+                    <span class="item-title" style="font-weight:700">${v.key}</span>
+                    ${v.namespace ? `<span style="font-size:9px; background:rgba(124,106,247,0.1); color:var(--accent); padding:1px 4px; border-radius:3px; font-weight:800; letter-spacing:0.05em">@${v.namespace.toUpperCase()}</span>` : ''}
+                </div>
                 <span class="item-subtitle">${v.value || 'No value set'}</span>
             </div>
             <small class="item-badge" style="background:rgba(59,130,246,0.1); color:#3b82f6">${v.is_readonly ? 'READONLY' : 'VAR'}</small>
         `;
         item.onclick = () => {
-            inputEl.value = `{{${v.key}}}`;
+            inputEl.value = `{{${displayKey}}}`;
             updateNodeConfig(nodeId, configKey, inputEl.value);
             renderBuilderNodes(); renderConnections();
             menu.remove();
@@ -1658,7 +1674,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             item.className = 'context-item';
             const argNames = parseFuncArgs(f.code || '');
             const displaySig = argNames.length > 0 ? `${f.name}(${argNames.join(', ')})` : `${f.name}()`;
-            
+
             const catMap = {
                 generator: { label: 'GEN', color: '#10b981' },
                 comparator: { label: 'LOGIC', color: '#6366f1' },
@@ -1688,7 +1704,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
                     item.innerHTML = '';
                     const formWrap = document.createElement('div');
                     formWrap.style = 'padding:6px 0; display:flex; flex-direction:column; gap:6px; width:100%;';
-                    
+
                     const argInputs = [];
                     argNames.forEach(argName => {
                         const argRow = document.createElement('div');
@@ -1855,7 +1871,7 @@ function startConnection(e, fromId, portType, portIdx) {
                     const edge = { from: outNodeId, fromIdx: outPortIdx, to: inNodeId, toIdx: inPortIdx };
                     if (sourceHandle !== undefined) edge.sourceHandle = sourceHandle;
                     if (targetedHandle) edge.targetHandle = targetedHandle;
-                    
+
                     state.builder.edges.push(edge);
                     toast('Connection created', 'success');
 
@@ -1884,7 +1900,7 @@ function startConnection(e, fromId, portType, portIdx) {
 function getPortPos(nodeId, type, portIdx) {
     const portEl = document.getElementById(`node-${nodeId}-${type}-${portIdx}`);
     const rect = portEl ? portEl.getBoundingClientRect() : null;
-    
+
     // If element doesn't exist OR hasn't been laid out by browser yet (0 width/height)
     if (!portEl || !rect || rect.width === 0) {
         // Fallback to estimation if DOM not ready (e.g. initial load)
@@ -2010,7 +2026,7 @@ function updateBuilderContextUI() {
             dot.style.background = '#34d399';
             dot.style.boxShadow = '0 0 10px #34d399';
         }
-        
+
         // Only update if not currently renaming (to avoid clobbering input)
         if (!document.querySelector('#builder-name-container input')) {
             nameDisplay.textContent = state.builder.currentScraperName;
@@ -2258,10 +2274,10 @@ async function editInBuilder(id) {
 
         // Force re-validation of dynamic ports for loaded flows
         state.builder.nodes.forEach(n => discoverDynamicPorts(n.id));
-        
+
         // Final sanity check for legacy string artifacts
         sanitizeBuilderState();
-        
+
         toast(`Loaded "${s.name}" into Builder`, 'info');
     } catch (e) {
         console.error("[Builder] Load Error:", e);
@@ -3345,7 +3361,7 @@ function switchLogTab(logId, tab, btn) {
 
 function renderDebugPayload(artifacts) {
     if (!artifacts || !artifacts.length) return '<div class="empty-state">No debug artifacts found.</div>';
-    
+
     return artifacts.map(a => {
         const isHtml = typeof a.data === 'string' && (a.data.trim().startsWith('<') || a.data.includes('</'));
         let content = '';
@@ -3372,7 +3388,7 @@ function renderDebugPayload(artifacts) {
             const pretty = typeof a.data === 'object' ? JSON.stringify(a.data, null, 2) : String(a.data);
             content = `<pre style="background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:400px; white-space:pre-wrap; word-break:break-all;">${pretty}</pre>`;
         }
-        
+
         return `
         <div class="debug-artifact" style="margin-bottom:16px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:12px; background:rgba(255,255,255,0.01);">
             <div style="font-size:11px; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">${a.label || 'Artifact'}</div>
@@ -3409,7 +3425,7 @@ function renderPayload(payload, episodeCount = 0) {
                 const val = (obj[k] !== null && obj[k] !== undefined) ? String(obj[k]) : '—';
                 const isHtml = val.length > 10 && (val.trim().startsWith('<') || val.includes('</'));
                 let cellContent = '';
-                
+
                 if (isHtml) {
                     const encoded = b64EncodeUnicode(val);
                     cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">🖼 Preview HTML</button>`;
@@ -3447,7 +3463,7 @@ function showHtmlModal(encoded) {
     const html = b64DecodeUnicode(encoded);
     const modal = document.getElementById('log-context-modal'); // Reusing log modal or creating new
     const body = document.getElementById('log-context-body');
-    
+
     body.innerHTML = `
         <div class="debug-html-wrapper">
             <div class="debug-html-actions" style="margin-bottom:12px; display:flex; gap:8px;">
@@ -3465,7 +3481,7 @@ function showHtmlModal(encoded) {
             <pre class="debug-html-source" style="display:none; background:var(--bg-input); padding:10px; border-radius:var(--radius-sm); font-size:11px; overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all;">${html.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
         </div>
     `;
-    
+
     document.getElementById('log-context-title').textContent = 'HTML Preview';
     modal.style.display = 'flex';
 }
@@ -4095,7 +4111,7 @@ async function loadSettings() {
         if (dl && (!_allTimezones.length || dl.children.length === 0)) {
             dl.innerHTML = _allTimezones.map(t => `<option value="${t.id}">${t.label}</option>`).join('');
         }
-        
+
         const tzInp = document.getElementById('tz-input');
         if (tzInp && document.activeElement !== tzInp) {
             tzInp.value = current;
@@ -4370,7 +4386,7 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
         } else if (inp.type === 'generator') {
             const streams = state.functions.filter(f => f.is_generator);
             const statics = state.functions.filter(f => !f.is_generator);
-            
+
             const builtinOpts = `
                 <optgroup label="Built-in Streams">
                     <option value="{{range(1, 10)}}">range(1, 10)</option>
@@ -4395,7 +4411,7 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
                 ${staticOpts}
             </select>`;
         } else if (inp.type === 'list') {
-            const varOpts = state.variables.filter(v => v.value_type === 'json').map(v => 
+            const varOpts = state.variables.filter(v => v.value_type === 'json').map(v =>
                 `<option value="{{${v.key}}}" ${`{{${v.key}}}` === String(def) ? 'selected' : ''}>[Var] ${v.key}</option>`
             ).join('');
             const listId = `dl-${id}`;
@@ -4435,7 +4451,7 @@ async function submitRunInputs() {
         else if (el.dataset.ptype === 'list') {
             const val = el.value.trim();
             if (val.startsWith('[')) {
-                try { inputValues[name] = JSON.parse(val); } catch(e) { inputValues[name] = val; }
+                try { inputValues[name] = JSON.parse(val); } catch (e) { inputValues[name] = val; }
             } else {
                 inputValues[name] = val;
             }
@@ -4507,19 +4523,19 @@ function openOneTimeModal() {
                 `).join('')}
             </div>
         `;
-        
+
         // Use existing selection or default to first scraper
         const currentSid = sel.value;
         const activeScraper = state.scrapers.find(s => String(s.id) === String(currentSid)) || state.scrapers[0];
-        
+
         if (activeScraper) {
             selectOneTimeScraper(activeScraper.id, activeScraper.name);
         }
     }
-    
+
     document.getElementById('ot-time').value = '';
     document.getElementById('ot-note').value = '';
-    
+
     const modal = document.getElementById('one-time-modal');
     if (modal) modal.style.display = 'flex';
 }
@@ -4527,17 +4543,17 @@ function openOneTimeModal() {
 function selectOneTimeScraper(id, name) {
     const sel = document.getElementById('ot-scraper');
     const summary = document.getElementById('summary-ot-scraper');
-    
+
     sel.value = id;
     summary.innerHTML = `<span>${name}</span> <span style="font-size:10px; opacity:0.5">▼</span>`;
-    
+
     document.querySelectorAll('#ot-menu-scrapers .dropdown-item').forEach(item => {
         item.classList.toggle('dropdown-item--active', item.textContent === name);
     });
-    
+
     // Close dropdown
     document.getElementById('dd-ot-scraper').classList.remove('open');
-    
+
     // Trigger params render
     renderOneTimeParams();
 }
@@ -4687,7 +4703,7 @@ function handleWizThumbFile(input) {
 function switchContextTab(tab, btn) {
     document.getElementById('ctx-vars-view').style.display = tab === 'vars' ? 'block' : 'none';
     document.getElementById('ctx-funcs-view').style.display = tab === 'funcs' ? 'block' : 'none';
-    
+
     // Toggle variable button visibility
     const addVarBtn = document.getElementById('ctx-add-var-btn');
     if (addVarBtn) {
@@ -4718,88 +4734,157 @@ function renderVariablesList() {
     const list = document.getElementById('variables-list-body');
     if (!list) return;
 
-    if (!state.variables.length) {
-        list.innerHTML = '<tr><td colspan="5" class="empty-td">No variables defined yet.</td></tr>';
-        return;
-    }
+    const vars = state.variables || [];
 
-    const tableRows = state.variables.map((v, idx) => {
-        if (v._editing || v._isNew) {
-            return `
-            <tr class="editing-row" style="background:rgba(99,102,241,0.03)">
-                <td>
-                    <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
-                </td>
-                <td>
-                    <select id="inline-var-type-${idx}" style="width:100%; height:34px; font-size:12.5px; padding:0 8px" onchange="state.variables[${idx}].value_type = this.value; renderVariablesList()">
-                        <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
-                        <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
-                        <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
-                        <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
-                    </select>
-                </td>
-                <td>
-                    ${v.value_type === 'json' ? `
-                        <textarea id="inline-var-value-${idx}" 
-                            class="inline-json-editor"
-                            placeholder='["url1", "url2"]' 
-                            oninput="state.variables[${idx}].value = this.value; validateInlineJson(this)"
-                        >${v.value || ''}</textarea>
-                    ` : v.value_type === 'boolean' ? `
-                        <label class="bool-toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0">
-                            <input type="checkbox" id="inline-var-value-${idx}" 
-                                class="bool-toggle-checkbox"
-                                ${String(v.value).toLowerCase() === 'true' || v.value === '1' ? 'checked' : ''}
-                                onchange="state.variables[${idx}].value = this.checked ? 'true' : 'false'">
-                            <span class="bool-toggle-track"></span>
-                            <span style="font-size:11px;font-weight:700;color:${String(v.value).toLowerCase() === 'true' ? 'var(--success)' : 'var(--failure)'};transition:color 0.2s" id="bool-lbl-${idx}">${String(v.value).toLowerCase() === 'true' ? 'TRUE' : 'FALSE'}</span>
-                        </label>
-                        <script>
-                            document.getElementById('inline-var-value-${idx}')?.addEventListener('change', function(){
-                                const lbl = document.getElementById('bool-lbl-${idx}');
-                                if(lbl){lbl.textContent = this.checked ? 'TRUE':'FALSE'; lbl.style.color = this.checked ? 'var(--success)':'var(--failure)';}
-                            });
-                        <\/script>
-                    ` : `
-                        <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." oninput="state.variables[${idx}].value = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
-                    `}
-                </td>
-                <td>
-                    <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Description..." oninput="state.variables[${idx}].description = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
-                </td>
-                <td style="text-align:right">
-                    <div style="display:flex; justify-content:flex-end; gap:6px;">
-                        <button class="icon-btn" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Hide' : 'Show'} Secret">
-                            ${v.is_secret ? '🔒' : '👁️'}
-                        </button>
-                        <button class="icon-btn" onclick="toggleInlineVariableReadonly(${idx})" title="${v.is_readonly ? 'Make Writable' : 'Make Read-Only'}" style="color:${v.is_readonly ? 'var(--failure)' : 'var(--text-muted)'}">
-                            ${v.is_readonly ? '🚫' : '📝'}
-                        </button>
-                        <button class="icon-btn" onclick="saveInlineVariable(${idx})" style="color:var(--success)">💾</button>
-                        <button class="icon-btn" style="color:var(--failure)" onclick="cancelInlineEdit(${idx})">✕</button>
+    // Grouping logic (Namespace)
+    const groups = vars.reduce((acc, v) => {
+        const ns = v.namespace || '';
+        if (!acc[ns]) acc[ns] = [];
+        acc[ns].push(v);
+        return acc;
+    }, {});
+
+    // Include virtual namespaces (empty ones)
+    (state.virtualNamespaces || []).forEach(ns => {
+        if (!groups[ns]) groups[ns] = [];
+    });
+
+    // Sort: Empty namespace (Global) first, then alphabetically
+    const sortedNamespaces = Object.keys(groups).sort((a, b) => {
+        if (a === '') return -1;
+        if (b === '') return 1;
+        return a.localeCompare(b);
+    });
+
+    let html = '';
+    sortedNamespaces.forEach(namespace => {
+        const isEditing = state.editingNamespace === (namespace || '@@GLOBAL@@');
+
+        // Namespace Group Header (colspan=6)
+        html += `
+        <tr class="group-header" style="background:rgba(255,255,255,0.015); border-bottom:1px solid var(--border-light)">
+            <td colspan="6" style="padding:16px 14px 10px; font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em">
+                <div style="display:flex; justify-content:space-between; align-items:center">
+                    <div style="display:inline-flex; align-items:center; gap:8px">
+                        <span style="opacity:0.6">${namespace ? '🏷️ NAMESPACE:' : '📦 GLOBAL VARS'}</span>
+                        ${isEditing ? `
+                            <div style="display:flex; align-items:center; gap:6px">
+                                <input type="text" id="rename-ns-input-${namespace || '@@GLOBAL@@'}" value="${namespace}" class="inline-input" style="height:24px; font-size:11px; width:150px; font-family:var(--font-mono); color:var(--accent)">
+                                <button class="icon-btn" onclick="saveNamespaceRename('${namespace}')" style="color:var(--success); font-size:12px">✅</button>
+                                <button class="icon-btn" onclick="cancelEditNamespace()" style="font-size:12px">✕</button>
+                            </div>
+                        ` : `
+                            <div style="display:flex; align-items:center; gap:8px">
+                                <span style="color:var(--accent); font-family:var(--font-mono)">${namespace || 'Shared Registry'}</span>
+                                ${namespace ? `<button class="icon-btn" onclick="editNamespace('${namespace}')" title="Rename Namespace" style="font-size:10px; opacity:0.4">✏️</button>` : ''}
+                            </div>
+                        `}
                     </div>
-                </td>
-            </tr>`;
-        }
-
-        return `
-        <tr>
-            <td><div style="font-family:var(--font-mono); font-weight:700; color:var(--accent); overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.key}</div></td>
-            <td><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
-            <td><div style="max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary)">${renderVariableValue(v)}</div></td>
-            <td><div style="color:var(--text-muted); opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || ''}</div></td>
-            <td style="text-align:right">
-                <div class="action-btn-group" style="justify-content:flex-end">
-                    <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
-                    <button class="icon-btn" onclick="toggleVariableReadonly(${idx})" title="${v.is_readonly ? 'Unlock' : 'Lock (Read-Only)'}">${v.is_readonly ? '🚫' : '📝'}</button>
-                    <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit Inline">✏️</button>
-                    <button class="icon-btn icon-btn-danger" onclick="deleteVariable(${v.id})" title="Delete">✕</button>
+                    <button class="icon-btn" onclick="addVariableRow('${namespace}')" title="Add variable to this namespace" style="font-size:10px; color:var(--accent); background:rgba(124,106,247,0.1); padding:2px 8px; border-radius:4px; height:20px; transition:all 0.2s">
+                        <span style="font-style:normal; font-weight:900">+</span> ADD VAR
+                    </button>
                 </div>
             </td>
         </tr>`;
-    }).join('');
 
-    list.innerHTML = tableRows;
+        if (groups[namespace].length === 0 && !isEditing) {
+            html += `<tr><td colspan="6" class="empty-td" style="padding:10px 20px; font-size:10px; opacity:0.5; font-style:italic">No variables in this namespace. Click [+ ADD VAR] to start.</td></tr>`;
+        }
+
+        groups[namespace].forEach(v => {
+            const idx = state.variables.indexOf(v);
+            if (v._editing || v._isNew) {
+                html += `
+                <tr class="editing-row" style="background:rgba(99,102,241,0.03)">
+                    <td style="padding-left:20px">
+                        <select id="inline-var-type-${idx}" style="width:150px; height:34px; font-size:11px; padding:0 8px; font-weight:700" onchange="state.variables[${idx}].value_type = this.value; renderVariablesList()">
+                            <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
+                            <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
+                            <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
+                            <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
+                        </select>
+                    </td>
+                    <td></td> <!-- No Status icon during edit -->
+                    <td>
+                        <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px; font-family:var(--font-mono); font-weight:700; color:var(--accent)">
+                    </td>
+                    <td>
+                        ${v.value_type === 'json' ? `
+                            <textarea id="inline-var-value-${idx}" class="inline-json-editor" placeholder='["url1", "url2"]' oninput="state.variables[${idx}].value = this.value; validateInlineJson(this)">${v.value || ''}</textarea>
+                        ` : v.value_type === 'boolean' ? `
+                            <label class="bool-toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0">
+                                <input type="checkbox" id="inline-var-value-${idx}" class="bool-toggle-checkbox" ${String(v.value).toLowerCase() === 'true' || v.value === '1' ? 'checked' : ''} onchange="state.variables[${idx}].value = this.checked ? 'true' : 'false'; renderVariablesList()">
+                                <span class="bool-toggle-track"></span>
+                                <span style="font-size:11px;font-weight:700;color:${String(v.value).toLowerCase() === 'true' ? 'var(--success)' : 'var(--failure)'}">${String(v.value).toLowerCase() === 'true' ? 'TRUE' : 'FALSE'}</span>
+                            </label>
+                        ` : `
+                            <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." oninput="state.variables[${idx}].value = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
+                        `}
+                    </td>
+                    <td>
+                        <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Description..." oninput="state.variables[${idx}].description = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
+                    </td>
+                    <td style="text-align:right">
+                        <div class="action-btn-group" style="justify-content:flex-end; padding-right:14px">
+                            <button class="icon-btn" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Hide' : 'Show'} Secret">${v.is_secret ? '🔒' : '👁️'}</button>
+                            <button class="icon-btn" onclick="toggleInlineVariableReadonly(${idx})" title="${v.is_readonly ? 'Make Writable' : 'Make Read-Only'}" style="color:${v.is_readonly ? 'var(--failure)' : 'var(--text-muted)'}">${v.is_readonly ? '🚫' : '📝'}</button>
+                            <button class="icon-btn" onclick="saveInlineVariable(${idx})" style="color:var(--success)">💾</button>
+                            <button class="icon-btn" style="color:var(--failure)" onclick="cancelInlineEdit(${idx})">✕</button>
+                        </div>
+                    </td>
+                </tr>`;
+            } else {
+                let valColor = 'var(--text-secondary)';
+                if (v.value_type === 'number') valColor = 'var(--warning)';
+                if (v.value_type === 'boolean') valColor = 'var(--success)';
+                if (v.value_type === 'json') valColor = 'var(--accent)';
+
+                html += `
+                <tr>
+                    <td style="padding-left:20px"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
+                    <td style="text-align:center">
+                        <button class="icon-btn" onclick="toggleVariableReadonly(${idx})" title="${v.is_readonly ? 'Locked' : 'Editable'}" style="opacity:0.5; font-size:12px; height:24px; width:24px; padding:0; border-radius:4px; display:inline-flex; align-items:center; justify-content:center">
+                            ${v.is_readonly ? '🚫' : '📝'}
+                        </button>
+                    </td>
+                    <td>
+                        <div style="display:inline-flex; align-items:center; background:rgba(124,106,247,0.06); border:1px solid rgba(124,106,247,0.1); border-radius:4px; padding:2px 8px; font-family:var(--font-mono); font-weight:800; color:var(--accent); font-size:12px; letter-spacing:-0.2px">
+                            ${v.key}
+                        </div>
+                    </td>
+                    <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${valColor}; font-weight:500; font-family:var(--font-mono); font-size:12px">${renderVariableValue(v)}</div></td>
+                    <td><div style="color:var(--text-muted); opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || '—'}</div></td>
+                    <td style="text-align:right">
+                        <div class="action-btn-group" style="justify-content:flex-end; padding-right:14px">
+                            <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
+                            <button class="icon-btn" onclick="toggleVariableReadonly(${idx})" title="${v.is_readonly ? 'Unlock' : 'Lock (Read-Only)'}">${v.is_readonly ? '🚫' : '📝'}</button>
+                            <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit Inline">✏️</button>
+                            <button class="icon-btn icon-btn-danger" onclick="deleteVariable(${v.id})" title="Delete">✕</button>
+                        </div>
+                    </td>
+                </tr>`;
+            }
+        });
+    });
+
+    // Add creation row row if we are adding a NEW namespace
+    if (state.editingNamespace === '@@NEW_NAMESPACE@@') {
+        html += `
+        <tr class="group-header" style="background:rgba(99,102,241,0.05); border-top:2px solid var(--accent)">
+            <td colspan="5" style="padding:16px 14px; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase">
+                <div style="display:flex; flex-direction:column; gap:8px">
+                    <span style="opacity:0.6">🆕 Create New Namespace:</span>
+                    <div style="display:flex; align-items:center; gap:10px">
+                        <input type="text" id="rename-ns-input-@@NEW_NAMESPACE@@" placeholder="Enter namespace name (e.g. Selectors)..." value="${state.tempNamespaceName || ''}" oninput="state.tempNamespaceName = this.value" class="inline-input" style="height:32px; font-size:13px; flex-grow:1; font-family:var(--font-mono)">
+                        <button class="btn btn-primary" style="height:32px; padding:0 12px; font-size:11px" onclick="saveNamespaceRename('@@NEW_NAMESPACE@@')">Confirm Name</button>
+                        <button class="btn btn-outline" style="height:32px; padding:0 12px; font-size:11px" onclick="cancelEditNamespace()">Cancel</button>
+                    </div>
+                </div>
+            </td>
+        </tr>`;
+    }
+
+    list.innerHTML = html;
 }
 
 function validateInlineJson(el) {
@@ -4817,7 +4902,7 @@ function validateInlineJson(el) {
 
 async function stopScraperRun(taskId, btn) {
     if (!confirm('Are you sure you want to force stop this scraper run?')) return;
-    
+
     // Support both direct IDs (from Scrapers list) and "run_ID" strings (from Logs list)
     let cleanId = taskId;
     if (typeof taskId === 'string') {
@@ -4833,7 +4918,7 @@ async function stopScraperRun(taskId, btn) {
     try {
         await apiFetch(API.stopRun(cleanId), { method: 'POST' });
         toast('Stop signal sent to scraper.', 'success');
-        
+
         // Polling refresh after a short delay
         setTimeout(() => {
             loadScrapers();
@@ -4863,9 +4948,11 @@ function renderVariableValue(v) {
     return `<span title="${v.value}">${v.value || '—'}</span>`;
 }
 
-function addVariableRow() {
-    // Check if we are already adding one
-    if (state.variables.some(v => v._isNew)) return;
+function addVariableRow(initNS = null) {
+    if (!state.variables) state.variables = [];
+
+    // Check if we are already adding one in this namespace
+    if (state.variables.some(v => v._isNew && v.namespace === (initNS || ''))) return;
 
     state.variables.unshift({
         key: '',
@@ -4874,10 +4961,82 @@ function addVariableRow() {
         description: '',
         is_secret: false,
         is_readonly: true,
+        namespace: initNS || '',
         _editing: true,
         _isNew: true
     });
+
+    // If we added to a virtual namespace, it's no longer virtual (it has a row)
+    if (initNS) {
+        state.virtualNamespaces = state.virtualNamespaces.filter(ns => ns !== initNS);
+    }
+
     renderVariablesList();
+}
+
+function promptAddNamespace() {
+    // Add a virtual namespace that only exists in UI until a variable is added
+    state.tempNamespaceName = "";
+    state.editingNamespace = "@@NEW_NAMESPACE@@";
+    renderVariablesList();
+
+    // Focus the new input
+    setTimeout(() => {
+        const input = document.getElementById('rename-ns-input-@@NEW_NAMESPACE@@');
+        if (input) input.focus();
+    }, 50);
+}
+
+function editNamespace(name) {
+    state.editingNamespace = name || '@@GLOBAL@@';
+    renderVariablesList();
+    setTimeout(() => {
+        const input = document.getElementById(`rename-ns-input-${name || '@@GLOBAL@@'}`);
+        if (input) {
+            input.focus();
+            input.select();
+        }
+    }, 50);
+}
+
+function cancelEditNamespace() {
+    state.editingNamespace = null;
+    renderVariablesList();
+}
+
+async function saveNamespaceRename(oldName) {
+    const input = document.getElementById(`rename-ns-input-${oldName || '@@GLOBAL@@'}`);
+    if (!input) return;
+    const newName = input.value.trim();
+
+    if (oldName === '@@NEW_NAMESPACE@@') {
+        if (!newName) { state.editingNamespace = null; renderVariablesList(); return; }
+        // Create a new virtual namespace
+        if (!state.virtualNamespaces.includes(newName)) {
+            state.virtualNamespaces.push(newName);
+        }
+        state.editingNamespace = null;
+        renderVariablesList();
+        return;
+    }
+
+    if (newName === oldName) {
+        state.editingNamespace = null;
+        renderVariablesList();
+        return;
+    }
+
+    try {
+        await apiFetch(API.variablesBatchRename, {
+            method: 'PATCH',
+            body: JSON.stringify({ old_namespace: oldName || '', new_namespace: newName })
+        });
+        toast(`Namespace renamed to ${newName}`, 'success');
+        state.editingNamespace = null;
+        loadVariables(true); // reload to get updated objects
+    } catch (e) {
+        toast(e.message, 'error');
+    }
 }
 
 function editInlineVariable(idx) {
@@ -4940,10 +5099,11 @@ async function saveInlineVariable(idx) {
         value = document.getElementById(`inline-var-value-${idx}`).value.trim();
     }
     const description = document.getElementById(`inline-var-desc-${idx}`).value.trim();
+    const namespace = v.namespace || '';
 
     if (!key) { toast('Key is required', 'error'); return; }
 
-    const payload = { key, value, value_type: type, is_secret: v.is_secret, is_readonly: v.is_readonly, description };
+    const payload = { key, value, value_type: type, is_secret: v.is_secret, is_readonly: v.is_readonly, description, namespace };
 
     try {
         const url = v._isNew ? API.variables : `${API.variables}/${v.id}`;
@@ -5130,7 +5290,7 @@ function renderFunctionsList() {
                 transformer: { bg: 'rgba(234, 179, 8, 0.04)', border: 'var(--warning)', icon: '🔧', label: 'UDF' }
             };
             const theme = colorMap[cat] || colorMap.transformer;
-            
+
             return `
                     <div class="ctx-item-card" style="border-left: 4px solid ${theme.border}; background: ${theme.bg}; padding: 12px 16px;">
                         <div class="ctx-item-header" style="margin:0; display:flex; align-items:center; gap:16px;">
@@ -5268,7 +5428,7 @@ function toggleBuilderFullscreen(forceState) {
     const body = document.body;
     const isFS = forceState !== undefined ? forceState : !body.classList.contains('is-builder-fullscreen');
     body.classList.toggle('is-builder-fullscreen', isFS);
-    
+
     // Update toggle button icon/state
     const btn = document.getElementById('toggle-fs-btn');
     if (btn) {
@@ -5276,16 +5436,16 @@ function toggleBuilderFullscreen(forceState) {
         btn.innerHTML = isFS ? '<span style="font-size:15px; opacity:0.8;">❐</span>' : '<span style="font-size:15px; opacity:0.8;">⛶</span>';
         btn.title = isFS ? 'Exit Focus Mode' : 'Focus Mode (Maximize Workspace)';
     }
-    
+
     if (isFS) {
         toast('Focus Mode Active — ESC to exit', 'info');
     }
-    
+
     // Re-verify viewport dimensions after layout shift to ensure nodes/edges align
     setTimeout(() => {
         if (typeof renderBuilderNodes === 'function') renderBuilderNodes();
         if (typeof renderConnections === 'function') renderConnections();
-        
+
         // Dispatch resize event to trigger internal canvas recalibrations
         window.dispatchEvent(new Event('resize'));
     }, 400);
