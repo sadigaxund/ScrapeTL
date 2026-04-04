@@ -9,6 +9,24 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/static/style.css?v=53" />
+  <style>
+    /* Variables Registry: Action Buttons hover visibility */
+    #variables-list-body tr .action-btn-group {
+      opacity: 0;
+      visibility: hidden;
+      transition: opacity 0.2s ease-in-out, visibility 0.2s;
+    }
+    #variables-list-body tr:hover .action-btn-group {
+      opacity: 1;
+      visibility: visible;
+    }
+    /* Keep editing rows always visible */
+    #variables-list-body tr.editing-row .action-btn-group,
+    #variables-list-body tr.group-header .action-btn-group {
+      opacity: 1;
+      visibility: visible;
+    }
+  </style>
 </head>
 
 <body>
@@ -509,8 +527,10 @@
             <p style="color:var(--text-secondary);font-size:14px;margin-top:6px;">Shared values and dynamic expressions
               accessible by all scrapers.</p>
           </div>
-          <button class="btn btn-primary" id="ctx-add-var-btn" onclick="openVarCreateModal()"
-            style="box-shadow: 0 4px 14px var(--accent-glow)">+ Add Variable</button>
+          <div style="display:flex; gap:10px">
+            <button class="btn btn-primary" onclick="promptAddNamespace()" 
+              style="box-shadow: 0 4px 14px var(--accent-glow)">🏷️ Create Namespace</button>
+          </div>
         </div>
 
         <!-- ── Context Tabs ────────────────────────── -->
@@ -529,11 +549,12 @@
             <table class="data-table">
               <thead>
                 <tr>
-                  <th style="width:180px">Name / Key</th>
-                  <th style="width:150px">Type</th>
-                  <th style="width:240px">Value</th>
+                  <th style="width:100px; padding-left:20px">Type</th>
+                  <th style="width:40px"></th> <!-- Status column -->
+                  <th style="width:200px">Name / Key</th>
+                  <th style="width:300px">Value</th>
                   <th>Description</th>
-                  <th style="width:150px; text-align:right">Actions</th>
+                  <th style="width:120px"></th> <!-- Actions Header removed -->
                 </tr>
               </thead>
               <tbody id="variables-list-body">

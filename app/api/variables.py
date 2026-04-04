@@ -16,6 +16,11 @@ class VariableBase(BaseModel):
     is_secret: bool = False
     is_readonly: bool = True
     doc_md: Optional[str] = None
+    namespace: Optional[str] = None
+
+class NamespaceRenameRequest(BaseModel):
+    old_namespace: str
+    new_namespace: str
 
 class VariableCreate(VariableBase):
     pass
@@ -28,6 +33,7 @@ class VariableUpdate(BaseModel):
     is_secret: Optional[bool] = None
     is_readonly: Optional[bool] = None
     doc_md: Optional[str] = None
+    namespace: Optional[str] = None
 
 class VariableResponse(VariableBase):
     id: int
@@ -57,7 +63,8 @@ def create_variable(payload: VariableCreate, db: Session = Depends(get_db)):
         description=payload.description,
         is_secret=payload.is_secret,
         is_readonly=payload.is_readonly,
-        doc_md=payload.doc_md
+        doc_md=payload.doc_md,
+        namespace=payload.namespace
     )
     db.add(var)
     db.commit()
@@ -89,6 +96,8 @@ def update_variable(var_id: int, payload: VariableUpdate, db: Session = Depends(
         var.is_readonly = payload.is_readonly
     if payload.doc_md is not None:
         var.doc_md = payload.doc_md
+    if payload.namespace is not None:
+        var.namespace = payload.namespace
     
     db.commit()
     db.refresh(var)
@@ -104,3 +113,23 @@ def delete_variable(var_id: int, db: Session = Depends(get_db)):
     db.delete(var)
     db.commit()
     return {"detail": "Variable deleted."}
+
+@router.patch("/batch/rename-namespace")
+def rename_namespace(payload: NamespaceRenameRequest, db: Session = Depends(get_db)):
+    """Batch rename a namespace across all variables."""
+    # Find all variables with old namespace
+    # Treat empty strings and nulls as the same (Shared Registry)
+    if not payload.old_namespace:
+        vars = db.query(GlobalVariable).filter((GlobalVariable.namespace == None) | (GlobalVariable.namespace == "")).all()
+    else:
+        vars = db.query(GlobalVariable).filter(GlobalVariable.namespace == payload.old_namespace).all()
+    
+    if not vars:
+        # It's possible there are no variables but the namespace existed virtually in frontend
+        return {"detail": f"Renamed 0 variables from '{payload.old_namespace}' to '{payload.new_namespace}'."}
+    
+    for v in vars:
+        v.namespace = payload.new_namespace
+        
+    db.commit()
+    return {"detail": f"Renamed {len(vars)} variables from '{payload.old_namespace}' to '{payload.new_namespace}'."}

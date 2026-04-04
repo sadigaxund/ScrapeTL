@@ -181,6 +181,7 @@ class GlobalVariable(Base):
     created_at  = Column(DateTime, default=datetime.utcnow)
     updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     doc_md      = Column(Text, nullable=True)   # Markdown documentation
+    namespace   = Column(Text, nullable=True)   # Scope/Category definition
 
 
 # ── UserFunction ──────────────────────────────────────────────────────────────

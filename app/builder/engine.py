@@ -185,7 +185,7 @@ class BuilderEngine:
 
         elif ntype == "input_expression":
             expr = (data.get("value") or data.get("expression", "")).strip()
-            context = {**self.global_vars, **node_inputs}
+            context = self._get_execution_context(node_inputs)
             print(f"[BuilderEngine] Resolving expression: '{expr}' | context keys: {list(context.keys())}")
             res = resolve_expressions(expr, context, custom_funcs=self.custom_funcs)
             if isinstance(res, str) and res.startswith("[Error: "):
@@ -199,7 +199,7 @@ class BuilderEngine:
                 print("[BuilderEngine] Warning: Fetcher node has no URL input! Skipping.")
                 return None
 
-            url = resolve_expressions(url, {**self.global_vars, **node_inputs}).strip()
+            url = resolve_expressions(url, self._get_execution_context(node_inputs)).strip()
             print(f"[BuilderEngine] Fetcher resolved URL: {url}")
 
             headers_raw = data.get("headers") or {}
@@ -224,7 +224,7 @@ class BuilderEngine:
             url = data.get("url") or node_inputs.get("url")
             if not url: return None
 
-            url = resolve_expressions(url, {**self.global_vars, **node_inputs})
+            url = resolve_expressions(url, self._get_execution_context(node_inputs))
             headless = data.get("headless", True)
             cdp_url = data.get("cdp_url")
 
@@ -541,7 +541,7 @@ class BuilderEngine:
                     # func_expr may be like "my_func" or "my_func(arg1)"
                     # If no parens, inject a as first arg
                     # Improved context: use all connected ports as named variables
-                    context = {**self.global_vars, **node_inputs}
+                    context = self._get_execution_context(node_inputs)
                     # For legacy/simple mode, still support input_a/input_b
                     if "input_a" not in context: context["input_a"] = a
                     if "input_b" not in context: context["input_b"] = b
@@ -561,9 +561,12 @@ class BuilderEngine:
             if isinstance(var_key, str) and var_key.startswith("{{") and var_key.endswith("}}"):
                 var_key = var_key[2:-2].strip()
 
+            # Handle namespaced keys (e.g. auth.token)
+            actual_key = var_key.split('.')[-1] if '.' in var_key else var_key
+
             value = node_inputs.get("value")
-            if self.db and var_key:
-                var = self.db.query(GlobalVariable).filter(GlobalVariable.key == var_key).first()
+            if self.db and actual_key:
+                var = self.db.query(GlobalVariable).filter(GlobalVariable.key == actual_key).first()
                 if var and not var.is_readonly:
                     var.value = str(value)
                     self.db.commit()
@@ -611,8 +614,56 @@ class BuilderEngine:
                     handle = "data"
 
                 print(f"[BuilderEngine] Found edge: {src_id} -> {node_id} (Mapped to handle '{handle}')")
-                inputs[handle] = src_output
+                
+                # Multi-edge support: Collect results into a list if multiple nodes connect to the same port
+                if handle in inputs:
+                    if not isinstance(inputs[handle], list):
+                        inputs[handle] = [inputs[handle]]
+                    inputs[handle].append(src_output)
+                else:
+                    inputs[handle] = src_output
         return inputs
+
+    def _get_execution_context(self, node_inputs: Dict[str, Any]) -> Dict[str, Any]:
+        """Builds a structured, namespaced context for expression evaluation."""
+        # Pre-process Global Registry (including the new schema metadata)
+        # Note: self.global_vars is a dict of {key: value} passed from Runner
+        # We also want to provide access to the raw model data if needed?
+        # For now, let's keep it simple as requested.
+        
+        # Nodes by label/ID
+        nodes_context = {}
+        for nid, res in self.results_cache.items():
+            node = self.nodes.get(nid)
+            # Default to ID if label is missing
+            label = node.get("config", {}).get("label") if node else None
+            if label:
+                nodes_context[label] = res
+            nodes_context[nid] = res
+
+        # Organize Global Registry into Namespaces
+        namespaces = {}
+        ns_metadata = self.global_vars.get("__namespaces__", {})
+        
+        for k, v in self.global_vars.items():
+            if k == "__namespaces__": continue
+            ns = ns_metadata.get(k)
+            if ns:
+                if ns not in namespaces: namespaces[ns] = {}
+                namespaces[ns][k] = v
+
+        context = {
+            "vars": self.global_vars,
+            "v": self.global_vars,
+            "namespaces": namespaces,
+            "ns": namespaces,
+            "inputs": node_inputs,
+            "nodes": nodes_context,
+            # Fallback for backward compatibility
+            **self.global_vars,
+            **node_inputs
+        }
+        return context
 
     def _map_port_to_handle(self, node_id: str, port_idx: int) -> str:
         """Maps a numeric port index to a descriptive handle name based on node type."""

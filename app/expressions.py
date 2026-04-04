@@ -3,6 +3,7 @@ import os
 import json
 from datetime import datetime, timedelta
 
+import inspect
 from app.models import UserFunction
 
 def _detect_func_name(code):
@@ -10,6 +11,41 @@ def _detect_func_name(code):
     if not code: return None
     match = re.search(r"def\s+([a-zA-Z0-9_]+)\s*\(", code)
     return match.group(1) if match else None
+
+def _wrap_with_type_casting(func):
+    """Wraps a function to automatically cast arguments based on its type hints."""
+    if not callable(func): return func
+    sig = inspect.signature(func)
+    
+    import functools
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        bound = sig.bind(*args, **kwargs)
+        bound.apply_defaults()
+        for name, value in bound.arguments.items():
+            param = sig.parameters[name]
+            if param.annotation is not inspect._empty:
+                # Try to cast value to the annotated type
+                try:
+                    target_type = param.annotation
+                    if target_type in (int, float):
+                        # Force numeric casting for strings
+                        if isinstance(value, str):
+                            v = re.sub(r"[^\d\.-]", "", value)
+                            bound.arguments[name] = target_type(v) if v else 0
+                        else:
+                            bound.arguments[name] = target_type(value)
+                    elif target_type is bool:
+                        if isinstance(value, str):
+                            bound.arguments[name] = value.lower().strip() not in ("0", "false", "", "null")
+                        else:
+                            bound.arguments[name] = bool(value)
+                except:
+                    # Fallback to 0 for numeric types if casting fails
+                    if param.annotation in (int, float):
+                        bound.arguments[name] = 0
+        return func(*bound.args, **bound.kwargs)
+    return wrapper
 
 def resolve_expressions(payload, context_vars, custom_funcs=None):
     """
@@ -48,8 +84,22 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
         "false": False,
     }
     
+    from types import SimpleNamespace
+    
+    def to_dot_accessible(obj):
+        if isinstance(obj, dict):
+            return SimpleNamespace(**{k: to_dot_accessible(v) for k, v in obj.items()})
+        elif isinstance(obj, list):
+            return [to_dot_accessible(x) for x in obj]
+        return obj
+
     # 2. Inject static variables with best-effort numeric casting
     for k, v in context_vars.items():
+        # Handle dot-accessible namespacing: if k is a namespace, v is already a dict from runner.py
+        if isinstance(v, dict):
+            ns[k] = to_dot_accessible(v)
+            continue
+
         if isinstance(v, str):
             # Try to cast to float/int if it looks numeric
             try:
@@ -71,13 +121,15 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
                              if callable(v) and not k.startswith("_")}
 
                 # Register them into the main namespace by their def-name
-                ns.update(new_funcs)
+                # and wrap them with automatic type casting
+                casted_funcs = {k: _wrap_with_type_casting(v) for k, v in new_funcs.items()}
+                ns.update(casted_funcs)
 
                 # Also register under the registry name if it differs
-                if fname not in ns and new_funcs:
-                    primary_func = list(new_funcs.values())[0]
+                if fname not in ns and casted_funcs:
+                    primary_func = list(casted_funcs.values())[0]
                     ns[fname] = primary_func
-                    print(f"[Expressions] Aliased UDF '{fname}' -> '{list(new_funcs.keys())[0]}'")
+                    print(f"[Expressions] Aliased UDF '{fname}' -> '{list(casted_funcs.keys())[0]}' (with type-casting)")
 
             except Exception as e:
                 print(f"[Expressions] Error compiling UDF '{fname}': {e}")
