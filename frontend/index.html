@@ -449,24 +449,26 @@
         <p style="color:var(--text-secondary);font-size:14px;margin-bottom:24px;margin-top:-14px">
           Catch-up tasks and one-time executions
         </p>
-        <div class="table-wrapper">
-          <table class="data-table" id="queue-table">
+        <div class="scrapers-table-container">
+          <table class="scrapers-table" id="queue-table">
             <thead>
               <tr>
+                <th style="width:30px"></th>
+                <th style="width:80px">Photo</th>
                 <th onclick="sortQueue('scraper_name')" style="cursor:pointer; user-select:none;">Scraper <span
                     class="sort-icon" id="sort-icon-scraper_name"></span></th>
-                <th onclick="sortQueue('scheduled_for')" style="cursor:pointer; user-select:none;">Scheduled For <span
+                <th onclick="sortQueue('scheduled_for')" style="cursor:pointer; user-select:none; width:150px">Scheduled For <span
                     class="sort-icon" id="sort-icon-scheduled_for">▼</span></th>
                 <th onclick="sortQueue('note')" style="cursor:pointer; user-select:none;">Label / Note <span
                     class="sort-icon" id="sort-icon-note"></span></th>
-                <th onclick="sortQueue('status')" style="cursor:pointer; user-select:none;">Status <span
+                <th onclick="sortQueue('status')" style="cursor:pointer; user-select:none; width:120px">Status <span
                     class="sort-icon" id="sort-icon-status"></span></th>
                 <th style="width:50px"></th>
               </tr>
             </thead>
             <tbody id="queue-body">
               <tr>
-                <td colspan="5" class="empty-td">Queue is empty.</td>
+                <td colspan="7" class="empty-td">Queue is empty.</td>
               </tr>
             </tbody>
           </table>
@@ -548,16 +550,17 @@
 
         <!-- ── Variables View ────────────────────────────── -->
         <div id="ctx-vars-view" style="padding: 16px 0;">
-          <div class="table-wrapper">
-            <table class="data-table" style="table-layout: fixed;">
+          <div class="scrapers-table-container">
+            <table class="scrapers-table">
               <thead>
                 <tr>
-                  <th style="width:100px; padding-left:20px">Type</th>
-                  <th style="width:100px; text-align:center">Status</th> 
-                  <th style="width:250px">Name / Key</th>
-                  <th style="width:300px">Value</th>
+                  <th style="width:30px"></th>
+                  <th style="width:120px">Namespace / Group</th>
+                  <th style="width:220px">Key / Name</th>
+                  <th style="width:300px">Current Value</th>
+                  <th style="width:100px">Status</th>
                   <th>Description</th>
-                  <th style="width:120px"></th> <!-- Actions Header removed -->
+                  <th class="action-cell">Actions</th>
                 </tr>
               </thead>
               <tbody id="variables-list-body">
@@ -719,8 +722,7 @@
 
         <div class="bt-dropdown" id="dropdown-logic">
           <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'logic')"
-            id="tool-logic"
-            style="border-color:rgba(168, 85, 247, 0.4); color:#a855f7;">
+            id="tool-logic">
             Logic <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
@@ -729,6 +731,17 @@
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'string_match')">String Match</button>
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'status_check')">Status Check</button>
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'custom_logic')">Custom Logic</button>
+          </div>
+        </div>
+ 
+        <div class="bt-dropdown" id="dropdown-utility">
+          <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'utility')"
+            id="tool-utility">
+            Utility <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
+          </button>
+          <div class="bt-menu">
+            <button class="menu-item" onclick="selectBuilderPreset('utility', 'splitter')">Splitter</button>
+            <button class="menu-item" onclick="selectBuilderPreset('utility', 'combiner')">Combiner</button>
           </div>
         </div>
 

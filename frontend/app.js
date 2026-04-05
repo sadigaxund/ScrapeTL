@@ -545,6 +545,23 @@ const NODE_PRESETS = {
                 { key: 'custom_func', type: 'expression', label: 'Target Function', filter: 'comparator' }
             ]
         }
+    },
+    utility: {
+        splitter: {
+            title: 'Split',
+            inputs: ['IN'],
+            outputs: ['OUT 1', 'OUT 2'],
+            logicalOutputs: 2
+        },
+        combiner: {
+            title: 'Merge',
+            inputs: ['IN 1', 'IN 2'],
+            outputs: ['OUT'],
+            logicalInputs: 2,
+            configs: [
+                { key: 'mode', type: 'select', label: '', options: ['list', 'flatten', 'merge_object'], default: 'list' }
+            ]
+        }
     }
 };
 
@@ -1047,6 +1064,7 @@ function renderBuilderNodes() {
 
             const el = document.createElement('div');
             el.className = `builder-node builder-node--${node.type}`;
+            if (node.type === 'utility') el.classList.add('builder-node--mini');
             el.id = `node-${node.id}`;
             el.style.left = `${node.x}px`;
             el.style.top = `${node.y}px`;
@@ -1090,7 +1108,11 @@ function renderBuilderNodes() {
             // 1. Title
             const title = document.createElement('div');
             title.className = 'builder-node__title';
-            title.textContent = preset.title;
+            if (node.type === 'utility') {
+                title.textContent = preset.title;
+            } else {
+                title.textContent = preset.title;
+            }
             el.appendChild(title);
 
             // 2. Universal Node Label - Processors only (Type 'action')
@@ -1106,18 +1128,21 @@ function renderBuilderNodes() {
                 el.appendChild(nameGroup);
             }
 
-            // Natural Header Control Bar for Logical nodes (STATIONARY)
-            if (node.preset === 'conditional' && (node.config.mode || 'logical') === 'logical') {
-                const count = Number(node.config.logicalInputs || 2);
+            // Variadic Control Bar (Add/Remove Ports)
+            // EXCLUSION: Utility nodes use Auto-Port growth instead of manual buttons
+            if ((preset.logicalInputs || preset.logicalOutputs) && node.type !== 'utility') {
+                const type = preset.logicalInputs ? 'Inputs' : 'Outputs';
+                const configKey = preset.logicalInputs ? 'logicalInputs' : 'logicalOutputs';
+                const count = Number(node.config[configKey] || (preset.logicalInputs || preset.logicalOutputs));
+
                 const controls = document.createElement('div');
                 controls.className = 'node-port-controls node-port-controls--top';
 
                 // Subtract Button
-                // Subtract Button
                 const subBtn = document.createElement('button');
                 subBtn.className = 'btn-port-footer btn-port-footer-sub';
                 subBtn.textContent = '−';
-                subBtn.title = 'Remove Last Input';
+                subBtn.title = `Remove Last ${type}`;
                 if (count <= 2) subBtn.disabled = true;
 
                 subBtn.onmousedown = (e) => {
@@ -1126,16 +1151,21 @@ function renderBuilderNodes() {
                     const targetNode = state.builder.nodes.find(n => n.id === node.id);
                     if (!targetNode) return;
 
-                    const curCount = Number(targetNode.config.logicalInputs || 2);
+                    const curCount = Number(targetNode.config[configKey] || (preset.logicalInputs || preset.logicalOutputs));
                     if (curCount <= 2) return;
 
-                    const newVal = curCount - 1;
-                    targetNode.config.logicalInputs = newVal;
+                    targetNode.config[configKey] = curCount - 1;
 
-                    // Cleanup connections for the removed port index (EDGES is the correct property)
-                    state.builder.edges = state.builder.edges.filter(edge =>
-                        !(edge.to === node.id && Number(edge.toIdx) === curCount - 1)
-                    );
+                    // Cleanup connections for removed port
+                    if (type === 'Inputs') {
+                        state.builder.edges = state.builder.edges.filter(edge =>
+                            !(edge.to === node.id && Number(edge.toIdx) === curCount - 1)
+                        );
+                    } else {
+                        state.builder.edges = state.builder.edges.filter(edge =>
+                            !(edge.from === node.id && Number(edge.fromIdx) === curCount - 1)
+                        );
+                    }
 
                     renderBuilderNodes();
                     renderConnections();
@@ -1145,7 +1175,7 @@ function renderBuilderNodes() {
                 const addBtn = document.createElement('button');
                 addBtn.className = 'btn-port-footer btn-port-footer-add';
                 addBtn.textContent = '+';
-                addBtn.title = 'Add More Inputs';
+                addBtn.title = `Add More ${type}`;
 
                 addBtn.onmousedown = (e) => {
                     if (e.button !== 0) return;
@@ -1153,8 +1183,8 @@ function renderBuilderNodes() {
                     const targetNode = state.builder.nodes.find(n => n.id === node.id);
                     if (!targetNode) return;
 
-                    const curCount = Number(targetNode.config.logicalInputs || 2);
-                    targetNode.config.logicalInputs = curCount + 1;
+                    const curCount = Number(targetNode.config[configKey] || (preset.logicalInputs || preset.logicalOutputs));
+                    targetNode.config[configKey] = curCount + 1;
 
                     renderBuilderNodes();
                     renderConnections();
@@ -1169,6 +1199,9 @@ function renderBuilderNodes() {
             let nodeInputs = [];
             if (node.dynamic_ports && node.dynamic_ports.length > 0) {
                 nodeInputs = node.dynamic_ports;
+            } else if (preset.logicalInputs) {
+                const count = Number(node.config.logicalInputs || preset.logicalInputs);
+                for (let i = 1; i <= count; i++) nodeInputs.push(`IN ${i}`);
             } else if (node.preset === 'conditional') {
                 const mode = node.config.mode || 'logical';
                 if (mode === 'logical') {
@@ -1192,13 +1225,14 @@ function renderBuilderNodes() {
                 const port = document.createElement('div');
                 port.className = 'node-port node-port--input';
                 port.id = `node-${node.id}-input-${idx}`;
-
+                port.title = label;
+                
                 // Variadic/Dynamic handle mapping
                 let handle = null;
                 if (node.dynamic_ports) {
                     handle = node.dynamic_ports[idx];
                     port.dataset.namedHandle = handle; // Store for drop-detection
-                } else if (node.preset === 'logic_gate') {
+                } else if (node.preset === 'logic_gate' || node.preset === 'combiner') {
                     handle = `input_${idx}`;
                 }
                 port.onmousedown = (e) => startConnection(e, node.id, 'input', idx, handle);
@@ -1234,18 +1268,27 @@ function renderBuilderNodes() {
             }
 
             // 4. Outputs (Right)
-            (preset.outputs || []).forEach((label, idx) => {
+            let nodeOutputs = [];
+            if (preset.logicalOutputs) {
+                const count = Number(node.config.logicalOutputs || preset.logicalOutputs);
+                for (let i = 1; i <= count; i++) nodeOutputs.push(`OUT ${i}`);
+            } else {
+                nodeOutputs = preset.outputs || [];
+            }
+
+            nodeOutputs.forEach((label, idx) => {
                 const row = document.createElement('div');
                 row.className = 'node-port-row node-port-row--output';
 
                 const port = document.createElement('div');
-                // Colour True/False ports on conditional nodes
+                // Colour True/False ports on standard conditional nodes
                 let portClass = 'node-port node-port--output';
-                if (node.type === 'logic') {
+                if (node.type === 'logic' && (node.preset === 'conditional' || node.preset === 'comparison' || node.preset === 'string_match' || node.preset === 'status_check' || node.preset === 'custom_logic')) {
                     portClass += idx === 0 ? ' node-port--true' : ' node-port--false';
                 }
                 port.className = portClass;
                 port.id = `node-${node.id}-output-${idx}`;
+                port.title = label;
                 port.onmousedown = (e) => startConnection(e, node.id, 'output', idx);
 
                 const lbl = document.createElement('span');
@@ -1289,10 +1332,12 @@ function renderBuilderNodes() {
                     const group = document.createElement('div');
                     group.className = 'node-config-group';
 
-                    const label = document.createElement('label');
-                    label.className = 'node-config-label';
-                    label.textContent = cfg.label;
-                    group.appendChild(label);
+                    if (cfg.label) {
+                        const label = document.createElement('label');
+                        label.className = 'node-config-label';
+                        label.textContent = cfg.label;
+                        group.appendChild(label);
+                    }
 
                     if (cfg.type === 'text') {
                         const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
@@ -1907,15 +1952,32 @@ function startConnection(e, fromId, portType, portIdx) {
                     state.builder.edges.push(edge);
                     toast('Connection created', 'success');
 
-                    // 💡 AUTO-INJECTION: If wiring TO an Expression node's named port, update its text value
-                    const destNode = state.builder.nodes.find(n => n.id === inNodeId);
-                    if (destNode && destNode.preset === 'expression' && targetedHandle) {
-                        const newVal = injectVariableIntoExpression(destNode.config.value, targetedHandle, inPortIdx);
-                        if (newVal !== destNode.config.value) {
-                            destNode.config.value = newVal;
-                            console.log(`[Builder] Auto-injected variable '${targetedHandle}' into Expression node`);
-                            renderBuilderNodes(); // Re-render to show updated string in text field
+                    // 💡 AUTO-INJECTION logic (existing) ...
+                    
+                    // ⚡ AUTO-PORT GROWTH: If wiring TO/FROM a Utility node's last port, expand it
+                    const growNode = (id, key) => {
+                        const target = state.builder.nodes.find(n => n.id === id);
+                        if (!target) return;
+                        const p = NODE_PRESETS[target.type][target.preset];
+                        if (target.type === 'utility' && (p.logicalInputs || p.logicalOutputs)) {
+                            const curCount = Number(target.config[key] || (p.logicalInputs || p.logicalOutputs));
+                            const portIdx = key === 'logicalInputs' ? finalInIdx : finalOutIdx;
+                            
+                            // If we connected the last port (even if numeric index is handled as string), add one more
+                            if (portIdx !== 'trigger' && portIdx !== 'error' && parseInt(portIdx) === curCount - 1) {
+                                target.config[key] = curCount + 1;
+                                renderBuilderNodes();
+                                renderConnections();
+                            }
                         }
+                    };
+
+                    if (conn.fromType === 'output') {
+                        growNode(outNodeId, 'logicalOutputs');
+                        growNode(inNodeId, 'logicalInputs');
+                    } else {
+                        growNode(inNodeId, 'logicalOutputs');
+                        growNode(outNodeId, 'logicalInputs');
                     }
                 }
             }
@@ -1993,11 +2055,40 @@ function renderConnections() {
         path.setAttribute('class', pathClass);
         path.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
 
-        path.oncontextmenu = (e) => {
-            e.preventDefault();
-            state.builder.edges.splice(index, 1);
-            renderConnections();
-        };
+            path.oncontextmenu = (e) => {
+                e.preventDefault();
+                const edge = state.builder.edges[index];
+                state.builder.edges.splice(index, 1);
+
+                // ⚡ AUTO-PORT PRUNING: Shrink utility nodes if they have empty trailing ports
+                const pruneNode = (id, key, isInput) => {
+                    const target = state.builder.nodes.find(n => n.id === id);
+                    if (!target || target.type !== 'utility') return;
+                    const p = NODE_PRESETS[target.type][target.preset];
+                    const min = p.logicalInputs || p.logicalOutputs || 2;
+                    let curCount = Number(target.config[key] || min);
+                    
+                    // Check if the last port is now empty
+                    while (curCount > min) {
+                        const lastIdx = curCount - 1;
+                        const isLastBusy = state.builder.edges.some(eg => 
+                            isInput ? (eg.to === id && eg.toIdx === lastIdx) : (eg.from === id && eg.fromIdx === lastIdx)
+                        );
+                        if (!isLastBusy) {
+                            curCount--;
+                            target.config[key] = curCount;
+                        } else {
+                            break;
+                        }
+                    }
+                    renderBuilderNodes();
+                };
+
+                pruneNode(edge.from, 'logicalOutputs', false);
+                pruneNode(edge.to, 'logicalInputs', true);
+
+                renderConnections();
+            };
 
         if (state.builder.selected && state.builder.selected.type === 'edge' && state.builder.selected.id === index) {
             path.classList.add('selected');
@@ -2518,9 +2609,9 @@ function renderScrapersList(scrapers) {
 }
 
 function integIcon(type) {
-    if (type === 'discord_webhook') return '<img src="/static/discord.svg" style="width:16px;height:16px;vertical-align:middle;margin-right:2px">';
-    if (type === 'http_request') return '🌐';
-    return '🔗';
+    if (type === 'discord_webhook') return '<img src="/static/discord.svg" style="width:24px;height:24px;vertical-align:middle;margin-right:8px">';
+    if (type === 'http_request') return '<span style="font-size:24px;vertical-align:middle;margin-right:8px">🌐</span>';
+    return '<span style="font-size:24px;vertical-align:middle;margin-right:8px">🔗</span>';
 }
 
 function populateScraperSelects(scrapers) {
@@ -3707,8 +3798,17 @@ function renderQueueTasks() {
     tbody.innerHTML = tasks.map(t => {
         const isVirtual = !!t.is_virtual;
         const removeBtn = !isVirtual
-            ? `<button class="btn btn-ghost" style="color:var(--failure);padding:4px 8px" onclick="removeQueueTask(${t.id})">✕</button>`
+            ? `<button class="icon-btn icon-btn-danger" style="padding:4px 8px" onclick="removeQueueTask(${t.id})" title="Remove from Queue">✕</button>`
             : '';
+
+        // Try to find scraper info for thumbnail
+        let thumbHtml = `<div class="table-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--bg-input);font-size:18px">🎌</div>`;
+        if (state.scrapers) {
+            const scraper = state.scrapers.find(s => s.name === t.scraper_name);
+            if (scraper && scraper.thumbnail_url) {
+                thumbHtml = `<img class="table-thumb" src="${scraper.thumbnail_url}" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🎌</text></svg>'">`;
+            }
+        }
 
         // Time left calculation
         let timeLeftStr = '';
@@ -3729,13 +3829,28 @@ function renderQueueTasks() {
 
         return `
         <tr>
-            <td><strong>${t.scraper_name || 'N/A'}</strong></td>
-            <td style="white-space:nowrap"><span class="log-epcount" style="margin:0">${formatDate(t.scheduled_for)}</span>${timeLeftStr}</td>
-            <td><div style="font-size:12px;color:var(--text-muted);max-width:150px;overflow:hidden;text-overflow:ellipsis">${t.note || '—'}</div></td>
+            <td></td>
+            <td>${thumbHtml}</td>
+            <td>
+                <div style="font-weight:600; font-size:14px; color:var(--text-primary)">${t.scraper_name || 'N/A'}</div>
+            </td>
+            <td style="white-space:nowrap"><span style="color:var(--text-primary); font-weight:500;">${formatDateOnCondition(t.scheduled_for)}</span>${timeLeftStr}</td>
+            <td><div style="font-size:12px; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis">${t.note || '—'}</div></td>
             <td>${statusBadge(t.status)}</td>
             <td style="text-align:right">${removeBtn}</td>
         </tr>`;
     }).join('');
+}
+
+function formatDateOnCondition(isoStr) {
+    if (!isoStr) return '—';
+    const d = new Date(isoStr);
+    const now = new Date();
+    // If it's today, show only time, else show date only
+    if (d.toDateString() === now.toDateString()) {
+        return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    }
+    return formatDateOnly(isoStr);
 }
 
 /* ════════════════════════════════════════════════
@@ -3997,22 +4112,37 @@ async function loadIntegrations() {
             const titleType = i.type === 'discord_webhook' ? 'Discord Webhook' : i.type === 'http_request' ? 'HTTP Request' : i.type;
 
             return `
-            <div class="item-card" draggable="true"
+            <div class="item-card" draggable="true" 
+                 style="padding: 12px 20px; display: flex; align-items: center; gap: 16px; min-height: 72px;"
                  ondragstart="handleDragStart(event, 'integration', ${i.id})"
                  ondragover="handleDragOver(event)"
                  ondragleave="handleDragLeave(event)"
                  ondrop="handleDrop(event, 'integration', ${i.id})"
                  ondragend="handleDragEnd(event)">
-              <div class="drag-handle" title="Drag to reorder">⠿</div>
-              <div class="item-info">
-                <div class="item-name" style="font-size:16px;">${integIcon(i.type)} ${i.name} ${metaChips}</div>
-                <div class="item-meta" style="font-size:12px;color:var(--text-muted)">${titleType} &nbsp;•&nbsp; Created on ${formatDate(i.created_at)}</div>
-                ${descriptionHTML}
+              <div class="drag-handle" style="margin:0; border:none; padding:0; flex-shrink:0;">⠿</div>
+              <div style="width:40px; height:40px; display:flex; align-items:center; justify-content:center; background:var(--bg-card); border-radius:8px; border:1px solid var(--border); overflow:hidden; flex-shrink:0;">
+                <div style="margin:0; padding:0; line-height:1; display:flex; align-items:center; justify-content:center;">${integIcon(i.type).replace('margin-right:8px', 'margin:0')}</div>
               </div>
-              <div class="item-actions">
-                <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="openConnectorModal('${i.type}', ${i.id})">✏️ Edit</button>
-                <button class="btn btn-ghost" style="font-size:12px;padding:6px 12px" onclick="testIntegration(${i.id}, this)">🧪 Test</button>
-                <button class="btn btn-danger" onclick="deleteIntegration(${i.id})">✕</button>
+              <div class="item-info" style="display: flex; align-items: center; gap: 24px; flex: 1; min-width: 0;">
+                <div style="min-width: 180px; flex-shrink: 0;">
+                    <div style="font-weight:600; font-size:14px; color:var(--text-primary); display:flex; align-items:center; gap:8px">
+                        ${i.name}
+                    </div>
+                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.02em; margin-top:2px;">${titleType}</div>
+                </div>
+                <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;">
+                    <div style="font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;">
+                        ${i.config && i.config.description ? i.config.description : `<span style="opacity:0.4; font-style:italic">No description</span>`}
+                    </div>
+                    <div style="display:flex; gap:6px; flex-wrap:nowrap;">${metaChips}</div>
+                </div>
+              </div>
+              <div class="item-actions" style="margin-left:auto;">
+                <div class="action-btn-group">
+                    <button class="icon-btn" onclick="openConnectorModal('${i.type}', ${i.id})" title="Edit Integration">✏️</button>
+                    <button class="icon-btn" onclick="testIntegration(${i.id}, this)" title="Test Connection">🧪</button>
+                    <button class="icon-btn icon-btn-danger" onclick="deleteIntegration(${i.id})" title="Delete">✕</button>
+                </div>
               </div>
             </div>`;
         }).join('');
@@ -4859,10 +4989,10 @@ function renderVariablesList() {
     sortedNamespaces.forEach(namespace => {
         const isEditing = state.editingNamespace === (namespace || '@@GLOBAL@@');
 
-        // Namespace Group Header (colspan=6)
+        // Namespace Group Header (colspan=7)
         html += `
         <tr class="group-header" style="background:rgba(255,255,255,0.015); border-bottom:1px solid var(--border-light)">
-            <td colspan="6" style="padding:16px 14px 10px; font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em">
+            <td colspan="7" style="padding:16px 14px 10px; font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em">
                 <div style="display:flex; justify-content:space-between; align-items:center">
                     <div style="display:inline-flex; align-items:center; gap:8px">
                         <span style="opacity:0.6">${namespace ? '🏷️ NAMESPACE:' : '📦 GLOBAL VARS'}</span>
@@ -4904,7 +5034,7 @@ function renderVariablesList() {
         </tr>`;
 
         if (groups[namespace].length === 0 && !isEditing) {
-            html += `<tr><td colspan="6" class="empty-td" style="padding:10px 20px; font-size:10px; opacity:0.5; font-style:italic">No variables in this namespace. Click [+ ADD VAR] to start.</td></tr>`;
+            html += `<tr><td colspan="7" class="empty-td" style="padding:10px 20px; font-size:10px; opacity:0.5; font-style:italic">No variables in this namespace. Click [+ ADD VAR] to start.</td></tr>`;
         }
 
         groups[namespace].forEach(v => {
@@ -4912,16 +5042,14 @@ function renderVariablesList() {
             if (v._editing || v._isNew) {
                 html += `
                 <tr class="editing-row" style="background:rgba(99,102,241,0.03)">
-                    <td style="padding-left:20px">
-                        <select id="inline-var-type-${idx}" style="width:100px; height:34px; font-size:11px; padding:0 8px; font-weight:700" onchange="state.variables[${idx}].value_type = this.value; renderVariablesList()">
+                    <td></td>
+                    <td style="padding-left:14px">
+                        <select id="inline-var-type-${idx}" style="height:34px; font-size:11px; padding:0 8px; font-weight:700" onchange="state.variables[${idx}].value_type = this.value; renderVariablesList()">
                             <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
                             <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
                             <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
                             <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
                         </select>
-                    </td>
-                    <td style="text-align:center">
-                        <span style="font-size:9px; font-weight:800; padding:4px 8px; border-radius:4px; opacity:0.6; background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1)">EDITING...</span>
                     </td>
                     <td>
                         <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px; font-family:var(--font-mono); font-weight:700; color:var(--accent)">
@@ -4939,11 +5067,14 @@ function renderVariablesList() {
                             <input type="text" id="inline-var-value-${idx}" value="${v.value || ''}" placeholder="Initial Value..." oninput="state.variables[${idx}].value = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
                         `}
                     </td>
+                    <td style="text-align:center">
+                        <span style="font-size:9px; font-weight:800; padding:4px 8px; border-radius:4px; opacity:0.6; background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1)">EDITING...</span>
+                    </td>
                     <td>
                         <input type="text" id="inline-var-desc-${idx}" value="${v.description || ''}" placeholder="Description..." oninput="state.variables[${idx}].description = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px">
                     </td>
-                    <td style="text-align:right">
-                        <div class="action-btn-group" style="justify-content:flex-end; padding-right:14px">
+                    <td class="action-cell" style="text-align:right">
+                        <div class="action-btn-group" style="justify-content:flex-end; gap:8px">
                             <button class="icon-btn" onclick="toggleInlineVariableSecret(${idx})" title="${v.is_secret ? 'Hide' : 'Show'} Secret">${v.is_secret ? '🔒' : '👁️'}</button>
                             <button class="icon-btn" onclick="toggleInlineVariableReadonly(${idx})" title="${v.is_readonly ? 'Make Writable' : 'Make Read-Only'}" style="color:${v.is_readonly ? 'var(--failure)' : 'var(--text-muted)'}">${v.is_readonly ? '🚫' : '📝'}</button>
                             <button class="icon-btn" onclick="saveInlineVariable(${idx})" style="color:var(--success)">💾</button>
@@ -4959,7 +5090,14 @@ function renderVariablesList() {
 
                 html += `
                 <tr>
-                    <td style="padding-left:20px"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
+                    <td></td>
+                    <td style="padding-left:14px"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
+                    <td>
+                        <div style="display:inline-flex; align-items:center; background:rgba(124,106,247,0.06); border:1px solid rgba(124,106,247,0.1); border-radius:4px; padding:1px 8px; font-family:var(--font-mono); font-weight:800; color:var(--accent); font-size:12px; letter-spacing:-0.2px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
+                            ${v.key}
+                        </div>
+                    </td>
+                    <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${valColor}; font-weight:500; font-family:var(--font-mono); font-size:12px">${renderVariableValue(v)}</div></td>
                     <td style="text-align:center">
                         <div onclick="toggleVariableReadonly(${idx})" title="Click to toggle Read-Only status" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:100%">
                             <span style="font-size:9px; font-weight:800; padding:4px 10px; border-radius:4px; transition:all 0.2s; white-space:nowrap; ${v.is_readonly ? 'background:rgba(239, 68, 68, 0.1); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.2)' : 'background:rgba(16, 185, 129, 0.1); color:#10b981; border:1px solid rgba(16, 185, 129, 0.2)'}">
@@ -4967,15 +5105,9 @@ function renderVariablesList() {
                             </span>
                         </div>
                     </td>
-                    <td>
-                        <div style="display:inline-flex; align-items:center; background:rgba(124,106,247,0.06); border:1px solid rgba(124,106,247,0.1); border-radius:4px; padding:1px 8px; font-family:var(--font-mono); font-weight:800; color:var(--accent); font-size:12px; letter-spacing:-0.2px; max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
-                            ${v.key}
-                        </div>
-                    </td>
-                    <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${valColor}; font-weight:500; font-family:var(--font-mono); font-size:12px">${renderVariableValue(v)}</div></td>
                     <td><div style="color:var(--text-muted); opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || '—'}</div></td>
-                    <td style="text-align:right">
-                        <div class="action-btn-group" style="justify-content:flex-end; padding-right:14px">
+                    <td class="action-cell" style="text-align:right">
+                        <div class="action-btn-group" style="justify-content:flex-end; gap:8px">
                             <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
                             <button class="icon-btn" onclick="toggleVariableReadonly(${idx})" title="${v.is_readonly ? 'Unlock' : 'Lock (Read-Only)'}">${v.is_readonly ? '🚫' : '📝'}</button>
                             <button class="icon-btn" onclick="editInlineVariable(${idx})" title="Edit Inline">✏️</button>
@@ -4991,7 +5123,7 @@ function renderVariablesList() {
     if (state.editingNamespace === '@@NEW_NAMESPACE@@') {
         html += `
         <tr class="group-header" style="background:rgba(99,102,241,0.05); border-top:2px solid var(--accent)">
-            <td colspan="6" style="padding:16px 14px; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase">
+            <td colspan="7" style="padding:16px 14px; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase">
                 <div style="display:flex; flex-direction:column; gap:8px">
                     <span style="opacity:0.6">🆕 Create New Namespace:</span>
                     <div style="display:flex; align-items:center; gap:10px">
@@ -5032,42 +5164,42 @@ function renderEnvironmentList() {
     }
 
     const html = `
-        <table class="data-table" style="table-layout: fixed;">
-            <thead>
-                <tr>
-                    <th style="width:100px; padding-left:20px">Type</th>
-                    <th style="width:100px; text-align:center">Status</th> 
-                    <th style="width:250px">Name / Key</th>
-                    <th style="width:300px">Value</th>
-                    <th>Description</th>
-                    <th style="width:120px"></th>
-                </tr>
-            </thead>
-            <tbody>
-                ${state.builtin_envs.map((v, i) => `
-                <tr class="variable-row variable-readonly">
-                    <td style="padding-left:20px"><span class="type-pill type-string">STRING</span></td>
-                    <td style="text-align:center">
-                        <span style="font-size:9px; font-weight:800; padding:4px 10px; border-radius:4px; opacity:0.8; background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.2); white-space:nowrap" title="This variable is locked by the system environment.">
-                            SYSTEM
-                        </span>
-                    </td>
-                    <td>
-                        <div style="display:inline-flex; align-items:center; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.1); border-radius:4px; padding:2px 8px; font-family:var(--font-mono); font-weight:800; color:#3b82f6; font-size:12px; letter-spacing:-0.2px; max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
-                            ${v.key}
-                        </div>
-                    </td>
-                    <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); opacity:0.6; font-weight:500; font-family:var(--font-mono); font-size:12px">••••••••</div></td>
-                    <td><div style="color:var(--text-muted); opacity:0.6; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">External environment variable</div></td>
-                    <td style="text-align:right">
-                        <div class="action-btn-group" style="justify-content:flex-end; padding-right:14px">
-                             <span style="font-size:9px; font-weight:800; color:var(--text-muted); opacity:0.4; letter-spacing:0.1em; text-transform:uppercase">Immutable</span>
-                        </div>
-                    </td>
-                </tr>
-                `).join('')}
-            </tbody>
-        </table>
+        <div class="scrapers-table-container">
+            <table class="scrapers-table">
+                <thead>
+                    <tr>
+                        <th style="width:30px"></th>
+                        <th style="width:120px">Source</th>
+                        <th style="width:220px">Key / Variable</th>
+                        <th style="width:300px">Current Value</th>
+                        <th>Description</th>
+                        <th class="action-cell">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${state.builtin_envs.map((v, i) => `
+                    <tr class="variable-row variable-readonly">
+                        <td></td>
+                        <td style="padding-left:14px"><span class="type-pill type-string">STRING</span></td>
+                        <td>
+                            <div style="display:inline-flex; align-items:center; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.1); border-radius:4px; padding:2px 8px; font-family:var(--font-mono); font-weight:800; color:#3b82f6; font-size:12px; letter-spacing:-0.2px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
+                                ${v.key}
+                            </div>
+                        </td>
+                        <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); opacity:0.6; font-weight:500; font-family:var(--font-mono); font-size:12px">••••••••</div></td>
+                        <td><div style="color:var(--text-muted); opacity:0.6; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">External environment variable</div></td>
+                        <td class="action-cell" style="text-align:right">
+                            <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px">
+                                <span style="font-size:9px; font-weight:800; padding:4px 10px; border-radius:4px; opacity:0.8; background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.2); white-space:nowrap" title="This variable is locked by the system environment.">
+                                    SYSTEM
+                                </span>
+                            </div>
+                        </td>
+                    </tr>
+                    `).join('')}
+                </tbody>
+            </table>
+        </div>
     `;
     container.innerHTML = html;
 }

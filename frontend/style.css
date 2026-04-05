@@ -3050,6 +3050,102 @@ input:checked+.slider {
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 0 20px rgba(168, 85, 247, 0.02) !important;
 }
 
+/* ── Compact Square Utility Sockets (Modern Junction Theme) ────────── */
+.builder-node.builder-node--utility.builder-node--mini {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+  min-height: 120px !important; /* Allow growth */
+  padding: 0 !important;
+  border-radius: 12px;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  justify-content: flex-start !important;
+  border-color: rgba(244, 63, 94, 0.4) !important;
+  background: rgba(23, 23, 23, 0.95) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+  overflow: visible; /* To see ports clearly */
+}
+
+.builder-node.builder-node--utility.builder-node--mini .builder-node__title {
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 8px 6px;
+  border-bottom: 1px solid rgba(244, 63, 94, 0.15);
+  margin-bottom: 4px;
+  text-align: center !important;
+  background: rgba(244, 63, 94, 0.08) !important;
+  color: #fb7185 !important;
+  width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Port positioning for compact square nodes */
+.builder-node--utility.builder-node--mini .node-port-row {
+  margin: 1px 0;
+  padding: 0 12px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  position: relative;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.builder-node--utility.builder-node--mini .node-port-label {
+  display: block; 
+  font-size: 8.5px;
+  opacity: 0.7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 80px;
+}
+
+/* Fix for config overflow in compact nodes */
+.builder-node.builder-node--utility.builder-node--mini .node-config-container {
+    padding: 6px !important;
+    margin-top: 2px !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    overflow: hidden !important;
+}
+
+.builder-node.builder-node--utility.builder-node--mini .node-config-group {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+}
+
+.builder-node.builder-node--utility.builder-node--mini .node-config-label {
+    font-size: 8px !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+}
+
+.builder-node.builder-node--utility.builder-node--mini .node-select, 
+.builder-node.builder-node--utility.builder-node--mini .node-input {
+    font-size: 10px !important;
+    height: 24px !important;
+    padding: 2px 6px !important;
+    padding-right: 20px !important; /* For the custom arrow */
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+    display: block !important;
+    appearance: none;
+    background-position: right 6px center !important;
+}
+
 .builder-node.builder-node--logic .builder-node__title {
   color: #c084fc !important;
   border-bottom-color: rgba(168, 85, 247, 0.2) !important;
@@ -3806,14 +3902,25 @@ path.connection-path.connection-path--false {
 }
 
 #tool-logic {
-  border-color: rgba(16, 185, 129, 0.25);
-  color: #10b981;
+  border-color: rgba(168, 85, 247, 0.25);
+  color: #a855f7;
 }
 
 #tool-logic.active {
-  background: rgba(16, 185, 129, 0.15) !important;
-  border-color: #10b981 !important;
-  box-shadow: 0 0 15px rgba(16, 185, 129, 0.3);
+  background: rgba(168, 85, 247, 0.15) !important;
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 15px rgba(168, 85, 247, 0.3);
+}
+
+#tool-utility {
+  border-color: rgba(244, 63, 94, 0.25);
+  color: #fb7185;
+}
+
+#tool-utility.active {
+  background: rgba(244, 63, 94, 0.15) !important;
+  border-color: #f43f5e !important;
+  box-shadow: 0 0 15px rgba(244, 63, 94, 0.3);
 }
 
 /* Override menu hover to match category */
@@ -3834,7 +3941,11 @@ path.connection-path.connection-path--false {
 }
 
 #dropdown-logic .menu-item:hover {
-  background: rgba(16, 185, 129, 0.15);
+  background: rgba(168, 85, 247, 0.15);
+}
+
+#dropdown-utility .menu-item:hover {
+  background: rgba(244, 63, 94, 0.15);
 }
 
 /* ── Context Item Card (Functions) ───────────────── */

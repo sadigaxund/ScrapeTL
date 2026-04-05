@@ -84,7 +84,7 @@ class BuilderEngine:
             # --- 1. Trigger Guard (Skip Check) ---
             # EXCLUSION: 'input' and 'sink' nodes never have a trigger guard.
             skip_node = False
-            if node.get("type") not in ["input", "sink"] and "trigger" in node_inputs:
+            if node.get("type") not in ["input", "sink", "utility"] and "trigger" in node_inputs:
                 t_val = node_inputs["trigger"]
                 # Skip if null or if it contains an error metadata
                 if t_val is None or (isinstance(t_val, dict) and "__error__" in t_val):
@@ -116,8 +116,8 @@ class BuilderEngine:
 
                 except Exception as e:
                     print(f"[BuilderEngine] ❌ Error in node {current_id} ({node['type']}): {e}")
-                    # EXCLUSION: 'input' or 'sink' nodes do not propagate errors through a separate branch
-                    if node.get("type") in ["input", "sink"]:
+                    # EXCLUSION: Utility nodes do not propagate errors via dedicated ports
+                    if node.get("type") in ["input", "sink", "utility"]:
                         status = "failed"
                         self.results_cache[current_id] = {"__error__": str(e)}
                     else:
@@ -440,6 +440,30 @@ class BuilderEngine:
                 if selector == "*" or child.select_one(selector) or child.name == selector:
                     results.append(str(child))
             return results
+
+        elif ntype == "logic_splitter":
+            # Returns its only input; the engine handles duplication to multiple neighbors
+            return node_inputs.get("data") or next(iter(node_inputs.values()), None)
+
+        elif ntype == "logic_combiner":
+            mode = data.get("mode", "list")
+            # Sort inputs by their numeric handle index (input_0, input_1, etc.)
+            sorted_keys = sorted(node_inputs.keys(), key=lambda k: int(k.split('_')[1]) if '_' in k and k.split('_')[1].isdigit() else 0)
+            input_list = [node_inputs[k] for k in sorted_keys]
+
+            if mode == "flatten":
+                result = []
+                for item in input_list:
+                    if isinstance(item, list): result.extend(item)
+                    else: result.append(item)
+                return result
+            elif mode == "merge_object":
+                result = {}
+                for item in input_list:
+                    if isinstance(item, dict): result.update(item)
+                return result
+            
+            return input_list # Default: list
 
         # ── Conditional Logic ─────────────────────────────────────────────
         elif ntype in ["logic_conditional", "logic_logic_gate", "logic_comparison", "logic_string_match", "logic_status_check", "logic_custom_logic"]:
