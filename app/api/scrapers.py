@@ -16,9 +16,7 @@ from app.builder.generator import Generator
 
 router = APIRouter(prefix="/api/scrapers", tags=["scrapers"])
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "data", "thumbnails")
 SCRAPERS_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "scrapers")
-os.makedirs(DATA_DIR, exist_ok=True)
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

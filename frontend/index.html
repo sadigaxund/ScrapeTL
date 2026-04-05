@@ -541,17 +541,20 @@
           <button class="ctx-tab-btn" onclick="switchContextTab('funcs', this)">
             <span class="ctx-tab-icon">ƒ</span> Expressive Functions
           </button>
+          <button class="ctx-tab-btn" onclick="switchContextTab('env', this)">
+            <span class="ctx-tab-icon">⚙️</span> System Environment
+          </button>
         </div>
 
         <!-- ── Variables View ────────────────────────────── -->
         <div id="ctx-vars-view" style="padding: 16px 0;">
           <div class="table-wrapper">
-            <table class="data-table">
+            <table class="data-table" style="table-layout: fixed;">
               <thead>
                 <tr>
                   <th style="width:100px; padding-left:20px">Type</th>
-                  <th style="width:40px"></th> <!-- Status column -->
-                  <th style="width:200px">Name / Key</th>
+                  <th style="width:100px; text-align:center">Status</th> 
+                  <th style="width:250px">Name / Key</th>
                   <th style="width:300px">Value</th>
                   <th>Description</th>
                   <th style="width:120px"></th> <!-- Actions Header removed -->
@@ -628,6 +631,15 @@
 
           <div id="functions-list" class="item-list" style="margin-top:24px;">
             <!-- Built-in and Custom functions documentation -->
+          </div>
+        </div>
+
+        <!-- ── Environment View ────────────────────────────── -->
+        <div id="ctx-env-view" style="display:none; padding:16px 0;">
+          <div class="table-wrapper">
+             <div id="environment-list-container">
+                <!-- Rendered as a single table -->
+             </div>
           </div>
         </div>
       </div>
