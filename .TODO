@@ -9,16 +9,24 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 14. rework the integration part to be similar to scraper/schedules creation part, but where at the top  [NOT SURE]
 26. Rename Schedules to Routines[NOT SURE]
 
-2. more integrations: SQL: sqlite, postgres, microsoft sql server, mysql
-12. somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain
-19. When a scraper contains some new library thats not in the app's environment, scraper does not run, maybe a way of dynamically installing libraries.
-13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
-27. a button to save a version within builder, like a snapshot. I think after reverting to certain version then snapshotting, it should just create a new version and append to the end of versions list. Not sure how to select the version number
-31. ability to Select which fields to send to integrations.
-37. add validation
+
 33. scraper connected dashboard
+12. somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain
 35. add an external api access to run or overall control the scraper like (1) start (2) stop (3) create/delete/pause schedule (4) list all schedules/scrapers/integrations (5) get status of each scraper/schedule/integration (6) and etc...
+
 36. add schema to the context registry
+
 28. add return types to the functions
 
+2. more integrations: SQL: sqlite, postgres, microsoft sql server, mysql
+13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
+19. When a scraper contains some new library thats not in the app's environment, scraper does not run, maybe a way of dynamically installing libraries.
+29. better error output from nodes, so that I can pass to the debug output node
+31. rework nodes so that onsuccess return data, on failure return error
 
+37. add validation
+31. ability to Select which fields to send to integrations.
+27. a button to save a version within builder, like a snapshot. I think after reverting to certain version then snapshotting, it should just create a new version and append to the end of versions list. Not sure how to select the version number
+
+33. make icon of the integrations the same size and shorter description so that single row
+34. fix schedules table
