@@ -69,7 +69,9 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         _input_values  = input_values or {}
 
         # 3. Load Global Variables for injection
+        import os
         global_vars = {}
+
         db_vars = db.query(GlobalVariable).all()
         for v in db_vars:
             val = v.value

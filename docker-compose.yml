@@ -7,9 +7,12 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data:/app/data
+      - app-data:/app/data
     environment:
       - APP_TIMEZONE=UTC
       # Point DB to the persistent volume
       - DATABASE_URL=sqlite:////app/data/scraper_registry.db
     restart: unless-stopped
+
+volumes:
+  app-data:

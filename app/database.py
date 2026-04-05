@@ -59,6 +59,10 @@ def _ensure_schema_columns():
         # Check schedules
         res = conn.execute(text("PRAGMA table_info(schedules)"))
         cols = [r[1] for r in res]
+        if "position" not in cols:
+            conn.execute(text("ALTER TABLE schedules ADD COLUMN position INTEGER DEFAULT 0"))
+            conn.commit()
+            print("[DB] Added position to schedules")
         if "thumbnail_url" not in cols:
             conn.execute(text("ALTER TABLE schedules ADD COLUMN thumbnail_url TEXT"))
             conn.commit()
@@ -75,6 +79,10 @@ def _ensure_schema_columns():
         # Check scrapers
         res = conn.execute(text("PRAGMA table_info(scrapers)"))
         cols = [r[1] for r in res]
+        if "position" not in cols:
+            conn.execute(text("ALTER TABLE scrapers ADD COLUMN position INTEGER DEFAULT 0"))
+            conn.commit()
+            print("[DB] Added position to scrapers")
         if "updated_at" not in cols:
             conn.execute(text("ALTER TABLE scrapers ADD COLUMN updated_at DATETIME"))
             # Default to created_at if it's new
@@ -98,6 +106,14 @@ def _ensure_schema_columns():
                 conn.execute(text("UPDATE global_variables SET namespace = schema WHERE namespace IS NULL"))
                 conn.commit()
                 print("[DB] Ported data from schema to namespace")
+
+        # Check integrations
+        res = conn.execute(text("PRAGMA table_info(integrations)"))
+        cols = [r[1] for r in res]
+        if "position" not in cols:
+            conn.execute(text("ALTER TABLE integrations ADD COLUMN position INTEGER DEFAULT 0"))
+            conn.commit()
+            print("[DB] Added position to integrations")
 
         # Check user_functions
         res = conn.execute(text("PRAGMA table_info(user_functions)"))

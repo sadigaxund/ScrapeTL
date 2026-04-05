@@ -31,6 +31,7 @@ const API = {
     functions: '/api/functions',
     stopRun: (id) => `/api/run/stop/${id}`,
     duplicateScraper: (id) => `/api/scrapers/${id}/duplicate`,
+    envVariables: '/api/variables/builtins/env',
 };
 
 /* ── State ──────────────────────────────────────────── */
@@ -53,6 +54,7 @@ let state = {
     queueTasks: [],
     queueSort: { col: 'scheduled_for', order: 'asc' },
     variables: [],
+    builtin_envs: [], // Built-in system environment variables
     virtualNamespaces: [],  // track namespaces with no variables yet
     editingNamespace: null, // track which namespace header is being renamed
     tempNamespaceName: '',  // buffer for typing new namespace
@@ -391,7 +393,7 @@ const NODE_PRESETS = {
             ]
         },
         expression: {
-            title: 'Registry Pull',
+            title: 'Context Registry',
             inputs: [],
             outputs: ['Val Out'],
             configs: [
@@ -1598,6 +1600,13 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     menu.style.top = `${top + 5}px`;
     menu.style.left = `${left}px`;
 
+    const addSeparator = (title) => {
+        const sep = document.createElement('div');
+        sep.style = 'font-size:9px; font-weight:800; color:var(--text-muted); padding:10px 8px 4px; letter-spacing:0.08em; border-top:1px solid rgba(255,255,255,0.03); margin-top:6px; text-transform:uppercase; display:flex; align-items:center; gap:8px';
+        sep.innerHTML = `<span>${title}</span><div style="flex:1; height:1px; background:rgba(255,255,255,0.03)"></div>`;
+        menu.appendChild(sep);
+    };
+
     // 1. Header
     const head = document.createElement('div');
     head.style = 'font-size:10px; font-weight:700; color:var(--accent); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin-bottom:4px;';
@@ -1627,44 +1636,45 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         }
     });
 
-    // 3. Global Variables (Sorted by Namespace)
-    const sortedVars = [...(state.variables || [])].sort((a, b) => {
-        const nsA = a.namespace || '';
-        const nsB = b.namespace || '';
-        if (nsA !== nsB) return nsA.localeCompare(nsB);
-        return a.key.localeCompare(b.key);
-    });
+    // 3. Global Variables (DB Registry)
+    if (state.variables && state.variables.length > 0) {
+        addSeparator('Global Variables');
+        const sortedVars = [...state.variables].sort((a, b) => {
+            const nsA = a.namespace || '';
+            const nsB = b.namespace || '';
+            if (nsA !== nsB) return nsA.localeCompare(nsB);
+            return a.key.localeCompare(b.key);
+        });
 
-    sortedVars.forEach(v => {
-        if (filter === 'writable' && v.is_readonly) return;
-
-        const item = document.createElement('div');
-        item.className = 'context-item';
-        const displayKey = v.namespace ? `${v.namespace}.${v.key}` : v.key;
-        
-        item.innerHTML = `
-            <div class="item-icon">VAR</div>
-            <div class="item-content">
-                <div style="display:flex; align-items:center; gap:6px">
-                    <span class="item-title" style="font-weight:700">${v.key}</span>
-                    ${v.namespace ? `<span style="font-size:9px; background:rgba(124,106,247,0.1); color:var(--accent); padding:1px 4px; border-radius:3px; font-weight:800; letter-spacing:0.05em">@${v.namespace.toUpperCase()}</span>` : ''}
+        sortedVars.forEach(v => {
+            if (filter === 'writable' && v.is_readonly) return;
+            const item = document.createElement('div');
+            item.className = 'context-item';
+            const displayKey = v.namespace ? `${v.namespace}.${v.key}` : v.key;
+            item.innerHTML = `
+                <div class="item-icon">VAR</div>
+                <div class="item-content">
+                    <div style="display:flex; align-items:center; gap:6px">
+                        <span class="item-title" style="font-weight:700">${v.key}</span>
+                        <span style="font-size:9px; background:rgba(124,106,247,0.1); color:var(--accent); padding:1px 4px; border-radius:3px; font-weight:800; letter-spacing:0.05em">@${(v.namespace || 'REGISTRY').toUpperCase()}</span>
+                    </div>
                 </div>
-                <span class="item-subtitle">${v.value || 'No value set'}</span>
-            </div>
-            <small class="item-badge" style="background:rgba(59,130,246,0.1); color:#3b82f6">${v.is_readonly ? 'READONLY' : 'VAR'}</small>
-        `;
-        item.onclick = () => {
-            inputEl.value = `{{${displayKey}}}`;
-            updateNodeConfig(nodeId, configKey, inputEl.value);
-            renderBuilderNodes(); renderConnections();
-            menu.remove();
-        };
-        menu.appendChild(item);
-    });
+            `;
+            item.onclick = () => {
+                inputEl.value = `{{${displayKey}}}`;
+                updateNodeConfig(nodeId, configKey, inputEl.value);
+                renderBuilderNodes(); renderConnections();
+                menu.remove();
+            };
+            menu.appendChild(item);
+        });
+    }
 
     // 4. Custom User Functions (With Category Filtering)
     if (filter !== 'writable') {
-        state.functions.forEach(f => {
+        const customs = state.functions || [];
+        if (customs.length > 0) addSeparator('User Functions');
+        customs.forEach(f => {
             // Functional Filtering
             if (filter === 'comparator' && f.category !== 'comparator') return;
             if (filter === 'generator' && f.category !== 'generator') return;
@@ -1674,106 +1684,75 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             item.className = 'context-item';
             const argNames = parseFuncArgs(f.code || '');
             const displaySig = argNames.length > 0 ? `${f.name}(${argNames.join(', ')})` : `${f.name}()`;
-
-            const catMap = {
-                generator: { label: 'GEN', color: '#10b981' },
-                comparator: { label: 'LOGIC', color: '#6366f1' },
-                transformer: { label: 'UDF', color: '#f59e0b' }
-            };
-            const meta = catMap[f.category] || { label: 'UDF', color: '#a855f7' };
-
             item.innerHTML = `
-                <div class="item-icon" style="color:${meta.color}">ƒ</div>
+                <div class="item-icon">ƒ</div>
                 <div class="item-content">
                     <span class="item-title">${displaySig}</span>
-                    <span class="item-subtitle">${f.description || 'Custom Function'}</span>
-                </div>
-                <small class="item-badge" style="background:${meta.color}1a; color:${meta.color}">${meta.label}</small>
-            `;
-
-            if (argNames.length === 0) {
-                item.onclick = () => {
-                    inputEl.value = `{{${f.name}()}}`;
-                    updateNodeConfig(nodeId, configKey, inputEl.value);
-                    renderBuilderNodes(); renderConnections();
-                    menu.remove();
-                };
-            } else {
-                item.onclick = (ev) => {
-                    ev.stopPropagation();
-                    item.innerHTML = '';
-                    const formWrap = document.createElement('div');
-                    formWrap.style = 'padding:6px 0; display:flex; flex-direction:column; gap:6px; width:100%;';
-
-                    const argInputs = [];
-                    argNames.forEach(argName => {
-                        const argRow = document.createElement('div');
-                        argRow.style = 'display:flex; align-items:center; gap:6px;';
-                        const argLbl = document.createElement('span');
-                        argLbl.style = 'font-size:10px; color:var(--text-muted); min-width:50px;';
-                        argLbl.textContent = argName + ':';
-                        const argInp = document.createElement('input');
-                        argInp.className = 'node-input';
-                        argInp.placeholder = `{{var}} or "literal"`;
-                        argInp.style = 'flex:1; font-size:10px;';
-                        argRow.appendChild(argLbl);
-                        argRow.appendChild(argInp);
-                        formWrap.appendChild(argRow);
-                        argInputs.push(argInp);
-                    });
-
-                    const insertBtn = document.createElement('button');
-                    insertBtn.className = 'btn-node-action';
-                    insertBtn.style = 'margin-top:4px; width:100%;';
-                    insertBtn.textContent = '↩ Insert Call';
-                    insertBtn.onclick = (e) => {
-                        e.stopPropagation();
-                        const argStr = argInputs.map(i => i.value.trim() || '""').join(', ');
-                        inputEl.value = `{{${f.name}(${argStr})}}`;
-                        updateNodeConfig(nodeId, configKey, inputEl.value);
-                        renderBuilderNodes(); renderConnections();
-                        menu.remove();
-                    };
-                    formWrap.appendChild(insertBtn);
-                    item.appendChild(formWrap);
-                };
-            }
-            menu.appendChild(item);
-        });
-
-        // 5. Built-in Functions
-        const builtins = [
-            { name: 'now', desc: 'Current timestamp' },
-            { name: 'today', desc: 'Current date' },
-            { name: 'random', desc: 'Random number' },
-            { name: 'str', desc: 'Convert to string' },
-            { name: 'int', desc: 'Convert to int' },
-            { name: 'json', desc: 'Parse/Stringify JSON' }
-        ];
-
-        const builtinHead = document.createElement('div');
-        builtinHead.style = 'font-size:10px; font-weight:700; color:var(--text-muted); padding:4px 8px; border-bottom:1px solid rgba(255,255,255,0.1); margin:8px 0 4px 0;';
-        builtinHead.textContent = 'Built-in Functions';
-        menu.appendChild(builtinHead);
-
-        builtins.forEach(b => {
-            const item = document.createElement('div');
-            item.className = 'context-item';
-            item.innerHTML = `
-                <div class="item-icon" style="color:var(--text-muted)">⚙️</div>
-                <div class="item-content">
-                    <span class="item-title">${b.name}()</span>
-                    <span class="item-subtitle">${b.desc}</span>
                 </div>
             `;
             item.onclick = () => {
-                inputEl.value = `{{${b.name}()}}`;
+                inputEl.value = `{{${f.name}(${argNames.join(', ')})}}`;
                 updateNodeConfig(nodeId, configKey, inputEl.value);
                 renderBuilderNodes(); renderConnections();
                 menu.remove();
             };
             menu.appendChild(item);
         });
+    }
+
+    // 5. Built-in Expressions
+    if (filter !== 'writable') {
+        addSeparator('Built-in Expressions');
+        const builtins = [
+            { name: 'today', val: 'today()' },
+            { name: 'now', val: 'now()' },
+            { name: 'random', val: 'random(0, 100)' },
+            { name: 'json', val: 'json(Data)' },
+            { name: 'upper', val: 'upper(Data)' },
+            { name: 'lower', val: 'lower(Data)' },
+            { name: 'strip', val: 'strip(Data)' }
+        ];
+        builtins.forEach(b => {
+            const item = document.createElement('div');
+            item.className = 'context-item';
+            item.innerHTML = `
+                <div class="item-icon" style="opacity:0.5">ƒ</div>
+                <div class="item-content">
+                    <span class="item-title">${b.name}()</span>
+                </div>
+            `;
+            item.onclick = () => {
+                inputEl.value = `{{${b.val}}}`;
+                updateNodeConfig(nodeId, configKey, inputEl.value);
+                renderBuilderNodes(); renderConnections();
+                menu.remove();
+            };
+            menu.appendChild(item);
+        });
+    }
+
+    // 6. System Environment Variables
+    if (state.builtin_envs && state.builtin_envs.length > 0) {
+        if (filter !== 'writable') {
+            addSeparator('Environment');
+            state.builtin_envs.forEach(v => {
+                const item = document.createElement('div');
+                item.className = 'context-item';
+                item.innerHTML = `
+                    <div class="item-icon" style="color:#3b82f6">⚙️</div>
+                    <div class="item-content">
+                        <span class="item-title" style="font-weight:700">${v.key}</span>
+                    </div>
+                `;
+                item.onclick = () => {
+                    inputEl.value = `{{env("${v.key}")}}`;
+                    updateNodeConfig(nodeId, configKey, inputEl.value);
+                    renderBuilderNodes(); renderConnections();
+                    menu.remove();
+                };
+                menu.appendChild(item);
+            });
+        }
     }
 
     if (menu.children.length === 1) {
@@ -4703,6 +4682,7 @@ function handleWizThumbFile(input) {
 function switchContextTab(tab, btn) {
     document.getElementById('ctx-vars-view').style.display = tab === 'vars' ? 'block' : 'none';
     document.getElementById('ctx-funcs-view').style.display = tab === 'funcs' ? 'block' : 'none';
+    document.getElementById('ctx-env-view').style.display = tab === 'env' ? 'block' : 'none';
 
     // Toggle variable button visibility
     const addVarBtn = document.getElementById('ctx-add-var-btn');
@@ -4715,6 +4695,7 @@ function switchContextTab(tab, btn) {
     btn.classList.add('active');
 
     if (tab === 'funcs') renderFunctionsList();
+    if (tab === 'env') renderEnvironmentList();
 }
 
 async function loadVariables(silent = false) {
@@ -4722,9 +4703,14 @@ async function loadVariables(silent = false) {
     if (state.variables && state.variables.some(v => v._editing || v._isNew)) return;
 
     try {
-        const vars = await apiFetch(API.variables);
+        const [vars, envs] = await Promise.all([
+            apiFetch(API.variables),
+            apiFetch(API.envVariables)
+        ]);
         state.variables = vars.map(v => ({ ...v, _editing: false }));
+        state.builtin_envs = envs;
         renderVariablesList();
+        renderEnvironmentList();
     } catch (e) {
         if (!silent) toast(e.message, 'error');
     }
@@ -4733,6 +4719,10 @@ async function loadVariables(silent = false) {
 function renderVariablesList() {
     const list = document.getElementById('variables-list-body');
     if (!list) return;
+
+    // Save scroll position and focused element ID to restore after render
+    const focusedId = document.activeElement ? document.activeElement.id : null;
+    const scrollPos = list.parentElement ? list.parentElement.scrollTop : 0;
 
     const vars = state.variables || [];
 
@@ -4780,8 +4770,25 @@ function renderVariablesList() {
                             </div>
                         `}
                     </div>
-                    <button class="icon-btn" onclick="addVariableRow('${namespace}')" title="Add variable to this namespace" style="font-size:10px; color:var(--accent); background:rgba(124,106,247,0.1); padding:2px 8px; border-radius:4px; height:20px; transition:all 0.2s">
-                        <span style="font-style:normal; font-weight:900">+</span> ADD VAR
+                    <button class="btn-add-var" onclick="addVariableRow('${namespace}')" title="Add variable to this namespace" style="
+                        display: inline-flex;
+                        align-items: center;
+                        gap: 8px;
+                        background: rgba(124, 106, 247, 0.12);
+                        border: 1px solid rgba(124, 106, 247, 0.2);
+                        color: var(--accent);
+                        font-size: 11px;
+                        font-weight: 800;
+                        padding: 0 16px;
+                        height: 30px;
+                        border-radius: 8px;
+                        cursor: pointer;
+                        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+                        text-transform: uppercase;
+                        letter-spacing: 0.04em;
+                    " onmouseover="this.style.background='var(--accent)'; this.style.color='white'; this.style.transform='translateY(-1.5px)'; this.style.boxShadow='0 5px 15px rgba(124,106,247,0.35)'" onmouseout="this.style.background='rgba(124,106,247,0.12)'; this.style.color='var(--accent)'; this.style.transform='none'; this.style.boxShadow='none'">
+                        <span style="font-size: 18px; line-height: 1; font-weight: 300; margin-top: -1px">+</span>
+                        <span>Add Variable</span>
                     </button>
                 </div>
             </td>
@@ -4797,14 +4804,16 @@ function renderVariablesList() {
                 html += `
                 <tr class="editing-row" style="background:rgba(99,102,241,0.03)">
                     <td style="padding-left:20px">
-                        <select id="inline-var-type-${idx}" style="width:150px; height:34px; font-size:11px; padding:0 8px; font-weight:700" onchange="state.variables[${idx}].value_type = this.value; renderVariablesList()">
+                        <select id="inline-var-type-${idx}" style="width:100px; height:34px; font-size:11px; padding:0 8px; font-weight:700" onchange="state.variables[${idx}].value_type = this.value; renderVariablesList()">
                             <option value="string" ${v.value_type === 'string' ? 'selected' : ''}>STRING</option>
                             <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
                             <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
                             <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
                         </select>
                     </td>
-                    <td></td> <!-- No Status icon during edit -->
+                    <td style="text-align:center">
+                        <span style="font-size:9px; font-weight:800; padding:4px 8px; border-radius:4px; opacity:0.6; background:rgba(255,255,255,0.05); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1)">EDITING...</span>
+                    </td>
                     <td>
                         <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px; font-family:var(--font-mono); font-weight:700; color:var(--accent)">
                     </td>
@@ -4843,12 +4852,14 @@ function renderVariablesList() {
                 <tr>
                     <td style="padding-left:20px"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
                     <td style="text-align:center">
-                        <button class="icon-btn" onclick="toggleVariableReadonly(${idx})" title="${v.is_readonly ? 'Locked' : 'Editable'}" style="opacity:0.5; font-size:12px; height:24px; width:24px; padding:0; border-radius:4px; display:inline-flex; align-items:center; justify-content:center">
-                            ${v.is_readonly ? '🚫' : '📝'}
-                        </button>
+                        <div onclick="toggleVariableReadonly(${idx})" title="Click to toggle Read-Only status" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:100%">
+                            <span style="font-size:9px; font-weight:800; padding:4px 10px; border-radius:4px; transition:all 0.2s; white-space:nowrap; ${v.is_readonly ? 'background:rgba(239, 68, 68, 0.1); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.2)' : 'background:rgba(16, 185, 129, 0.1); color:#10b981; border:1px solid rgba(16, 185, 129, 0.2)'}">
+                                ${v.is_readonly ? 'READ ONLY' : 'EDITABLE'}
+                            </span>
+                        </div>
                     </td>
                     <td>
-                        <div style="display:inline-flex; align-items:center; background:rgba(124,106,247,0.06); border:1px solid rgba(124,106,247,0.1); border-radius:4px; padding:2px 8px; font-family:var(--font-mono); font-weight:800; color:var(--accent); font-size:12px; letter-spacing:-0.2px">
+                        <div style="display:inline-flex; align-items:center; background:rgba(124,106,247,0.06); border:1px solid rgba(124,106,247,0.1); border-radius:4px; padding:1px 8px; font-family:var(--font-mono); font-weight:800; color:var(--accent); font-size:12px; letter-spacing:-0.2px; max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
                             ${v.key}
                         </div>
                     </td>
@@ -4871,7 +4882,7 @@ function renderVariablesList() {
     if (state.editingNamespace === '@@NEW_NAMESPACE@@') {
         html += `
         <tr class="group-header" style="background:rgba(99,102,241,0.05); border-top:2px solid var(--accent)">
-            <td colspan="5" style="padding:16px 14px; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase">
+            <td colspan="6" style="padding:16px 14px; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase">
                 <div style="display:flex; flex-direction:column; gap:8px">
                     <span style="opacity:0.6">🆕 Create New Namespace:</span>
                     <div style="display:flex; align-items:center; gap:10px">
@@ -4885,6 +4896,71 @@ function renderVariablesList() {
     }
 
     list.innerHTML = html;
+
+    // Restore focus and scroll
+    if (focusedId) {
+        const el = document.getElementById(focusedId);
+        if (el) {
+            el.focus();
+            // If it's a text input, restore cursor to the end
+            if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') {
+                const val = el.value;
+                el.value = '';
+                el.value = val;
+            }
+        }
+    }
+    if (list.parentElement) list.parentElement.scrollTop = scrollPos;
+}
+
+function renderEnvironmentList() {
+    const container = document.getElementById('environment-list-container');
+    if (!container) return;
+
+    if (!state.builtin_envs || state.builtin_envs.length === 0) {
+        container.innerHTML = `<div style="padding:20px; text-align:center; color:var(--text-muted); font-size:13px">No environment variables detected.</div>`;
+        return;
+    }
+
+    const html = `
+        <table class="data-table" style="table-layout: fixed;">
+            <thead>
+                <tr>
+                    <th style="width:100px; padding-left:20px">Type</th>
+                    <th style="width:100px; text-align:center">Status</th> 
+                    <th style="width:250px">Name / Key</th>
+                    <th style="width:300px">Value</th>
+                    <th>Description</th>
+                    <th style="width:120px"></th>
+                </tr>
+            </thead>
+            <tbody>
+                ${state.builtin_envs.map((v, i) => `
+                <tr class="variable-row variable-readonly">
+                    <td style="padding-left:20px"><span class="type-pill type-string">STRING</span></td>
+                    <td style="text-align:center">
+                        <span style="font-size:9px; font-weight:800; padding:4px 10px; border-radius:4px; opacity:0.8; background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.2); white-space:nowrap" title="This variable is locked by the system environment.">
+                            SYSTEM
+                        </span>
+                    </td>
+                    <td>
+                        <div style="display:inline-flex; align-items:center; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.1); border-radius:4px; padding:2px 8px; font-family:var(--font-mono); font-weight:800; color:#3b82f6; font-size:12px; letter-spacing:-0.2px; max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
+                            ${v.key}
+                        </div>
+                    </td>
+                    <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); opacity:0.6; font-weight:500; font-family:var(--font-mono); font-size:12px">••••••••</div></td>
+                    <td><div style="color:var(--text-muted); opacity:0.6; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">External environment variable</div></td>
+                    <td style="text-align:right">
+                        <div class="action-btn-group" style="justify-content:flex-end; padding-right:14px">
+                             <span style="font-size:9px; font-weight:800; color:var(--text-muted); opacity:0.4; letter-spacing:0.1em; text-transform:uppercase">Immutable</span>
+                        </div>
+                    </td>
+                </tr>
+                `).join('')}
+            </tbody>
+        </table>
+    `;
+    container.innerHTML = html;
 }
 
 function validateInlineJson(el) {
