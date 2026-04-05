@@ -1213,6 +1213,26 @@ function renderBuilderNodes() {
                 el.appendChild(row);
             });
 
+            // 3.1 Universal Trigger Port (Bottom of Inputs)
+            // EXCLUSION: Skip for 'input' and 'sink' nodes
+            if (node.type !== 'input' && node.type !== 'sink') {
+                const trigRow = document.createElement('div');
+                trigRow.className = 'node-port-row node-port-row--input node-port-row--universal';
+                
+                const trigPort = document.createElement('div');
+                trigPort.className = 'node-port node-port--input node-port--trigger';
+                trigPort.id = `node-${node.id}-input-trigger`;
+                trigPort.onmousedown = (e) => startConnection(e, node.id, 'input', 'trigger', 'trigger');
+
+                const trigLbl = document.createElement('span');
+                trigLbl.className = 'node-port-label node-port-label--trigger';
+                trigLbl.textContent = 'Trigger';
+
+                trigRow.appendChild(trigPort);
+                trigRow.appendChild(trigLbl);
+                el.appendChild(trigRow);
+            }
+
             // 4. Outputs (Right)
             (preset.outputs || []).forEach((label, idx) => {
                 const row = document.createElement('div');
@@ -1237,13 +1257,32 @@ function renderBuilderNodes() {
                 el.appendChild(row);
             });
 
+            // 4.1 Universal Error Port (Bottom of Outputs)
+            // EXCLUSION: Skip for 'input' and 'sink' nodes
+            if (node.type !== 'input' && node.type !== 'sink') {
+                const errRow = document.createElement('div');
+                errRow.className = 'node-port-row node-port-row--output node-port-row--universal';
+
+                const errPort = document.createElement('div');
+                errPort.className = 'node-port node-port--output node-port--error';
+                errPort.id = `node-${node.id}-output-error`;
+                errPort.onmousedown = (e) => startConnection(e, node.id, 'output', 'error', 'error');
+
+                const errLbl = document.createElement('span');
+                errLbl.className = 'node-port-label node-port-label--error';
+                errLbl.textContent = 'Error';
+
+                errRow.appendChild(errLbl);
+                errRow.appendChild(errPort);
+                el.appendChild(errRow);
+            }
+
             // 5. Configuration UI (Moved to bottom for stability)
             if (preset.configs) {
                 const configContainer = document.createElement('div');
                 configContainer.className = 'node-config-container';
 
                 preset.configs.forEach(cfg => {
-                    // Conditional Visibility & Skip Hidden fields (already initialized)
                     if (cfg.type === 'hidden') return;
                     if (cfg.visible && !cfg.visible(node)) return;
 
@@ -1270,7 +1309,6 @@ function renderBuilderNodes() {
                                 validateInlineJson(e.target);
                             };
                             group.appendChild(textarea);
-                            // Trigger initial validation
                             setTimeout(() => validateInlineJson(textarea), 0);
                         } else {
                             const input = document.createElement('input');
@@ -1330,7 +1368,6 @@ function renderBuilderNodes() {
                         row.appendChild(input);
                         row.appendChild(pickBtn);
                         group.appendChild(row);
-
                     } else if (cfg.type === 'checkbox') {
                         const wrap = document.createElement('label');
                         wrap.style = 'display:flex; align-items:center; gap:8px; cursor:pointer; font-size:11px; color:var(--text-secondary); margin-top:4px';
@@ -1343,7 +1380,7 @@ function renderBuilderNodes() {
 
                         wrap.appendChild(cb);
                         wrap.appendChild(document.createTextNode(cfg.label));
-                        group.innerHTML = ''; // Replace label with this integrated toggle
+                        group.innerHTML = '';
                         group.appendChild(wrap);
                     } else if (cfg.type === 'action_list') {
                         renderActionListUI(node.id, cfg.key, group);
@@ -1614,7 +1651,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     menu.appendChild(head);
 
     // 2. Input Parameters (External Inputs)
-    state.builder.nodes.forEach(n => {
+    if (filter !== 'comparator') {
+        state.builder.nodes.forEach(n => {
         if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
             const item = document.createElement('div');
             item.className = 'context-item';
@@ -1635,9 +1673,10 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             menu.appendChild(item);
         }
     });
+}
 
     // 3. Global Variables (DB Registry)
-    if (state.variables && state.variables.length > 0) {
+    if (state.variables && state.variables.length > 0 && filter !== 'comparator') {
         addSeparator('Global Variables');
         const sortedVars = [...state.variables].sort((a, b) => {
             const nsA = a.namespace || '';
@@ -1701,7 +1740,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     }
 
     // 5. Built-in Expressions
-    if (filter !== 'writable') {
+    if (filter !== 'writable' && filter !== 'comparator') {
         addSeparator('Built-in Expressions');
         const builtins = [
             { name: 'today', val: 'today()' },
@@ -1829,25 +1868,39 @@ function startConnection(e, fromId, portType, portIdx) {
                 const inNodeId = conn.fromType === 'input' ? fromId : targetId;
                 const inPortIdx = conn.fromType === 'input' ? conn.fromPortIdx : targetPortIdx;
 
+                // Handle special universal ports (non-numeric indices)
+                const actualTargetIdx = targetPort.id.includes('trigger') ? 'trigger' : 
+                                     targetPort.id.includes('error') ? 'error' : targetPortIdx;
+                
+                const actualSourceIdx = (conn.fromPortIdx === 'trigger' || conn.fromPortIdx === 'error') ? conn.fromPortIdx : outPortIdx;
+
+                const finalOutIdx = conn.fromType === 'output' ? actualSourceIdx : actualTargetIdx;
+                const finalInIdx = conn.fromType === 'input' ? actualSourceIdx : actualTargetIdx;
+
                 // Prevent duplicates
                 const exists = state.builder.edges.some(edge =>
-                    edge.from === outNodeId && edge.fromIdx === outPortIdx &&
-                    edge.to === inNodeId && edge.toIdx === inPortIdx
+                    edge.from === outNodeId && edge.fromIdx === finalOutIdx &&
+                    edge.to === inNodeId && edge.toIdx === finalInIdx
                 );
 
                 if (!exists && outNodeId !== inNodeId) {
                     // Detect target handle (argument name) from DOM if it was a drop-onto-named-port
-                    const targetedHandle = targetPort.dataset.namedHandle || conn.targetHandle;
+                    let targetedHandle = targetPort.dataset.namedHandle || conn.targetHandle;
+                    if (actualTargetIdx === 'trigger') targetedHandle = 'trigger';
+                    if (actualTargetIdx === 'error') targetedHandle = 'error';
 
                     // For conditional nodes, tag the edge with its branch handle
                     const srcNode = state.builder.nodes.find(n => n.id === outNodeId);
                     let sourceHandle = undefined;
+                    
+                    if (actualSourceIdx === 'error') sourceHandle = 'error';
+                    else if (actualSourceIdx === 'trigger') sourceHandle = 'trigger';
                     // Any node in the 'logic' category has True (0) and False (1) outputs
-                    if (srcNode && srcNode.type === 'logic') {
+                    else if (srcNode && srcNode.type === 'logic') {
                         sourceHandle = outPortIdx === 0 ? 'true' : 'false';
                     }
 
-                    const edge = { from: outNodeId, fromIdx: outPortIdx, to: inNodeId, toIdx: inPortIdx };
+                    const edge = { from: outNodeId, fromIdx: finalOutIdx, to: inNodeId, toIdx: finalInIdx };
                     if (sourceHandle !== undefined) edge.sourceHandle = sourceHandle;
                     if (targetedHandle) edge.targetHandle = targetedHandle;
 
@@ -1880,13 +1933,28 @@ function getPortPos(nodeId, type, portIdx) {
     const portEl = document.getElementById(`node-${nodeId}-${type}-${portIdx}`);
     const rect = portEl ? portEl.getBoundingClientRect() : null;
 
+    const node = state.builder.nodes.find(n => n.id === nodeId);
+    if (!node) return { x: 0, y: 0 };
+
     // If element doesn't exist OR hasn't been laid out by browser yet (0 width/height)
     if (!portEl || !rect || rect.width === 0) {
-        // Fallback to estimation if DOM not ready (e.g. initial load)
-        const node = state.builder.nodes.find(n => n.id === nodeId);
-        if (!node) return { x: 0, y: 0 };
-        const x = type === 'input' ? node.x : node.x + 160;
-        const y = node.y + 40 + (portIdx * 24); // 40px offset for title/label area
+        // Fallback to estimation for initial load
+        const x = type === 'input' ? node.x : node.x + 200; // Estimated width
+        let y = node.y + 40; 
+        
+        if (portIdx === 'trigger' || portIdx === 'error') {
+            const preset = NODE_PRESETS[node.preset] || {};
+            const inputCount = (preset.inputs || []).length;
+            const outputCount = (preset.outputs || []).length;
+            
+            if (portIdx === 'trigger') {
+                return { x: node.x, y: node.y + 40 + (inputCount * 24) + 7 }; // +7 for 14px port center
+            } else {
+                return { x: node.x + 200, y: node.y + 40 + (outputCount * 24) + 7 };
+            }
+        }
+        
+        y += (parseInt(portIdx) || 0) * 24;
         return { x, y };
     }
 
@@ -1919,6 +1987,9 @@ function renderConnections() {
         let pathClass = 'connection-path';
         if (edge.sourceHandle === 'true') pathClass += ' connection-path--true';
         else if (edge.sourceHandle === 'false') pathClass += ' connection-path--false';
+        else if (edge.sourceHandle === 'trigger') pathClass += ' connection-path--trigger';
+        else if (edge.sourceHandle === 'error') pathClass += ' connection-path--error';
+
         path.setAttribute('class', pathClass);
         path.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
 

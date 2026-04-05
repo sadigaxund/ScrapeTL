@@ -79,56 +79,90 @@ class BuilderEngine:
 
             current_id = queue.pop(0)
             node = self.nodes[current_id]
+            node_inputs = self._get_node_inputs(current_id)
+            
+            # --- 1. Trigger Guard (Skip Check) ---
+            # EXCLUSION: 'input' and 'sink' nodes never have a trigger guard.
+            skip_node = False
+            if node.get("type") not in ["input", "sink"] and "trigger" in node_inputs:
+                t_val = node_inputs["trigger"]
+                # Skip if null or if it contains an error metadata
+                if t_val is None or (isinstance(t_val, dict) and "__error__" in t_val):
+                    skip_node = True
+                    print(f"[BuilderEngine] ⏩ Skipping node {current_id} ({node['type']}) - Trigger Guard active.")
 
-            try:
-                res = self._execute_node(node, runtime_inputs)
-                
-                # Global check: If a node returns an error string, escalate it as a failure
-                if isinstance(res, str) and res.startswith("[Error: "):
-                    raise ValueError(f"Node execution failed: {res[8:-1]}")
+            # --- 2. Node Execution ---
+            status = "success"
+            res = None
+            
+            if not skip_node:
+                try:
+                    res = self._execute_node(node, runtime_inputs)
+                    
+                    # Global check: If a node returns an error string, escalate it as a failure
+                    if isinstance(res, str) and res.startswith("[Error: "):
+                        raise ValueError(res[8:-1])
 
-                self.results_cache[current_id] = res
-                print(f"[BuilderEngine] Ran node {current_id} ({node['type']}) -> result type: {type(res).__name__}")
+                    self.results_cache[current_id] = res
+                    print(f"[BuilderEngine] Ran node {current_id} ({node['type']}) -> result type: {type(res).__name__}")
 
-                nt = self._get_full_type(node)
-                if nt == "sink_debug":
-                    debug_artifacts.append({
-                        "node_id": current_id,
-                        "label": node.get("config", {}).get("label", "Debug"),
-                        "data": res
-                    })
+                    nt = self._get_full_type(node)
+                    if nt == "sink_debug":
+                        debug_artifacts.append({
+                            "node_id": current_id,
+                            "label": node.get("config", {}).get("label", "Debug"),
+                            "data": res
+                        })
 
-            except Exception as e:
-                print(f"[BuilderEngine] Error in node {current_id} ({node['type']}): {e}")
-                raise
+                except Exception as e:
+                    print(f"[BuilderEngine] ❌ Error in node {current_id} ({node['type']}): {e}")
+                    # EXCLUSION: 'input' or 'sink' nodes do not propagate errors through a separate branch
+                    if node.get("type") in ["input", "sink"]:
+                        status = "failed"
+                        self.results_cache[current_id] = {"__error__": str(e)}
+                    else:
+                        status = "failed"
+                        res = {"__error__": str(e), "node_id": current_id, "type": node['type']}
+                        self.results_cache[current_id] = res
+            else:
+                status = "skipped"
+                # For skipped nodes, we pass along the trigger signal (or None) if subsequent nodes are triggered
+                self.results_cache[current_id] = node_inputs.get("trigger")
 
-            # Update neighbors — with conditional branch-aware skipping
+            # --- 3. Neighbor Propagation (Branching) ---
             for neighbor in self.adj.get(current_id, []):
-                node_type = self._get_full_type(node)
+                # Find matching edges to determine handles
+                matching_edges = [
+                    e for e in self.edges
+                    if (e.get("source") or e.get("from")) == current_id
+                    and (e.get("target") or e.get("to")) == neighbor
+                ]
+                
+                should_trigger_neighbor = False
+                for edge in matching_edges:
+                    handle = edge.get("sourceHandle", "data")
+                    
+                    if status == "success":
+                        # Success: follow standard (non-error) paths
+                        if handle != "error": should_trigger_neighbor = True
+                    elif status == "failed":
+                        # Failure: ONLY follow 'error' path
+                        if handle == "error": should_trigger_neighbor = True
+                    elif status == "skipped":
+                        # Skipped nodes usually don't trigger anything unless we want to propagate failure?
+                        # User: "if it receives error/null, it should not execute". 
+                        # We stay silent on the success path, but maybe allow error path to propagate skip?
+                        # For now, let's keep it simple: skip means total silence for this node's children.
+                        pass
+                
+                if should_trigger_neighbor:
+                    self.in_degree[neighbor] -= 1
+                    if self.in_degree[neighbor] == 0:
+                        queue.append(neighbor)
+                else:
+                    print(f"[BuilderEngine] ⎇ Skipping path {current_id} -> {neighbor} (status={status})")
 
-                if node_type in ["logic_conditional", "logic_logic_gate", "logic_comparison", "logic_string_match", "logic_status_check", "logic_custom_logic"]:
-                    # Find the specific edge(s) from current to this neighbor
-                    matching_edges = [
-                        e for e in self.edges
-                        if (e.get("source") or e.get("from")) == current_id
-                        and (e.get("target") or e.get("to")) == neighbor
-                    ]
-                    cond_result = bool(self.results_cache.get(current_id, False))
-                    skip = False
-                    for edge in matching_edges:
-                        handle = edge.get("sourceHandle", "true")
-                        if handle == "true" and not cond_result:
-                            skip = True
-                        elif handle == "false" and cond_result:
-                            skip = True
-                    if skip:
-                        # Don't decrement in_degree — downstream node stays blocked
-                        print(f"[BuilderEngine] ⎇ Skipping node {neighbor} (branch={handle}, result={cond_result})")
-                        continue
-
-                self.in_degree[neighbor] -= 1
-                if self.in_degree[neighbor] == 0:
-                    queue.append(neighbor)
+            processed_nodes.add(current_id)
 
             processed_nodes.add(current_id)
 
@@ -665,8 +699,11 @@ class BuilderEngine:
         }
         return context
 
-    def _map_port_to_handle(self, node_id: str, port_idx: int) -> str:
-        """Maps a numeric port index to a descriptive handle name based on node type."""
+    def _map_port_to_handle(self, node_id: str, port_idx: Any) -> str:
+        """Maps a numeric port index or string handle to a descriptive handle name."""
+        if port_idx == "trigger": return "trigger"
+        if port_idx == "error": return "error"
+        
         node = self.nodes.get(node_id)
         if not node: return "data"
         ntype = node.get("type", "")
@@ -693,4 +730,8 @@ class BuilderEngine:
         if ntype == "logic_conditional":
             return f"input_{port_idx}"
 
-        return f"input_{port_idx}"
+        try:
+            p_idx = int(port_idx)
+            return f"input_{p_idx}"
+        except:
+            return str(port_idx)
