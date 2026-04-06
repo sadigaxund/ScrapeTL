@@ -177,23 +177,23 @@ function formatRelativeDate(isoStr) {
 }
 
 function statusBadge(status) {
-    if (!status) return `<span class="status-badge badge-pending">• UNKNOWN</span>`;
+    if (!status) return `<span class="status-badge badge-pending">UNKNOWN</span>`;
     const map = {
-        success: ['•', 'success'],
-        failure: ['•', 'failure'],
-        pending: ['•', 'pending'],
-        running: ['•', 'running'],
-        done: ['•', 'done'],
-        failed: ['•', 'failed'],
-        manual: ['•', 'manual'],
-        catchup: ['•', 'catchup'],
-        scheduler: ['•', 'scheduler'],
-        skipped: ['•', 'skipped'],
-        scheduled: ['•', 'pending'],
-        cancelled: ['•', 'failure'],
+        success: ['success'],
+        failure: ['failure'],
+        pending: ['pending'],
+        running: ['running'],
+        done: ['done'],
+        failed: ['failed'],
+        manual: ['manual'],
+        catchup: ['catchup'],
+        scheduler: ['scheduler'],
+        skipped: ['skipped'],
+        scheduled: ['pending'],
+        cancelled: ['failure'],
     };
-    const [icon, cls] = map[status] || ['•', 'pending'];
-    return `<span class="status-badge badge-${cls}">${icon} ${status.toUpperCase()}</span>`;
+    const [cls] = map[status] || ['pending'];
+    return `<span class="status-badge badge-${cls}">${status.toUpperCase()}</span>`;
 }
 
 /** 
