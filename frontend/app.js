@@ -2613,7 +2613,7 @@ function renderScrapersList(scrapers) {
                 <div style="font-weight:600; font-size:14px; color:var(--text-primary); display:flex; align-items:center; gap:8px">
                     ${s.name} ${s.latest_version ? `<span style="font-size:10px; color:var(--accent); background:var(--accent-glow); padding:1px 6px; border-radius:10px;">v${s.latest_version}</span>` : ''}
                 </div>
-                <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">${s.description || 'No description provided.'}</div>
+                <div style="font-size:12px; color:#d1d5db; margin-top:2px;">${s.description || 'No description provided.'}</div>
                 ${tagsHtml}
             </td>
             <td>${typeBadge}</td>
@@ -3121,7 +3121,7 @@ async function loadSchedules(skipFetch = false) {
                         ${displayName}
                         ${inputs ? `<button class="icon-btn-inline" onclick="toggleSchedExpand(event, ${s.id})" title="View Parameters" style="font-size:12px; opacity:0.6; cursor:pointer; background:none; border:none; padding:0">🔍</button>` : ''}
                     </div>
-                    ${subtitle ? `<div style="font-size:12px; color:var(--text-muted); margin-top:2px;">${subtitle}</div>` : ''}
+                    ${subtitle ? `<div style="font-size:12px; color:#d1d5db; margin-top:2px;">${subtitle}</div>` : ''}
                     ${tagsHtml}
                 </td>
                 <td>${freqBadge}</td>
@@ -3969,7 +3969,7 @@ function renderQueueTasks() {
                 <div style="font-weight:600; font-size:14px; color:var(--text-primary)">${t.scraper_name || 'N/A'}</div>
             </td>
             <td style="white-space:nowrap"><span style="color:var(--text-primary); font-weight:500;">${formatDateOnCondition(t.scheduled_for)}</span>${timeLeftStr}</td>
-            <td><div style="font-size:12px; color:var(--text-muted); max-width:200px; overflow:hidden; text-overflow:ellipsis">${t.note || '—'}</div></td>
+            <td><div style="font-size:12px; color:#d1d5db; max-width:200px; overflow:hidden; text-overflow:ellipsis">${t.note || '—'}</div></td>
             <td>${statusBadge(t.status)}</td>
             <td style="text-align:right">${removeBtn}</td>
         </tr>`;
@@ -4262,11 +4262,11 @@ async function loadIntegrations() {
                     <div style="font-weight:600; font-size:14px; color:var(--text-primary); display:flex; align-items:center; gap:8px">
                         ${i.name}
                     </div>
-                    <div style="font-size:11px; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.02em; margin-top:2px;">${titleType}</div>
+                    <div style="font-size:11px; color:#aeb9e1; font-weight:500; text-transform:uppercase; letter-spacing:0.05em; margin-top:2px;">${titleType}</div>
                 </div>
                 <div style="flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px;">
-                    <div style="font-size: 13px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;">
-                        ${i.config && i.config.description ? i.config.description : `<span style="opacity:0.4; font-style:italic">No description</span>`}
+                    <div style="font-size: 13px; color: #d1d5db; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px;">
+                        ${i.config && i.config.description ? i.config.description : `<span style="opacity:0.3; font-style:italic">No description</span>`}
                     </div>
                     <div style="display:flex; gap:6px; flex-wrap:nowrap;">${metaChips}</div>
                 </div>
@@ -5232,10 +5232,10 @@ function renderVariablesList() {
         // Namespace Group Header (colspan=7)
         html += `
         <tr class="group-header" style="background:rgba(255,255,255,0.015); border-bottom:1px solid var(--border-light)">
-            <td colspan="7" style="padding:16px 14px 10px; font-size:11px; font-weight:800; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.12em">
+            <td colspan="7" style="padding:16px 14px 10px; font-size:11px; font-weight:800; color:#aeb9e1; text-transform:uppercase; letter-spacing:0.12em">
                 <div style="display:flex; justify-content:space-between; align-items:center">
                     <div style="display:inline-flex; align-items:center; gap:8px">
-                        <span style="opacity:0.6">${namespace ? '🏷️ NAMESPACE:' : '📦 GLOBAL VARS'}</span>
+                        <span>${namespace ? '🏷️ NAMESPACE:' : '📦 GLOBAL VARS'}</span>
                         ${isEditing ? `
                             <div style="display:flex; align-items:center; gap:6px">
                                 <input type="text" id="rename-ns-input-${namespace || '@@GLOBAL@@'}" value="${namespace}" class="inline-input" style="height:24px; font-size:11px; width:150px; font-family:var(--font-mono); color:var(--accent)">
@@ -5331,13 +5331,13 @@ function renderVariablesList() {
                 html += `
                 <tr>
                     <td></td>
-                    <td style="padding-left:14px"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
+                    <td style="text-align: center"><span class="type-pill type-${v.value_type}">${v.value_type.toUpperCase()}</span></td>
                     <td>
                         <div style="display:inline-flex; align-items:center; background:rgba(124,106,247,0.06); border:1px solid rgba(124,106,247,0.1); border-radius:4px; padding:1px 8px; font-family:var(--font-mono); font-weight:800; color:var(--accent); font-size:12px; letter-spacing:-0.2px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
                             ${v.key}
                         </div>
                     </td>
-                    <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${valColor}; font-weight:500; font-family:var(--font-mono); font-size:12px">${renderVariableValue(v)}</div></td>
+                    <td style="text-align: center"><div style="max-width:300px; margin: 0 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:${valColor}; font-weight:500; font-family:var(--font-mono); font-size:12px">${renderVariableValue(v)}</div></td>
                     <td style="text-align:center">
                         <div onclick="toggleVariableReadonly(${idx})" title="Click to toggle Read-Only status" style="cursor:pointer; display:inline-flex; align-items:center; justify-content:center; width:100%">
                             <span style="font-size:9px; font-weight:800; padding:4px 10px; border-radius:4px; transition:all 0.2s; white-space:nowrap; ${v.is_readonly ? 'background:rgba(239, 68, 68, 0.1); color:#ef4444; border:1px solid rgba(239, 68, 68, 0.2)' : 'background:rgba(16, 185, 129, 0.1); color:#10b981; border:1px solid rgba(16, 185, 129, 0.2)'}">
@@ -5345,7 +5345,7 @@ function renderVariablesList() {
                             </span>
                         </div>
                     </td>
-                    <td><div style="color:var(--text-muted); opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || '—'}</div></td>
+                    <td><div style="color:#d1d5db; opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || '—'}</div></td>
                     <td class="action-cell" style="text-align:right">
                         <div class="action-btn-group" style="justify-content:flex-end; gap:8px">
                             <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
@@ -5363,9 +5363,9 @@ function renderVariablesList() {
     if (state.editingNamespace === '@@NEW_NAMESPACE@@') {
         html += `
         <tr class="group-header" style="background:rgba(99,102,241,0.05); border-top:2px solid var(--accent)">
-            <td colspan="7" style="padding:16px 14px; font-size:11px; font-weight:800; color:var(--accent); text-transform:uppercase">
+            <td colspan="7" style="padding:16px 14px; font-size:11px; font-weight:800; color:#aeb9e1; text-transform:uppercase">
                 <div style="display:flex; flex-direction:column; gap:8px">
-                    <span style="opacity:0.6">🆕 Create New Namespace:</span>
+                    <span>🆕 Create New Namespace:</span>
                     <div style="display:flex; align-items:center; gap:10px">
                         <input type="text" id="rename-ns-input-@@NEW_NAMESPACE@@" placeholder="Enter namespace name (e.g. Selectors)..." value="${state.tempNamespaceName || ''}" oninput="state.tempNamespaceName = this.value" class="inline-input" style="height:32px; font-size:13px; flex-grow:1; font-family:var(--font-mono)">
                         <button class="btn btn-primary" style="height:32px; padding:0 12px; font-size:11px" onclick="saveNamespaceRename('@@NEW_NAMESPACE@@')">Confirm Name</button>
@@ -5409,32 +5409,32 @@ function renderEnvironmentList() {
                 <thead>
                     <tr>
                         <th style="width:30px"></th>
-                        <th style="width:120px">Source</th>
+                        <th style="width:120px; text-align:center">Type</th>
                         <th style="width:220px">Key / Variable</th>
-                        <th style="width:300px">Current Value</th>
+                        <th style="width:300px; text-align:center">Current Value</th>
+                        <th style="width:120px; text-align:center">Status</th>
                         <th>Description</th>
-                        <th class="action-cell">Status</th>
                     </tr>
                 </thead>
                 <tbody>
                     ${state.builtin_envs.map((v, i) => `
                     <tr class="variable-row variable-readonly">
                         <td></td>
-                        <td style="padding-left:14px"><span class="type-pill type-string">STRING</span></td>
+                        <td style="text-align:center"><span class="type-pill type-string">STRING</span></td>
                         <td>
                             <div style="display:inline-flex; align-items:center; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.1); border-radius:4px; padding:2px 8px; font-family:var(--font-mono); font-weight:800; color:#3b82f6; font-size:12px; letter-spacing:-0.2px; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap" title="${v.key}">
                                 ${v.key}
                             </div>
                         </td>
-                        <td><div style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); opacity:0.6; font-weight:500; font-family:var(--font-mono); font-size:12px">••••••••</div></td>
-                        <td><div style="color:var(--text-muted); opacity:0.6; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">External environment variable</div></td>
-                        <td class="action-cell" style="text-align:right">
-                            <div style="display:flex; justify-content:flex-end; align-items:center; gap:8px">
+                        <td style="text-align:center"><div style="max-width:300px; margin: 0 auto; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; color:var(--text-secondary); opacity:0.6; font-weight:500; font-family:var(--font-mono); font-size:12px">••••••••</div></td>
+                        <td style="text-align:center">
+                            <div style="display:flex; justify-content:center; align-items:center;">
                                 <span style="font-size:9px; font-weight:800; padding:4px 10px; border-radius:4px; opacity:0.8; background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.2); white-space:nowrap" title="This variable is locked by the system environment.">
                                     SYSTEM
                                 </span>
                             </div>
                         </td>
+                        <td><div style="color:#94a3b8; opacity:0.6; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">External environment variable</div></td>
                     </tr>
                     `).join('')}
                 </tbody>

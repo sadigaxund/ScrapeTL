@@ -498,12 +498,12 @@
 
           <div class="connector-card" onclick="openConnectorModal('http_request')" style="user-select:none;">
             <span class="connector-icon"
-              style="background:linear-gradient(135deg,#0ea5e9,#6366f1); color:white; font-size:22px;">
-              🌐
+              style="background:linear-gradient(135deg,#0ea5e9,#6366f1); color:white;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
             </span>
             <div class="connector-info">
               <h3>HTTP Request</h3>
-              <p>POST/PUT/GET any endpoint with payload data.</p>
+              <p>POST, PUT, or GET any web endpoint.</p>
             </div>
           </div>
         </div>
@@ -540,11 +540,11 @@
           <button class="ctx-tab-btn active" onclick="switchContextTab('vars', this)">
             <span class="ctx-tab-icon">📦</span> Shared Variables
           </button>
-          <button class="ctx-tab-btn" onclick="switchContextTab('funcs', this)">
-            <span class="ctx-tab-icon">ƒ</span> Expressive Functions
-          </button>
           <button class="ctx-tab-btn" onclick="switchContextTab('env', this)">
             <span class="ctx-tab-icon">⚙️</span> System Environment
+          </button>
+          <button class="ctx-tab-btn" onclick="switchContextTab('funcs', this)">
+            <span class="ctx-tab-icon">ƒ</span> Expressive Functions
           </button>
         </div>
 
@@ -555,18 +555,27 @@
               <thead>
                 <tr>
                   <th style="width:30px"></th>
-                  <th style="width:120px">Namespace / Group</th>
-                  <th style="width:220px">Key / Name</th>
-                  <th style="width:300px">Current Value</th>
-                  <th style="width:100px">Status</th>
+                  <th style="width:120px; text-align:center">Type</th>
+                  <th style="width:220px">Key / Variable</th>
+                  <th style="width:300px; text-align:center">Current Value</th>
+                  <th style="width:100px; text-align:center">Status</th>
                   <th>Description</th>
-                  <th class="action-cell">Actions</th>
+                  <th class="action-cell" style="text-align:center">Actions</th>
                 </tr>
               </thead>
               <tbody id="variables-list-body">
                 <!-- Rendered as table-rows (tr) -->
               </tbody>
             </table>
+          </div>
+        </div>
+
+        <!-- ── Environment View ────────────────────────────── -->
+        <div id="ctx-env-view" style="display:none; padding:16px 0;">
+          <div class="table-wrapper">
+             <div id="environment-list-container">
+                <!-- Rendered as a single table -->
+             </div>
           </div>
         </div>
 
@@ -634,15 +643,6 @@
 
           <div id="functions-list" class="item-list" style="margin-top:24px;">
             <!-- Built-in and Custom functions documentation -->
-          </div>
-        </div>
-
-        <!-- ── Environment View ────────────────────────────── -->
-        <div id="ctx-env-view" style="display:none; padding:16px 0;">
-          <div class="table-wrapper">
-             <div id="environment-list-container">
-                <!-- Rendered as a single table -->
-             </div>
           </div>
         </div>
       </div>
