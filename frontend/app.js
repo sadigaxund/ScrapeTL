@@ -190,7 +190,7 @@ function statusBadge(status) {
         scheduler: ['scheduler'],
         skipped: ['skipped'],
         scheduled: ['pending'],
-        cancelled: ['failure'],
+        cancelled: ['cancelled'],
     };
     const [cls] = map[status] || ['pending'];
     return `<span class="status-badge badge-${cls}">${status.toUpperCase()}</span>`;
@@ -3557,12 +3557,12 @@ function renderLogFilters() {
     const aScrap = state.scrapers.find(s => String(s.id) === state.logFilters.scraperId);
     const aTag = state.tags.find(t => String(t.id) === state.logFilters.tagId);
     const statuses = [
-        { id: '', label: 'All' },
-        { id: 'running', label: '⚡ Running' },
-        { id: 'success', label: '✅ Success' },
-        { id: 'failure', label: '❌ Failure' },
-        { id: 'skipped', label: '⏭ Skipped' },
-        { id: 'cancelled', label: '🛑 Cancelled' }
+        { id: '', label: 'All', color: 'transparent' },
+        { id: 'running', label: 'Running', color: 'var(--running)' },
+        { id: 'success', label: 'Success', color: 'var(--success)' },
+        { id: 'failure', label: 'Failure', color: 'var(--failure)' },
+        { id: 'skipped', label: 'Skipped', color: 'var(--cancelled)' },
+        { id: 'cancelled', label: 'Cancelled', color: 'var(--cancelled)' }
     ];
     const aStat = statuses.find(st => st.id === state.logFilters.status);
 
@@ -3621,7 +3621,9 @@ function renderLogFilters() {
     // Build Status menu (No search needed)
     let stHtml = `<div class="dropdown-scroll-area" style="padding-top:4px">`;
     statuses.filter(st => st.id !== '').forEach(st => {
-        stHtml += `<button class="dropdown-item ${state.logFilters.status === st.id ? 'dropdown-item--active' : ''}" onclick="setLogFilter('status', '${st.id}')">${st.label}</button>`;
+        stHtml += `<button class="dropdown-item ${state.logFilters.status === st.id ? 'dropdown-item--active' : ''}" onclick="setLogFilter('status', '${st.id}')">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${st.color};margin-right:8px"></span> ${st.label}
+        </button>`;
     });
     stHtml += `</div>`;
     document.getElementById('log-menu-statuses').innerHTML = stHtml;
