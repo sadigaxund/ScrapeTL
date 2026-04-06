@@ -975,7 +975,7 @@ select option {
   inset: 0;
   background: rgba(0, 0, 0, 0.65);
   backdrop-filter: blur(6px);
-  z-index: 500;
+  z-index: 15000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2836,7 +2836,7 @@ input:checked+.slider {
   inset: 0;
   background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
-  z-index: 999;
+  z-index: 15500;
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.3s ease;
@@ -2857,7 +2857,7 @@ input:checked+.slider {
   background: #131b2e;
   /* Solid dark background */
   border-left: 1px solid var(--border-strong);
-  z-index: 1000;
+  z-index: 16000;
   transform: translateX(100%);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   display: flex;
@@ -3799,7 +3799,7 @@ path.connection-path.connection-path--false {
   box-shadow: -20px 0 50px rgba(0, 0, 0, 0.8);
   display: flex !important;
   flex-direction: column;
-  z-index: 2100;
+  z-index: 16500;
   /* Above regular modals */
 }
 
