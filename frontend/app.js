@@ -1107,12 +1107,8 @@ function renderBuilderNodes() {
 
             // 1. Title
             const title = document.createElement('div');
-            title.className = 'builder-node__title';
-            if (node.type === 'utility') {
-                title.textContent = preset.title;
-            } else {
-                title.textContent = preset.title;
-            }
+            title.className = `builder-node__title builder-node__title--${node.type}`;
+            title.textContent = preset.title;
             el.appendChild(title);
 
             // 2. Universal Node Label - Processors only (Type 'action')
@@ -1235,7 +1231,7 @@ function renderBuilderNodes() {
                 } else if (node.preset === 'logic_gate' || node.preset === 'combiner') {
                     handle = `input_${idx}`;
                 }
-                port.onmousedown = (e) => startConnection(e, node.id, 'input', idx, handle);
+                // No onmousedown: input ports are only recipients (drag from Output instead)
 
                 const lbl = document.createElement('span');
                 lbl.className = 'node-port-label';
@@ -1248,15 +1244,16 @@ function renderBuilderNodes() {
             });
 
             // 3.1 Universal Trigger Port (Bottom of Inputs)
-            // EXCLUSION: Skip for 'input' and 'sink' nodes
-            if (node.type !== 'input' && node.type !== 'sink') {
+            // EXCLUSION: Skip for 'input', 'sink', and 'utility' nodes
+            if (node.type !== 'input' && node.type !== 'sink' && node.type !== 'utility') {
                 const trigRow = document.createElement('div');
                 trigRow.className = 'node-port-row node-port-row--input node-port-row--universal';
                 
                 const trigPort = document.createElement('div');
                 trigPort.className = 'node-port node-port--input node-port--trigger';
                 trigPort.id = `node-${node.id}-input-trigger`;
-                trigPort.onmousedown = (e) => startConnection(e, node.id, 'input', 'trigger', 'trigger');
+                trigPort.title = 'Trigger';
+                // No onmousedown: trigger ports are only recipients (incoming only)
 
                 const trigLbl = document.createElement('span');
                 trigLbl.className = 'node-port-label node-port-label--trigger';
@@ -1301,8 +1298,8 @@ function renderBuilderNodes() {
             });
 
             // 4.1 Universal Error Port (Bottom of Outputs)
-            // EXCLUSION: Skip for 'input' and 'sink' nodes
-            if (node.type !== 'input' && node.type !== 'sink') {
+            // EXCLUSION: Skip for 'input', 'sink', and 'utility' nodes
+            if (node.type !== 'input' && node.type !== 'sink' && node.type !== 'utility') {
                 const errRow = document.createElement('div');
                 errRow.className = 'node-port-row node-port-row--output node-port-row--universal';
 
@@ -1949,8 +1946,13 @@ function startConnection(e, fromId, portType, portIdx) {
                     if (sourceHandle !== undefined) edge.sourceHandle = sourceHandle;
                     if (targetedHandle) edge.targetHandle = targetedHandle;
 
+                    // ⚡ SINGLE CONNECTION PER INPUT: Remove any existing edge that targets the same input port
+                    state.builder.edges = state.builder.edges.filter(e => 
+                        !(e.to === inNodeId && e.toIdx === finalInIdx)
+                    );
+
                     state.builder.edges.push(edge);
-                    toast('Connection created', 'success');
+                    toast('Connection updated', 'success');
 
                     // 💡 AUTO-INJECTION logic (existing) ...
                     

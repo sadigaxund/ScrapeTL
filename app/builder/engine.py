@@ -17,7 +17,7 @@ class BuilderEngine:
     """
 
     def __init__(self, flow_data: Dict[str, Any], global_vars: Dict[str, Any], db_session=None, custom_funcs: Dict[str, str] = None):
-        self.nodes = {n["id"]: n for n in flow_data.get("nodes", [])}
+        self.nodes = {str(n["id"]): n for n in flow_data.get("nodes", [])}
         self.edges = flow_data.get("edges", [])
         self.global_vars = global_vars
         self.db = db_session
@@ -27,10 +27,10 @@ class BuilderEngine:
 
         # Adjacency list for DAG traversal
         self.adj = {}
-        self.in_degree = {nid: 0 for nid in self.nodes}
+        self.in_degree = {str(nid): 0 for nid in self.nodes}
         for edge in self.edges:
-            src = edge.get("source") or edge.get("from")
-            tgt = edge.get("target") or edge.get("to")
+            src = str(edge.get("source") or edge.get("from"))
+            tgt = str(edge.get("target") or edge.get("to"))
 
             if src not in self.adj: self.adj[src] = []
             self.adj[src].append(tgt)
@@ -71,6 +71,7 @@ class BuilderEngine:
         combined_results = []
         debug_artifacts = []
         processed_nodes = set()
+        self.execution_statuses = {} # Track success/failed/skipped for each node
 
         while queue:
             if stop_event and stop_event.is_set():
@@ -84,11 +85,21 @@ class BuilderEngine:
             # --- 1. Trigger Guard (Skip Check) ---
             # EXCLUSION: 'input' and 'sink' nodes never have a trigger guard.
             skip_node = False
-            if node.get("type") not in ["input", "sink", "utility"] and "trigger" in node_inputs:
-                t_val = node_inputs["trigger"]
-                # Skip if null or if it contains an error metadata
-                if t_val is None or (isinstance(t_val, dict) and "__error__" in t_val):
-                    skip_node = True
+            if node.get("type") not in ["input", "sink"] and "trigger" in node_inputs:
+                t_vals = node_inputs.get("trigger")
+                if not isinstance(t_vals, list):
+                    t_vals = [t_vals]
+                
+                # Logic: Skip if NO signals are satisfied (None) 
+                # OR if ANY signal specifically received a False/Error that should abort this path.
+                # However, many users use Trigger as an OR gate. 
+                # But here, we follow the user's specific request: "skip if error or false".
+                for t in t_vals:
+                    if t is None or t is False or (isinstance(t, dict) and "__error__" in t):
+                        skip_node = True
+                        break
+                
+                if skip_node:
                     print(f"[BuilderEngine] ⏩ Skipping node {current_id} ({node['type']}) - Trigger Guard active.")
 
             # --- 2. Node Execution ---
@@ -128,19 +139,26 @@ class BuilderEngine:
                 status = "skipped"
                 # For skipped nodes, we pass along the trigger signal (or None) if subsequent nodes are triggered
                 self.results_cache[current_id] = node_inputs.get("trigger")
+            
+            self.execution_statuses[current_id] = status
 
             # --- 3. Neighbor Propagation (Branching) ---
             for neighbor in self.adj.get(current_id, []):
                 # Find matching edges to determine handles
                 matching_edges = [
                     e for e in self.edges
-                    if (e.get("source") or e.get("from")) == current_id
-                    and (e.get("target") or e.get("to")) == neighbor
+                    if str(e.get("source") or e.get("from")) == str(current_id)
+                    and str(e.get("target") or e.get("to")) == str(neighbor)
                 ]
                 
                 should_trigger_neighbor = False
                 for edge in matching_edges:
-                    handle = edge.get("sourceHandle", "data")
+                    # Resolve handle from source perspective
+                    handle = edge.get("sourceHandle")
+                    if not handle and "fromIdx" in edge:
+                        handle = self._map_port_to_handle(current_id, edge["fromIdx"])
+                    
+                    if not handle: handle = "data"
                     
                     if status == "success":
                         # Success: follow standard (non-error) paths
@@ -171,8 +189,12 @@ class BuilderEngine:
         for n_id, node in self.nodes.items():
             nt = self._get_full_type(node)
             if nt == "sink_system_output":
-                res = self.results_cache.get(n_id)
-                if res: main_outputs.append(res)
+                # Final guard: Only include output nodes that were actually reached and processed.
+                # Nodes that were never reached (stuck in in_degree waitlist) or skipped should be ignored.
+                status = self.execution_statuses.get(n_id)
+                if n_id in processed_nodes and status in ["success", "failed"]:
+                    res = self.results_cache.get(n_id)
+                    if res: main_outputs.append(res)
 
         columns = {}
         for res in main_outputs:
@@ -215,7 +237,19 @@ class BuilderEngine:
         # ── Inputs ──────────────────────────────────────────────────────
         if ntype == "input_external":
             name = data.get("name")
-            return runtime_inputs.get(name, data.get("default"))
+            val = runtime_inputs.get(name, data.get("default"))
+            dtype = data.get("dataType", "string")
+
+            if dtype == "number":
+                try: 
+                    return float(str(val).replace(",", "")) if "." in str(val) else int(str(val).replace(",", ""))
+                except: return 0
+            elif dtype == "bool":
+                return str(val).lower().strip() in ("true", "1", "yes", "on")
+            elif dtype == "json":
+                try: return json.loads(val) if isinstance(val, str) else val
+                except: return val
+            return str(val) if val is not None else ""
 
         elif ntype == "input_expression":
             expr = (data.get("value") or data.get("expression", "")).strip()
@@ -226,8 +260,8 @@ class BuilderEngine:
                 raise ValueError(f"Expression evaluation failed: {res[8:-1]}")
             return res
 
-        # ── Sources ──────────────────────────────────────────────────────
-        elif ntype == "action_fetch_url":
+        # ── Sources & Actions ────────────────────────────────────────────
+        elif ntype in ["action_fetch_url", "source_fetch_url", "source_fetch_html"]:
             url = data.get("url") or node_inputs.get("url")
             if not url:
                 print("[BuilderEngine] Warning: Fetcher node has no URL input! Skipping.")
@@ -631,16 +665,16 @@ class BuilderEngine:
             return value
 
         elif ntype == "sink_system_output":
-            sink_data = node_inputs.get("data")
+            sink_data = node_inputs.get("data") or node_inputs.get("error") or next(iter(node_inputs.values()), None)
             import types
             if isinstance(sink_data, types.GeneratorType):
                 sink_data = list(sink_data)
 
-            label = None
-            if isinstance(sink_data, dict):
-                label = sink_data.get("label") or sink_data.get("internalLabel")
-            if not label:
-                label = str(node.get("config", {}).get("label") or "Results")
+            label = str(node.get("config", {}).get("label") or "Results")
+
+            # 🛠️ ERROR FORMATTING: If we received an internal error object, format it using the node's label
+            if isinstance(sink_data, dict) and "__error__" in sink_data:
+                return {label: sink_data["__error__"]}
 
             if isinstance(sink_data, list):
                 return [(d if isinstance(d, dict) else {label: str(d)}) for d in sink_data]
@@ -649,7 +683,7 @@ class BuilderEngine:
             return sink_data
 
         elif ntype == "sink_debug":
-            val = node_inputs.get("data")
+            val = node_inputs.get("data") or node_inputs.get("error") or next(iter(node_inputs.values()), None)
             print(f"[BuilderEngine] DEBUG [{node['id']}]: {val}")
             return val
 
@@ -657,11 +691,12 @@ class BuilderEngine:
 
     def _get_node_inputs(self, node_id: str) -> Dict[str, Any]:
         """Collects outputs from all nodes that flow INTO this node."""
+        node_id = str(node_id)
         inputs = {}
         for edge in self.edges:
-            target_id = edge.get("target") or edge.get("to")
+            target_id = str(edge.get("target") or edge.get("to"))
             if target_id == node_id:
-                src_id = edge.get("source") or edge.get("from")
+                src_id = str(edge.get("source") or edge.get("from"))
                 src_output = self.results_cache.get(src_id)
 
                 handle = edge.get("targetHandle")
@@ -735,7 +770,7 @@ class BuilderEngine:
         if preset:
             ntype = f"{ntype}_{preset}"
 
-        if ntype in ["action_fetch_url", "action_fetch_playwright", "source_fetch_playwright", "source_fetch_html"]:
+        if ntype in ["action_fetch_url", "source_fetch_url", "action_fetch_playwright", "source_fetch_playwright", "source_fetch_html"]:
             return "url" if port_idx == 0 else "data"
 
         if ntype in ["action_bs4_select", "action_html_children"]:

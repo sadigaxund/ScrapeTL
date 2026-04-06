@@ -3004,11 +3004,19 @@ input:checked+.slider {
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: var(--text-secondary);
-  padding: 0 16px 8px 16px;
+  padding: 10px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   margin-bottom: 8px;
   text-align: center;
 }
+
+/* Category-specific title colors */
+.builder-node__title--input { color: #4ade80 !important; }
+.builder-node__title--source { color: #38bdf8 !important; }
+.builder-node__title--action { color: #818cf8 !important; }
+.builder-node__title--logic { color: #c084fc !important; }
+.builder-node__title--sink { color: #fbbf24 !important; }
+.builder-node__title--utility { color: #fb7185 !important; }
 
 .builder-node:hover {
   border-color: rgba(255, 255, 255, 0.3);

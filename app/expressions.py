@@ -88,7 +88,8 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
     
     def to_dot_accessible(obj):
         if isinstance(obj, dict):
-            return SimpleNamespace(**{k: to_dot_accessible(v) for k, v in obj.items()})
+            # SimpleNamespace requires string keywords; ensure all keys are stringified
+            return SimpleNamespace(**{str(k): to_dot_accessible(v) for k, v in obj.items()})
         elif isinstance(obj, list):
             return [to_dot_accessible(x) for x in obj]
         return obj
