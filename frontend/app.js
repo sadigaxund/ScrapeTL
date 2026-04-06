@@ -1678,6 +1678,17 @@ function renderStringArrayUI(nodeId, configKey, container) {
     container.appendChild(listContainer);
 }
 
+function getTypeIndicator(type) {
+    const t = (type || 'string').toLowerCase();
+    if (t === 'string' || t === 'str') return { text: 'STR', cls: 'type-icon--str' };
+    if (t === 'number' || t === 'num' || t === 'float' || t === 'int' || t === 'integer') return { text: 'NUM', cls: 'type-icon--num' };
+    if (t === 'boolean' || t === 'bool') return { text: 'BOL', cls: 'type-icon--bol' };
+    if (t === 'object' || t === 'dict' || t === 'json') return { text: 'OBJ', cls: 'type-icon--obj' };
+    if (t === 'batch' || t === 'list' || t === 'array' || t === 'arr') return { text: 'ARR', cls: 'type-icon--arr' };
+    if (t === 'null' || t === 'none') return { text: 'NUL', cls: 'type-icon--nul' };
+    return { text: 'VAR', cls: '' };
+}
+
 function openContextRegistry(nodeId, configKey, inputEl, filter) {
     // Remove any existing menu
     const existing = document.querySelector('.context-registry-menu');
@@ -1702,8 +1713,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
 
     const addSeparator = (title) => {
         const sep = document.createElement('div');
-        sep.style = 'font-size:9px; font-weight:800; color:var(--text-muted); padding:10px 8px 4px; letter-spacing:0.08em; border-top:1px solid rgba(255,255,255,0.03); margin-top:6px; text-transform:uppercase; display:flex; align-items:center; gap:8px';
-        sep.innerHTML = `<span>${title}</span><div style="flex:1; height:1px; background:rgba(255,255,255,0.03)"></div>`;
+        sep.className = 'ctx-separator';
+        sep.textContent = title;
         menu.appendChild(sep);
     };
 
@@ -1717,10 +1728,11 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     if (filter !== 'comparator') {
         state.builder.nodes.forEach(n => {
             if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
+                const type = getTypeIndicator(n.config.dataType || 'string');
                 const item = document.createElement('div');
                 item.className = 'context-item';
                 item.innerHTML = `
-                <div class="item-icon">IN</div>
+                <div class="item-icon ${type.cls}">${type.text}</div>
                 <div class="item-content">
                     <span class="item-title">${n.config.name}</span>
                     <span class="item-subtitle">${n.config.dataType || 'string'}</span>
@@ -1750,11 +1762,12 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
 
         sortedVars.forEach(v => {
             if (filter === 'writable' && v.is_readonly) return;
+            const type = getTypeIndicator(v.value_type || 'string');
             const item = document.createElement('div');
             item.className = 'context-item';
             const displayKey = v.namespace ? `${v.namespace}.${v.key}` : v.key;
             item.innerHTML = `
-                <div class="item-icon">VAR</div>
+                <div class="item-icon ${type.cls}">${type.text}</div>
                 <div class="item-content">
                     <div style="display:flex; align-items:center; gap:6px">
                         <span class="item-title" style="font-weight:700">${v.key}</span>
@@ -1787,7 +1800,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             const argNames = parseFuncArgs(f.code || '');
             const displaySig = argNames.length > 0 ? `${f.name}(${argNames.join(', ')})` : `${f.name}()`;
             item.innerHTML = `
-                <div class="item-icon">ƒ</div>
+                <div class="item-icon type-icon--func">ƒ</div>
                 <div class="item-content">
                     <span class="item-title">${displaySig}</span>
                 </div>
@@ -1818,7 +1831,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             const item = document.createElement('div');
             item.className = 'context-item';
             item.innerHTML = `
-                <div class="item-icon" style="opacity:0.5">ƒ</div>
+                <div class="item-icon type-icon--func">ƒ</div>
                 <div class="item-content">
                     <span class="item-title">${b.name}()</span>
                 </div>
@@ -1841,7 +1854,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
                 const item = document.createElement('div');
                 item.className = 'context-item';
                 item.innerHTML = `
-                    <div class="item-icon" style="color:#3b82f6">⚙️</div>
+                <div class="item-icon type-icon--env">ENV</div>
                     <div class="item-content">
                         <span class="item-title" style="font-weight:700">${v.key}</span>
                     </div>
