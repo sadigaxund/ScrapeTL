@@ -39,3 +39,21 @@ This file contains a record of identified and resolved bugs in the ScrapeTL Hub 
 - **File**: [runner.py](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/app/runner.py), [discord.py](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/app/discord.py)
 - **Description**: When the "Include Scraping Results" option was enabled in Discord integrations, only the execution state (Success/Failure) was being sent, even if data was successfully scraped. This was caused by `app/runner.py` passing an empty list instead of the actual results.
 - **Fix**: Updated the integration dispatcher to use the correct results list and refined the Discord notification logic to handle both data and state payloads consistently, including improved visual formatting (thumbnails/footers).
+
+### 9. Tainted Canvas Security Errors (fetch_image)
+- **Status**: ✅ SOLVED
+- **File**: [engine.py](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/app/builder/engine.py)
+- **Description**: When attempting to extract images via Canvas (`toDataURL`), the browser would frequently throw `SecurityError: Tainted canvases may not be exported` if the image was hosted on a different domain without CORS headers.
+- **Fix**: Implemented a silent network-level fallback using `page.request.get` when the canvas extraction fails. Suppressed the noisy security logs to keep the execution output clean.
+
+### 10. Implicit Iteration Propagation Logic
+- **Status**: ✅ SOLVED
+- **File**: [engine.py](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/app/builder/engine.py)
+- **Description**: The "Map-over-List" logic (implicit iteration) was failing to propagate correctly when a node was in "All" mode but received a single item, or vice versa. This caused inconsistent row counts in the final output.
+- **Fix**: Refactored the `BuilderEngine` to automatically detect list inputs and wrap/unwrap them based on the node's expected cardinality, ensuring "All" mode correctly iterates through every row.
+
+### 11. Scheduler Timezone Hot-Reload Crash
+- **Status**: ✅ SOLVED
+- **File**: [scheduler.py](file:///c:/Users/sadig/Documents/DiscordAnimeScraper/app/scheduler.py)
+- **Description**: Updating the global timezone setting while the background scheduler was running caused a race condition and potential crash because APScheduler does not support runtime reconfiguration of its base timezone.
+- **Fix**: Modified `reload_timezone` to check if the scheduler is running before attempting configuration. Instead of reconfiguring the engine, it now dynamically reloads all active jobs using the new timezone offset.
