@@ -406,8 +406,19 @@ const NODE_PRESETS = {
             inputs: [],
             outputs: ['Val Out'],
             configs: [
-                { key: 'name', type: 'text', label: 'Var Name', placeholder: 'my_param' },
-                { key: 'dataType', type: 'select', label: 'Type', options: ['string', 'number', 'bool', 'json'] }
+                { key: 'name', type: 'text', label: 'Arg Name', placeholder: 'my_param' },
+                { key: 'label', type: 'text', label: 'Form Label', placeholder: 'Human-readable label' },
+                { key: 'dataType', type: 'select', label: 'Type', options: ['string', 'number', 'boolean', 'select'], rerender: true },
+                { key: 'default', type: 'text', label: 'Default Value' },
+                { key: 'description', type: 'text', label: 'Description', placeholder: 'Help text for users...' },
+                { 
+                    key: 'options', 
+                    type: 'string_array', 
+                    label: 'Select Options', 
+                    placeholder: 'Option value',
+                    btnLabel: '+ Add Option',
+                    visible: (n) => n.config.dataType === 'select' 
+                }
             ]
         },
         expression: {
@@ -477,7 +488,7 @@ const NODE_PRESETS = {
             inputs: ['Data'],
             outputs: ['Typed'],
             configs: [
-                { key: 'to_type', type: 'select', label: 'Target Type', options: ['string', 'int', 'float', 'json'] }
+                { key: 'to_type', type: 'select', label: 'Target Type', options: ['string', 'number', 'boolean', 'json'] }
             ]
         },
         html_children: {
@@ -1445,7 +1456,7 @@ function renderBuilderNodes() {
                     } else if (cfg.type === 'action_list') {
                         renderActionListUI(node.id, cfg.key, group);
                     } else if (cfg.type === 'string_array') {
-                        renderStringArrayUI(node.id, cfg.key, group);
+                        renderStringArrayUI(node.id, cfg, group);
                     }
 
                     configContainer.appendChild(group);
@@ -1619,7 +1630,8 @@ function renderActionListUI(nodeId, configKey, container) {
     container.appendChild(listContainer);
 }
 
-function renderStringArrayUI(nodeId, configKey, container) {
+function renderStringArrayUI(nodeId, cfg, container) {
+    const configKey = cfg.key;
     const node = state.builder.nodes.find(n => n.id === nodeId);
     if (!node) return;
 
@@ -1640,7 +1652,7 @@ function renderStringArrayUI(nodeId, configKey, container) {
 
             const valInput = document.createElement('input');
             valInput.className = 'node-input macro-input';
-            valInput.placeholder = '.close-modal-btn';
+            valInput.placeholder = cfg.placeholder || '.close-modal-btn';
             valInput.value = item || '';
             valInput.oninput = (e) => {
                 items[idx] = e.target.value;
@@ -1664,7 +1676,7 @@ function renderStringArrayUI(nodeId, configKey, container) {
 
         const addBtn = document.createElement('button');
         addBtn.className = 'btn-macro-add';
-        addBtn.textContent = '+ Add Selector';
+        addBtn.textContent = cfg.btnLabel || '+ Add Selector';
         addBtn.onclick = (e) => {
             e.stopPropagation();
             items.push('');
@@ -1680,7 +1692,7 @@ function renderStringArrayUI(nodeId, configKey, container) {
 
 function getTypeIndicator(type) {
     const t = (type || 'string').toLowerCase();
-    if (t === 'string' || t === 'str') return { text: 'STR', cls: 'type-icon--str' };
+    if (t === 'string' || t === 'str' || t === 'text') return { text: 'STR', cls: 'type-icon--str' };
     if (t === 'number' || t === 'num' || t === 'float' || t === 'int' || t === 'integer') return { text: 'NUM', cls: 'type-icon--num' };
     if (t === 'boolean' || t === 'bool') return { text: 'BOL', cls: 'type-icon--bol' };
     if (t === 'object' || t === 'dict' || t === 'json') return { text: 'OBJ', cls: 'type-icon--obj' };

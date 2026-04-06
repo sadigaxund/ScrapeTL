@@ -22,7 +22,7 @@ class MyScraper(BaseScraper):
 
 ## Supported Input Types
 
-### 1. `text`
+### 1. `string`
 A standard single-line text input.
 - **Python Type**: `str`
 - **Fields**:
@@ -32,7 +32,7 @@ A standard single-line text input.
     - `required`: (Optional) If `True`, the UI form enforces a non-empty value.
 
 ```python
-{"name": "search_query", "label": "Search Term", "type": "text", "default": "", "required": True}
+{"name": "search_query", "label": "Search Term", "type": "string", "default": "", "required": True}
 ```
 
 ### 2. `number`
