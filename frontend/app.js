@@ -30,6 +30,7 @@ const API = {
     variablesBatchRename: '/api/variables/batch/rename-namespace',
     functions: '/api/functions',
     stopRun: (id) => `/api/run/stop/${id}`,
+    taskStatus: (id) => `/api/run/status/${id}`,
     duplicateScraper: (id) => `/api/scrapers/${id}/duplicate`,
     envVariables: '/api/variables/builtins/env',
 };
@@ -450,7 +451,7 @@ const NODE_PRESETS = {
             outputs: ['Result'],
             configs: [
                 { key: 'operation', type: 'select', label: 'Operation', options: ['prefix', 'suffix', 'replace', 'trim'] },
-                { key: 'value', type: 'text', label: 'Param Value', placeholder: 'https://...' },
+                { key: 'value', type: 'text', label: 'Param Value', placeholder: 'URL or HTML Source' },
                 { key: 'replacement', type: 'text', label: 'Replacement', placeholder: '' }
             ]
         },
@@ -1539,7 +1540,9 @@ function renderActionListUI(nodeId, configKey, container) {
                 'scroll_bottom': 'Scroll Bottom',
                 'scroll_to': 'Scroll To Selector',
                 'goto': 'Go To URL',
-                'type': 'Type Text'
+                'type': 'Type Text',
+                'fetch_image': '📷 Fetch Original Image',
+                'screenshot': '🖼 Take Screenshot'
             };
             for (const [k, v] of Object.entries(types)) {
                 const opt = document.createElement('option');
@@ -1559,7 +1562,8 @@ function renderActionListUI(nodeId, configKey, container) {
             if (action.type !== 'scroll_bottom') {
                 const valInput = document.createElement('input');
                 valInput.className = 'node-input macro-input';
-                valInput.placeholder = action.type === 'wait' ? '2000' : 'Selector or URL...';
+                const isImg = action.type === 'fetch_image' || action.type === 'screenshot';
+                valInput.placeholder = action.type === 'wait' ? '2000' : (isImg ? 'Image Source Selector...' : 'Selector or URL...');
                 valInput.value = action.value || '';
                 valInput.oninput = (e) => {
                     actions[idx].value = e.target.value;
@@ -2581,7 +2585,7 @@ function renderScrapersList(scrapers) {
                         <button class="icon-btn" onclick="downloadScraper(${s.id})" title="Download Code">📥</button>
                         <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
                     </div>
-                        <button class="btn btn-run" style="padding: 6px 14px;" onclick="runScraper(${s.id}, this)">⚡ Run</button>
+                        <button class="btn btn-run" style="padding: 6px 14px; min-width: 80px; justify-content: center;" onclick="runScraper(${s.id}, this)">Run</button>
                 </div>
             </td>
         </tr>`;
@@ -2770,7 +2774,7 @@ async function runScraper(id, btn) {
 }
 
 async function _doRunScraper(id, inputValues, btn, force = false) {
-    if (btn) { btn.disabled = true; btn.textContent = '⚡ Running…'; }
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
     try {
         let url = API.run(id);
         if (force) url += '?force=true';
@@ -2780,7 +2784,13 @@ async function _doRunScraper(id, inputValues, btn, force = false) {
             body: JSON.stringify({ input_values: inputValues }),
         });
         toast(res.detail, 'success');
-        setTimeout(() => loadTab('logs'), 2500);
+
+        // Poll for task completion if task_id provided
+        if (res.task_id && btn) {
+            await _pollTaskStatus(res.task_id, btn);
+        }
+
+        setTimeout(() => refreshAll(), 1000);
     } catch (e) {
         // Handle concurrency conflict (already running)
         if (e.message.includes('already running')) {
@@ -2791,11 +2801,55 @@ async function _doRunScraper(id, inputValues, btn, force = false) {
             toast(e.message, 'error');
         }
     } finally {
-        if (btn) {
+        // Only restore if not currently polling (polling might have finished and restored already)
+        if (btn && !btn.dataset.polling) {
             btn.disabled = false;
-            btn.textContent = '⚡ Run'; // Restore button text
+            btn.textContent = 'Run'; // Restore button text
         }
     }
+}
+
+/**
+ * Polls the backend until the task is no longer in the running/pending state.
+ */
+async function _pollTaskStatus(taskId, btn) {
+    btn.dataset.polling = "true";
+    const startTime = Date.now();
+    const timeout = 10 * 60 * 1000; // 10 minute safety timeout
+
+    return new Promise((resolve) => {
+        const interval = setInterval(async () => {
+            // Safety safety timeout check
+            if (Date.now() - startTime > timeout) {
+                console.warn("[Runner] Polling timed out.");
+                clearInterval(interval);
+                delete btn.dataset.polling;
+                btn.disabled = false;
+                btn.textContent = 'Run';
+                resolve();
+                return;
+            }
+
+            try {
+                const res = await apiFetch(API.taskStatus(taskId));
+                // 'finished' means task record was deleted (the default runner behaviour on success/fail)
+                if (res.status === 'finished' || res.status === 'done' || res.status === 'failed' || res.status === 'cancelled') {
+                    clearInterval(interval);
+                    delete btn.dataset.polling;
+                    btn.disabled = false;
+                    btn.textContent = 'Run';
+                    resolve();
+                }
+            } catch (e) {
+                console.error("[Runner] Polling error:", e);
+                clearInterval(interval);
+                delete btn.dataset.polling;
+                btn.disabled = false;
+                btn.textContent = 'Run';
+                resolve();
+            }
+        }, 1500); // Check every 1.5s
+    });
 }
 
 async function deleteScraper(id) {
@@ -3605,17 +3659,24 @@ function renderPayload(payload, episodeCount = 0) {
             return '<tr>' + keys.map(k => {
                 const val = (obj[k] !== null && obj[k] !== undefined) ? String(obj[k]) : '—';
                 const isHtml = val.length > 10 && (val.trim().startsWith('<') || val.includes('</'));
+                const isDataImg = val.startsWith('data:image/');
                 let cellContent = '';
 
                 if (isHtml) {
-                    const encoded = b64EncodeUnicode(val);
-                    cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">🖼 Preview HTML</button>`;
-                } else {
-                    let v = val;
-                    if (v.length > 200) v = v.substring(0, 200) + '...';
-                    if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
-                    cellContent = v;
-                }
+                        const encoded = b64EncodeUnicode(val);
+                        cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">🖼 Preview HTML</button>`;
+                    } else if (isDataImg) {
+                        cellContent = `
+                        <div class="payload-img-wrapper" onclick="showImageModal('${val}')">
+                            <img src="${val}" class="payload-img-preview" alt="Captured Image">
+                            <div class="payload-img-overlay">🔍 View</div>
+                        </div>`;
+                    } else {
+                        let v = val;
+                        if (v.length > 200) v = v.substring(0, 200) + '...';
+                        if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
+                        cellContent = v;
+                    }
                 return `<td>${cellContent}</td>`;
             }).join('') + '</tr>';
         }).join('');
@@ -3642,8 +3703,9 @@ function renderPayload(payload, episodeCount = 0) {
 
 function showHtmlModal(encoded) {
     const html = b64DecodeUnicode(encoded);
-    const modal = document.getElementById('log-context-modal'); // Reusing log modal or creating new
+    const modal = document.getElementById('log-context-modal');
     const body = document.getElementById('log-context-body');
+    modal.style.display = 'flex';
 
     body.innerHTML = `
         <div class="debug-html-wrapper">
@@ -3665,6 +3727,25 @@ function showHtmlModal(encoded) {
 
     document.getElementById('log-context-title').textContent = 'HTML Preview';
     modal.style.display = 'flex';
+}
+
+function showImageModal(src) {
+    const modal = document.getElementById('log-context-modal');
+    const body = document.getElementById('log-context-body');
+    document.getElementById('log-context-title').textContent = 'High-Resolution Capture';
+    modal.style.display = 'flex';
+
+    body.innerHTML = `
+        <div style="display:flex; flex-direction:column; gap:16px; align-items:center; padding:20px;">
+            <div style="background:white; border-radius:12px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,0.5); max-width:100%; border:1px solid var(--border-light);">
+                <img src="${src}" style="display:block; max-width:100%; max-height:70vh; object-fit:contain;" alt="High Res">
+            </div>
+            <div style="width:100%; display:flex; justify-content:center; gap:12px; margin-top:8px;">
+                <button class="btn btn-primary" onclick="const a=document.createElement('a');a.href='${src}';a.download='captured_image.png';a.click();" style="padding:8px 24px;">📥 Download Original</button>
+                <button class="btn btn-ghost" onclick="document.getElementById('log-context-modal').style.display='none'" style="padding:8px 24px;">Close</button>
+            </div>
+        </div>
+    `;
 }
 
 function b64EncodeUnicode(str) {
@@ -4687,6 +4768,22 @@ async function submitRunInputs() {
         await cb.fn(inputValues);
     }
     _runInputsCallback = null;
+}
+
+/**
+ * ── Builder: Run Trigger ──────────────────────────
+ * Direct bridge from the builder canvas to the runner pipeline.
+ */
+function runScraperFromBuilder() {
+    const id = state.builder.currentScraperId;
+    if (!id) {
+        toast('Please save your scraper flow before running.', 'warning');
+        openSaveFlowModal();
+        return;
+    }
+
+    const btn = document.getElementById('builder-run-btn');
+    runScraper(id, btn);
 }
 
 /* ── Drag-and-drop for code zones ───────────────────── */

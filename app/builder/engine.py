@@ -196,29 +196,48 @@ class BuilderEngine:
                     res = self.results_cache.get(n_id)
                     if res: main_outputs.append(res)
 
+        # We need a predictable way to name columns if multiple sinks use the same label
+        label_counts = {}
         columns = {}
+
         for res in main_outputs:
-            if isinstance(res, list):
+            if not isinstance(res, list) or not res: 
+                continue
+            
+            # Identify the node's label and generate a unique key
+            # Since sink_system_output returns [{label: val}, ...], we inspect the first item
+            first_item = res[0]
+            if isinstance(first_item, dict):
+                label = list(first_item.keys())[0]
+                label_counts[label] = label_counts.get(label, 0) + 1
+                unique_key = f"{label} #{label_counts[label]}" if label_counts[label] > 1 else label
+                
+                # Extract all values for this specific column
+                col_values = []
                 for item in res:
                     if isinstance(item, dict):
-                        for k, v in item.items(): columns.setdefault(k, []).append(v)
-            elif isinstance(res, dict):
-                for k, v in res.items(): columns.setdefault(k, []).append(v)
+                        col_values.append(item.get(label))
+                
+                columns[unique_key] = col_values
 
-        merged = []
-        if columns:
-            max_len = max(len(col) for col in columns.values())
-            for i in range(max_len):
-                row = {}
-                for k, col in columns.items():
-                    if len(col) == 1: row[k] = col[0]
-                    elif i < len(col): row[k] = col[i]
-                    else: row[k] = None
-                merged.append(row)
+        # Final Zipping: Create rows based on the maximum length of any single column
+        if not columns:
+            return {"main": [], "debug": debug_artifacts}
 
-        print(f"[BuilderEngine] Flow Finished. Extracted {len(merged)} items. Captured {len(debug_artifacts)} debug points.")
+        max_len = max(len(col) for col in columns.values())
+        final_results = []
+        for i in range(max_len):
+            row = {}
+            for k, col in columns.items():
+                if i < len(col):
+                    row[k] = col[i]
+                else:
+                    row[k] = None
+            final_results.append(row)
+
+        print(f"[BuilderEngine] Flow Finished. Extracted {len(final_results)} items. Captured {len(debug_artifacts)} debug points.")
         return {
-            "main": merged,
+            "main": final_results,
             "debug": debug_artifacts
         }
 
@@ -314,7 +333,10 @@ class BuilderEngine:
                     """
                     page.add_init_script(script)
 
-                page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                if url.strip().startswith("<"):
+                    page.set_content(url)
+                else:
+                    page.goto(url, wait_until="domcontentloaded", timeout=60000)
 
                 for action in actions:
                     atype = action.get("type", "")
@@ -336,6 +358,42 @@ class BuilderEngine:
                             page.goto(aval, wait_until="domcontentloaded", timeout=30000)
                         elif atype == "type":
                             page.keyboard.type(aval)
+                        elif atype == "screenshot":
+                            # Snapshot the element as an image
+                            if aval:
+                                bytes = page.locator(aval).first.screenshot(type="png")
+                            else:
+                                bytes = page.screenshot(type="png")
+                            import base64
+                            return f"data:image/png;base64,{base64.b64encode(bytes).decode()}"
+                        elif atype == "fetch_image":
+                            # Use browser-side fetch to extract high-res original (bypasses CORS)
+                            if not aval:
+                                raise Exception("fetch_image requires a selector to find the image src.")
+                            
+                            src = page.locator(aval).first.get_attribute("src")
+                            if not src:
+                                raise Exception(f"No src found for image selector: {aval}")
+                            
+                            if not src.startswith("http") and not src.startswith("data:"):
+                                from urllib.parse import urljoin
+                                src = urljoin(page.url, src)
+
+                            # Execute fetch in browser context to get original bytes/quality
+                            data_url = page.evaluate("""
+                                async (url) => {
+                                    const response = await fetch(url);
+                                    if (!response.ok) throw new Error(`HTTP ${response.status} failed to fetch ${url}`);
+                                    const blob = await response.blob();
+                                    return new Promise((resolve, reject) => {
+                                        const reader = new FileReader();
+                                        reader.onloadend = () => resolve(reader.result);
+                                        reader.onerror = reject;
+                                        reader.readAsDataURL(blob);
+                                    });
+                                }
+                            """, src)
+                            return data_url
                     except Exception as e:
                         print(f"[BuilderEngine] Playwright Action Failed ({atype}): {e}")
 
@@ -406,8 +464,12 @@ class BuilderEngine:
 
             if not pattern: return text_input
 
+            # Performance Optimization: Resolve static config parameters once
+            ctx = self._get_execution_context(node_inputs)
+            p = str(resolve_expressions(pattern, ctx, custom_funcs=self.custom_funcs))
+
             def _extract(txt):
-                match = re.search(pattern, str(txt), re.I | re.S)
+                match = re.search(p, str(txt), re.I | re.S)
                 if match:
                     try:
                         return match.group(group_idx)
@@ -425,14 +487,23 @@ class BuilderEngine:
             val = data.get("value", "")
             repl = data.get("replacement", "")
 
+            # Performance Optimization: Resolve static config parameters once, not for every item in a list
+            ctx = self._get_execution_context(node_inputs)
+            v = resolve_expressions(val, ctx, custom_funcs=self.custom_funcs)
+            r = resolve_expressions(repl, ctx, custom_funcs=self.custom_funcs)
+
+            # Default to 'prefix' if operation is missing but value is provided (fixes UI default mismatch)
+            if op == "none" and (v or r): 
+                op = "prefix"
+
             def _transform(txt):
                 t = str(txt or "")
                 if op == "prefix":
-                    return f"{val}{t}"
+                    return f"{v}{t}"
                 elif op == "suffix":
-                    return f"{t}{val}"
+                    return f"{t}{v}"
                 elif op == "replace":
-                    return t.replace(val, repl)
+                    return t.replace(v, r)
                 elif op == "trim":
                     return t.strip()
                 return t
@@ -475,11 +546,11 @@ class BuilderEngine:
                     results.append(str(child))
             return results
 
-        elif ntype == "logic_splitter":
+        elif ntype in ["logic_splitter", "utility_splitter"]:
             # Returns its only input; the engine handles duplication to multiple neighbors
-            return node_inputs.get("data") or next(iter(node_inputs.values()), None)
+            return node_inputs.get("data") or node_inputs.get("input_0") or next(iter(node_inputs.values()), None)
 
-        elif ntype == "logic_combiner":
+        elif ntype in ["logic_combiner", "utility_combiner"]:
             mode = data.get("mode", "list")
             # Sort inputs by their numeric handle index (input_0, input_1, etc.)
             sorted_keys = sorted(node_inputs.keys(), key=lambda k: int(k.split('_')[1]) if '_' in k and k.split('_')[1].isdigit() else 0)
@@ -705,8 +776,6 @@ class BuilderEngine:
 
                 if not handle:
                     handle = "data"
-
-                print(f"[BuilderEngine] Found edge: {src_id} -> {node_id} (Mapped to handle '{handle}')")
                 
                 # Multi-edge support: Collect results into a list if multiple nodes connect to the same port
                 if handle in inputs:

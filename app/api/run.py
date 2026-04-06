@@ -91,3 +91,18 @@ def stop_run(task_id: int):
         raise HTTPException(status_code=404, detail="Active task not found or already finished.")
 
     return {"detail": "Stop request sent to scraper."}
+
+
+@router.get("/status/{task_id}")
+def get_task_status(task_id: int, db: Session = Depends(get_db)):
+    """Check the current status of a specific task."""
+    from app.models import TaskQueue
+    task = db.get(TaskQueue, task_id)
+    if not task:
+        # If the task is gone from the queue, it's either done or failed (was deleted by runner.py)
+        return {"status": "finished", "id": task_id}
+    
+    return {
+        "status": task.status, # e.g. "running" | "pending"
+        "id": task_id
+    }

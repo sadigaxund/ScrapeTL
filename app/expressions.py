@@ -130,7 +130,7 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
                 if fname not in ns and casted_funcs:
                     primary_func = list(casted_funcs.values())[0]
                     ns[fname] = primary_func
-                    print(f"[Expressions] Aliased UDF '{fname}' -> '{list(casted_funcs.keys())[0]}' (with type-casting)")
+                    # print(f"[Expressions] Aliased UDF '{fname}' -> '{list(casted_funcs.keys())[0]}' (with type-casting)")
 
             except Exception as e:
                 print(f"[Expressions] Error compiling UDF '{fname}': {e}")

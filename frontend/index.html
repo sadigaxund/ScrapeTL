@@ -675,10 +675,14 @@
 
         <!-- File Actions -->
         <button class="btn btn-ghost builder-tool-btn" onclick="createNewFlow()" title="New Flow (Clear Canvas)"
-          style="padding:0 10px; height:28px;">New</button>
+          style="padding:0 12px; height:28px; color:var(--text-primary) !important; font-weight:700; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);">New</button>
         <button class="btn btn-primary builder-tool-btn" onclick="openSaveFlowModal()"
-          style="padding:0 12px; height:28px; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 10px rgba(16,185,129,0.2);">
+          style="padding:0 12px; height:28px; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 10px rgba(16,185,129,0.2); font-weight:700;">
           Save
+        </button>
+        <button class="btn btn-primary builder-tool-btn" id="builder-run-btn" onclick="runScraperFromBuilder()" title="Run Scraper"
+          style="padding:0 12px; height:28px; background:linear-gradient(135deg, #7c6af7, #6366f1) !important; border:none; box-shadow:0 0 10px rgba(124,106,247,0.2); font-weight:700; margin-left:4px; min-width:85px; justify-content:center;">
+          Run
         </button>
 
         <div class="bar-divider"></div>

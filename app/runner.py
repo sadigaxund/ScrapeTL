@@ -285,7 +285,13 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
         # Fire assigned integrations
         if status in ("success", "failure", "skipped"):
-            results = _fire_integrations(scraper_record, status, all_episodes, error_msg, triggered_by)
+            # Skip if success but empty (requested by user to avoid noisy integrations on empty results)
+            if status == "success" and not all_episodes:
+                print(f"[Runner] {scraper_record.name} - Success but no data. Skipping integrations.")
+                results = []
+            else:
+                results = _fire_integrations(scraper_record, status, all_episodes, error_msg, triggered_by)
+            
             if results:
                 log.integration_details = json.dumps(results)
                 db.commit()
