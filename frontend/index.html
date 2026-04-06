@@ -828,7 +828,7 @@
         </div>
 
         <!-- Row 2: Browser Defaults -->
-        <div>
+        <div style="padding-bottom:20px; border-bottom:1px solid var(--border-light); margin-bottom:20px;">
           <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">🌐 Browser Defaults (Playwright)</h3>
           <div class="form-row" style="align-items: flex-start;">
             <div class="form-group" style="flex: 0 0 240px;">
@@ -844,6 +844,18 @@
               <input type="text" id="setting-browser-cdp" placeholder="ws://localhost:3000 or http://..." style="height:42px;" />
               <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Leave blank to use local Chromium executable.</p>
             </div>
+          </div>
+        </div>
+
+        <div style="padding-bottom:20px; border-bottom:1px solid var(--border-light); margin-bottom:20px;">
+          <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">📊 Memory & History</h3>
+          <div class="form-row" style="align-items: flex-start;">
+            <div class="form-group" style="flex: 1;">
+              <label>Log Preview Row Limit <span style="font-weight:400;color:var(--text-muted);text-transform:none">(0 for unlimited)</span></label>
+              <input type="number" id="setting-log-preview-limit" style="height:42px" placeholder="10" min="0" />
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Number of rows saved and displayed in log details.</p>
+            </div>
+            <div style="flex: 1;"></div>
           </div>
         </div>
 

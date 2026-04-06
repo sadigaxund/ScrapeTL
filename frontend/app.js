@@ -4479,6 +4479,11 @@ async function loadSettings() {
             document.getElementById('setting-browser-cdp').value = cdp;
         }
 
+        const logLimit = settings.log_preview_limit !== undefined ? settings.log_preview_limit : '10';
+        if (document.getElementById('setting-log-preview-limit')) {
+            document.getElementById('setting-log-preview-limit').value = logLimit;
+        }
+
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -4498,6 +4503,7 @@ async function saveAllAppSettings() {
     const tz = document.getElementById('tz-input').value.trim();
     const bHeadless = document.getElementById('setting-browser-headless').value;
     const bCDP = document.getElementById('setting-browser-cdp').value.trim();
+    const logLimit = document.getElementById('setting-log-preview-limit').value;
 
     if (!tz) { toast('Please enter a timezone.', 'error'); return; }
 
@@ -4509,7 +4515,8 @@ async function saveAllAppSettings() {
         await Promise.all([
             apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: tz }) }),
             saveAppSetting('browser_headless', bHeadless),
-            saveAppSetting('browser_cdp_url', bCDP)
+            saveAppSetting('browser_cdp_url', bCDP),
+            saveAppSetting('log_preview_limit', logLimit)
         ]);
 
         // Post-timezone update logic

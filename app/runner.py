@@ -32,6 +32,17 @@ def _get_retry_settings(db: Session) -> tuple[int, float]:
     return max_retries, backoff_seconds
 
 
+def _get_log_preview_limit(db: Session) -> int:
+    """Read log_preview_limit from AppSettings, defaulting to 10."""
+    try:
+        r = db.get(AppSetting, "log_preview_limit")
+        if r and r.value:
+            return int(r.value)
+    except Exception:
+        pass
+    return 10
+
+
 from app import task_registry
 
 def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None, schedule_id: int = None):
@@ -55,6 +66,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
     try:
         max_retries, backoff_seconds = _get_retry_settings(db)
+        log_preview_limit = _get_log_preview_limit(db)
 
         status        = "success"
         payload_dict  = None
@@ -214,7 +226,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                     chunk_log = ScrapeLog(
                         scraper_id=scraper_id,
                         status="success",
-                        payload=json.dumps([dict(ep) for ep in iter_episodes[:10]]),
+                        payload=json.dumps([dict(ep) for ep in (iter_episodes[:log_preview_limit] if log_preview_limit > 0 else iter_episodes)]),
                         episode_count=len(iter_episodes),
                         error_msg="Streaming Chunk",
                         run_at=datetime.utcnow(),
@@ -263,7 +275,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         log = ScrapeLog(
             scraper_id=scraper_id,
             status=status,
-            payload=json.dumps(payload_list[:10], default=_safe_json) if payload_list else (json.dumps([payload_dict], default=_safe_json) if payload_dict else None),
+            payload=json.dumps(payload_list[:log_preview_limit] if log_preview_limit > 0 else payload_list, default=_safe_json) if payload_list else (json.dumps([payload_dict], default=_safe_json) if payload_dict else None),
             episode_count=episode_count,
             error_msg=error_msg,
             run_at=datetime.utcnow(),
