@@ -3,6 +3,12 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Foreign
 from sqlalchemy.orm import relationship
 from app.database import Base
 
+
+class Batch(list):
+    """Signals that this list should be iterated over (one run per item)."""
+    pass
+
+
 # ── Association tables ────────────────────────────────────────────────────────
 
 scraper_tags = Table(

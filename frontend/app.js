@@ -196,6 +196,19 @@ function statusBadge(status) {
     return `<span class="status-badge badge-${cls}">${icon} ${status.toUpperCase()}</span>`;
 }
 
+/** 
+ * Safely formats any value for display in the UI, 
+ * stringifying objects to prevent [object Object]. 
+ */
+function formatValueForUI(val) {
+    if (val === null || val === undefined) return '—';
+    if (typeof val === 'object') {
+        try { return JSON.stringify(val); }
+        catch (e) { return String(val); }
+    }
+    return String(val);
+}
+
 /* ── Drag and Drop Logic ───────────────────────────── */
 let _draggedItem = null;
 
@@ -3442,11 +3455,12 @@ function renderEditSchedParams(inputs, values) {
     }
 
     container.innerHTML = inputs.map(inp => {
-        const val = values[inp.name] !== undefined ? values[inp.name] : (inp.default || '');
+        const rawVal = values[inp.name] !== undefined ? values[inp.name] : (inp.default || '');
+        const displayVal = formatValueForUI(rawVal);
         return `
             <div class="form-group" style="min-width: 0; flex: 1;">
                 <label style="font-size: 11px;">${inp.label}${inp.required ? ' *' : ''}</label>
-                <input type="text" class="edit-sched-input-field" data-name="${inp.name}" value="${val}" placeholder="${inp.description || ''}" />
+                <input type="text" class="edit-sched-input-field" data-name="${inp.name}" value="${displayVal}" placeholder="${inp.description || ''}" />
             </div>
         `;
     }).join('');
@@ -3809,28 +3823,40 @@ function toggleDebugPreview(btn) {
 function renderPayload(payload, episodeCount = 0) {
     if (!payload || typeof payload !== 'object') return '';
 
+    // Tabular View (Array of Objects)
     if (Array.isArray(payload) && payload.length > 0) {
         const keys = Array.from(new Set(payload.map(p => Object.keys(p)).flat())).filter(k => k !== null && k !== undefined);
-        let thead = '<tr>' + keys.map(k => `<th>${k.replace(/_/g, ' ').replace(/\\b\\w/g, c => c.toUpperCase())}</th>`).join('') + '</tr>';
+        let thead = '<tr>' + keys.map(k => `<th>${k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</th>`).join('') + '</tr>';
 
         let tbody = payload.map(obj => {
             return '<tr>' + keys.map(k => {
-                const val = (obj[k] !== null && obj[k] !== undefined) ? String(obj[k]) : '—';
-                const isHtml = val.length > 10 && (val.trim().startsWith('<') || val.includes('</'));
-                const isDataImg = val.startsWith('data:image/');
+                const rawVal = (obj[k] !== null && obj[k] !== undefined) ? obj[k] : '—';
+                const isObj = typeof rawVal === 'object' && rawVal !== null;
+                const strVal = isObj ? JSON.stringify(rawVal) : String(rawVal);
+                
+                const isHtml = typeof rawVal === 'string' && strVal.length > 10 && (strVal.trim().startsWith('<') || strVal.includes('</'));
+                const isDataImg = typeof rawVal === 'string' && strVal.startsWith('data:image/');
                 let cellContent = '';
 
                 if (isHtml) {
-                    const encoded = b64EncodeUnicode(val);
-                    cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">🖼 Preview HTML</button>`;
+                    const encoded = b64EncodeUnicode(strVal);
+                    cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">Preview HTML</button>`;
                 } else if (isDataImg) {
                     cellContent = `
-                        <div class="payload-img-wrapper" onclick="showImageModal('${val}')">
-                            <img src="${val}" class="payload-img-preview" alt="Captured Image">
+                        <div class="payload-img-wrapper" onclick="showImageModal('${strVal}')">
+                            <img src="${strVal}" class="payload-img-preview" alt="Captured Image">
                             <div class="payload-img-overlay">🔍 View</div>
                         </div>`;
+                } else if (isObj) {
+                    const prettyJson = JSON.stringify(rawVal, null, 2);
+                    const encoded = b64EncodeUnicode(prettyJson);
+                    if (prettyJson.length > 100 || prettyJson.includes('\n')) {
+                        cellContent = `<button class="btn btn-ghost btn-sm" onclick="showJsonModal('${encoded}')" style="font-size:10px; padding:4px 8px;">View JSON</button>`;
+                    } else {
+                        cellContent = `<code style="font-size:11px; color:var(--accent); background:rgba(124,106,247,0.05); padding:2px 4px; border-radius:4px">${strVal}</code>`;
+                    }
                 } else {
-                    let v = val;
+                    let v = strVal;
                     if (v.length > 200) v = v.substring(0, 200) + '...';
                     if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
                     cellContent = v;
@@ -3847,16 +3873,48 @@ function renderPayload(payload, episodeCount = 0) {
         return `<div class="payload-table-wrapper"><table class="payload-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>${msg}`;
     }
 
+    // Grid View (Single Object)
     const rows = Object.entries(payload)
         .filter(([, v]) => v !== null && v !== undefined && v !== '')
         .map(([k, v]) => {
             const label = k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-            let val = String(v);
+            let val = formatValueForUI(v);
             // Auto-link URLs
             if (val.startsWith('http')) val = `<a href="${val}" target="_blank" rel="noopener">${val}</a>`;
             return `<div class="payload-row"><span class="payload-key">${label}</span><span class="payload-val">${val}</span></div>`;
         });
     return `<div class="payload-grid">${rows.join('')}</div>`;
+}
+
+function showJsonModal(encoded) {
+    const json = b64DecodeUnicode(encoded);
+    const modal = document.getElementById('log-context-modal');
+    const body = document.getElementById('log-context-body');
+    document.getElementById('log-context-title').textContent = 'JSON Data Viewer';
+    modal.style.display = 'flex';
+
+    body.innerHTML = `
+        <div style="padding:24px; background:var(--bg-card); border-radius:12px; border:1px solid var(--border);">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div style="font-size:12px; font-weight:700; color:var(--text-muted); text-transform:uppercase;">Formatted JSON Payload</div>
+                <button class="btn btn-ghost btn-sm" onclick="downloadJsonObject('${encoded}')">Download</button>
+            </div>
+            <pre style="background:rgba(0,0,0,0.2); padding:20px; border-radius:8px; font-family:var(--font-mono); font-size:12px; line-height:1.6; color:var(--accent-light); overflow:auto; max-height:70vh; border:1px solid rgba(255,255,255,0.05);">${json.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+        </div>
+    `;
+}
+
+function downloadJsonObject(encoded) {
+    const json = b64DecodeUnicode(encoded);
+    const blob = new Blob([json], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `data_${new Date().getTime()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
 }
 
 function showHtmlModal(encoded) {
@@ -5399,14 +5457,15 @@ function renderVariablesList() {
                             <option value="number" ${v.value_type === 'number' ? 'selected' : ''}>NUMBER</option>
                             <option value="boolean" ${v.value_type === 'boolean' ? 'selected' : ''}>BOOLEAN</option>
                             <option value="json" ${v.value_type === 'json' ? 'selected' : ''}>JSON</option>
+                            <option value="batch" ${v.value_type === 'batch' ? 'selected' : ''}>BATCH</option>
                         </select>
                     </td>
                     <td>
                         <input type="text" id="inline-var-key-${idx}" value="${v.key || ''}" placeholder="KEY_NAME" oninput="state.variables[${idx}].key = this.value" style="width:100%; height:34px; font-size:12.5px; padding:0 8px; font-family:var(--font-mono); font-weight:700; color:var(--accent)">
                     </td>
                     <td>
-                        ${v.value_type === 'json' ? `
-                            <textarea id="inline-var-value-${idx}" class="inline-json-editor" placeholder='["url1", "url2"]' oninput="state.variables[${idx}].value = this.value; validateInlineJson(this)">${v.value || ''}</textarea>
+                        ${v.value_type === 'json' || v.value_type === 'batch' ? `
+                            <textarea id="inline-var-value-${idx}" class="inline-json-editor" placeholder="${v.value_type === 'batch' ? 'One value per line...' : '[\"url1\", \"url2\"]'}" oninput="state.variables[${idx}].value = this.value; if(state.variables[${idx}].value_type==='json') validateInlineJson(this)">${v.value_type === 'batch' ? _formatBatchForUI(v.value) : (v.value || '')}</textarea>
                         ` : v.value_type === 'boolean' ? `
                             <label class="bool-toggle-wrap" style="display:flex;align-items:center;gap:10px;cursor:pointer;padding:4px 0">
                                 <input type="checkbox" id="inline-var-value-${idx}" class="bool-toggle-checkbox" ${String(v.value).toLowerCase() === 'true' || v.value === '1' ? 'checked' : ''} onchange="state.variables[${idx}].value = this.checked ? 'true' : 'false'; renderVariablesList()">
@@ -5612,7 +5671,26 @@ function renderVariableValue(v) {
     if (v.value_type === 'json') {
         return `<code style="font-size:11px;opacity:0.7;background:rgba(255,255,255,0.05);padding:2px 4px;border-radius:4px">{...}</code>`;
     }
-    return `<span title="${v.value}">${v.value || '—'}</span>`;
+    if (v.value_type === 'batch') {
+        try {
+            const items = JSON.parse(v.value);
+            if (Array.isArray(items)) {
+                return `<code style="font-size:10px; font-weight:700; color:var(--accent); background:rgba(124,106,247,0.1); padding:2px 6px; border-radius:4px; border:1px solid rgba(124,106,247,0.2)">[Batch: ${items.length} items]</code>`;
+            }
+        } catch (e) { }
+        return `<code style="font-size:10px; font-weight:700; color:var(--accent)">[Batch]</code>`;
+    }
+    const displayVal = formatValueForUI(v.value);
+    return `<span title="${displayVal}">${displayVal}</span>`;
+}
+
+function _formatBatchForUI(val) {
+    if (!val) return '';
+    try {
+        const items = JSON.parse(val);
+        if (Array.isArray(items)) return items.join('\n');
+    } catch (e) { }
+    return val;
 }
 
 function addVariableRow(initNS = null) {
@@ -5762,6 +5840,15 @@ async function saveInlineVariable(idx) {
     if (type === 'boolean') {
         const cb = document.getElementById(`inline-var-value-${idx}`);
         value = (cb && cb.checked) ? 'true' : 'false';
+    } else if (type === 'batch') {
+        const raw = document.getElementById(`inline-var-value-${idx}`).value.trim();
+        // If it looks like a JSON array, preserve it/clean it, otherwise treat as lines
+        if (raw.startsWith('[') && raw.endsWith(']')) {
+            try { JSON.parse(raw); value = raw; }
+            catch (e) { value = JSON.stringify(raw.split('\n').map(l => l.trim()).filter(l => l)); }
+        } else {
+            value = JSON.stringify(raw.split('\n').map(l => l.trim()).filter(l => l));
+        }
     } else {
         value = document.getElementById(`inline-var-value-${idx}`).value.trim();
     }

@@ -47,6 +47,21 @@ def _wrap_with_type_casting(func):
         return func(*bound.args, **bound.kwargs)
     return wrapper
 
+class ObjectDict(dict):
+    """A dictionary that also supports dot-access for expressions."""
+    def __getattr__(self, name):
+        try: return self[name]
+        except KeyError: raise AttributeError(f"'ObjectDict' object has no attribute '{name}'")
+    def __setattr__(self, name, value):
+        self[name] = value
+
+def to_dot_accessible(obj):
+    if isinstance(obj, dict):
+        return ObjectDict({str(k): to_dot_accessible(v) for k, v in obj.items()})
+    elif isinstance(obj, list):
+        return [to_dot_accessible(x) for x in obj]
+    return obj
+
 def resolve_expressions(payload, context_vars, custom_funcs=None):
     """
     Resolves {{expression}} patterns in a string or nested JSON object.
@@ -84,25 +99,26 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
         "false": False,
     }
     
-    from types import SimpleNamespace
-    
-    def to_dot_accessible(obj):
-        if isinstance(obj, dict):
-            # SimpleNamespace requires string keywords; ensure all keys are stringified
-            return SimpleNamespace(**{str(k): to_dot_accessible(v) for k, v in obj.items()})
-        elif isinstance(obj, list):
-            return [to_dot_accessible(x) for x in obj]
-        return obj
+    # 2. Process variable registry and namespaces (Dot-Accessible)
+    # 2.1 Start with isolated namespaces for priority
+    registry_namespaces = context_vars.get("__namespaces__", {})
+    for ns_name, ns_dict in registry_namespaces.items():
+        ns[ns_name] = to_dot_accessible(ns_dict)
 
-    # 2. Inject static variables with best-effort numeric casting
+    # 2.2 Inject top-level variables (Merging if namespace exists)
     for k, v in context_vars.items():
-        # Handle dot-accessible namespacing: if k is a namespace, v is already a dict from runner.py
+        if k == "__namespaces__": continue
+        
+        # If it's a dict (from a JSON variable)
         if isinstance(v, dict):
-            ns[k] = to_dot_accessible(v)
-            continue
-
-        if isinstance(v, str):
-            # Try to cast to float/int if it looks numeric
+            dot_v = to_dot_accessible(v)
+            if k in ns and isinstance(ns[k], ObjectDict):
+                # MERGE: allow access to both the JSON content and other variables in this namespace
+                ns[k].update(dot_v)
+            else:
+                ns[k] = dot_v
+        elif isinstance(v, str):
+            # Numeric Casting
             try:
                 if '.' in v: ns[k] = float(v)
                 else: ns[k] = int(v)

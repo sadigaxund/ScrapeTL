@@ -8,9 +8,12 @@ import json
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable, UserFunction
+from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable, UserFunction, Batch
 from app.exceptions import ScrapeSkip
 from app.expressions import resolve_expressions
+
+
+
 
 
 def _get_retry_settings(db: Session) -> tuple[int, float]:
@@ -95,20 +98,23 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             elif v.value_type == "json":
                 try: 
                     val = json.loads(val)
+                except: pass
+            elif v.value_type == "batch":
+                try: 
+                    val = json.loads(val)
                     if isinstance(val, list):
-                        # Wrap in Batch so it can be distinguished from standard function returns
-                        class Batch(list): pass
+                        # Wrap in Batch so it can be distinguished from standard objects
                         val = Batch(val)
                 except: pass
             # Flat access for broad compatibility
             global_vars[v.key] = val
             # Namespace-grouped access for {{namespace.key}}
             if v.namespace:
-                if v.namespace not in global_vars:
-                    global_vars[v.namespace] = {}
-                # Ensure the root variable is an object-like structure if it's already a dict
-                if isinstance(global_vars[v.namespace], dict):
-                    global_vars[v.namespace][v.key] = val
+                if "__namespaces__" not in global_vars:
+                    global_vars["__namespaces__"] = {}
+                if v.namespace not in global_vars["__namespaces__"]:
+                    global_vars["__namespaces__"][v.namespace] = {}
+                global_vars["__namespaces__"][v.namespace][v.key] = val
             
         # 3.5 Resolve Expressions in Input Values using current variables
         custom_funcs = {f.name: f.code for f in db.query(UserFunction).all()}
@@ -122,7 +128,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         # Standard lists from return statements are treated as single values.
         all_debug_data = []
         for k, v in _input_values.items():
-            is_iter = isinstance(v, types.GeneratorType) or (hasattr(v, "__class__") and v.__class__.__name__ == "Batch")
+            is_iter = isinstance(v, (types.GeneratorType, Batch))
             if is_iter:
                 batch_input_name = k
                 iterable_source = v

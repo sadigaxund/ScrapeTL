@@ -136,10 +136,15 @@ def process_catchup_queue():
             # If it has a schedule_id, it is a scheduled catch-up run.
             # If not, but has a note, it was likely manual or one-time.
             if task.schedule_id:
+                from app.models import Schedule
+                sched_obj = db.get(Schedule, task.schedule_id)
+                if sched_obj:
+                    sched_obj.last_run = datetime.utcnow()
                 triggered_by = "catchup"
             else:
                 triggered_by = "one-time" if task.note else "catchup"
 
+            db.commit()
             run_scraper(db, task.scraper_id, triggered_by=triggered_by, queue_task_id=task.id, input_values=iv, schedule_id=task.schedule_id)
     finally:
         db.close()

@@ -7,7 +7,7 @@ import requests
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
 from app.expressions import resolve_expressions
-from app.models import GlobalVariable
+from app.models import GlobalVariable, Batch
 
 class BuilderEngine:
     """
@@ -499,7 +499,7 @@ class BuilderEngine:
                     results = soup.select(selector)
                     if limit and str(limit).isdigit():
                         results = results[:int(limit)]
-                    return [_extract_val(r) for r in results]
+                    return Batch([_extract_val(r) for r in results])
                 else:
                     result = soup.select_one(selector)
                     if not result:
@@ -509,7 +509,7 @@ class BuilderEngine:
             if isinstance(html_input, list):
                 mapped = [_process_html(h) for h in html_input]
                 if mode == "all":
-                    return [item for sublist in mapped if sublist for item in sublist]
+                    return Batch([item for sublist in mapped if sublist for item in sublist])
                 return mapped
             else:
                 return _process_html(html_input)
@@ -535,7 +535,7 @@ class BuilderEngine:
                 return None
 
             if isinstance(text_input, list):
-                return [_extract(t) for t in text_input]
+                return Batch([_extract(t) for t in text_input])
             return _extract(text_input)
 
         elif ntype == "action_text_transform":
@@ -601,7 +601,7 @@ class BuilderEngine:
             for child in children:
                 if selector == "*" or child.select_one(selector) or child.name == selector:
                     results.append(str(child))
-            return results
+            return Batch(results)
 
         elif ntype in ["logic_splitter", "utility_splitter"]:
             # Returns its only input; the engine handles duplication to multiple neighbors
@@ -802,13 +802,21 @@ class BuilderEngine:
 
             # 🛠️ ERROR FORMATTING: If we received an internal error object, format it using the node's label
             if isinstance(sink_data, dict) and "__error__" in sink_data:
-                return {label: sink_data["__error__"]}
+                return [{label: sink_data["__error__"]}]
 
-            if isinstance(sink_data, list):
-                return [(d if isinstance(d, dict) else {label: str(d)}) for d in sink_data]
-            elif isinstance(sink_data, str) or not isinstance(sink_data, dict):
-                return {label: sink_data}
-            return sink_data
+            # 🛠️ DATA SHAPING (Sink Output)
+            # We want to provide a list of dicts for the tabular UI.
+            # If the user passed a list or specialized Batch/Generator, handle each item.
+            if isinstance(sink_data, (types.GeneratorType, Batch)):
+                # If each item is a dict, return as-is (tabular formatting). 
+                # Otherwise, wrap each item under the label.
+                return [(item if isinstance(item, dict) else {label: item}) for item in sink_data]
+            
+            # For SINGLE items:
+            # We ALWAYS wrap under the label to prevent "exploding" 
+            # a single complex JSON variable into multiple columns.
+            # This ensures {{ABC.ARRAY}} shows as ONE cell with the full JSON.
+            return [{label: sink_data}]
 
         elif ntype == "sink_debug":
             val = node_inputs.get("data") or node_inputs.get("error") or next(iter(node_inputs.values()), None)
@@ -860,28 +868,24 @@ class BuilderEngine:
                 nodes_context[label] = res
             nodes_context[nid] = res
 
-        # Organize Global Registry into Namespaces
-        namespaces = {}
-        ns_metadata = self.global_vars.get("__namespaces__", {})
+        # Organize Global Registry into Namespaces (Handled by resolve_expressions)
+        # We just provide the root vars and inputs.
         
-        for k, v in self.global_vars.items():
-            if k == "__namespaces__": continue
-            ns = ns_metadata.get(k)
-            if ns:
-                if ns not in namespaces: namespaces[ns] = {}
-                namespaces[ns][k] = v
-
         context = {
             "vars": self.global_vars,
             "v": self.global_vars,
-            "namespaces": namespaces,
-            "ns": namespaces,
             "inputs": node_inputs,
             "nodes": nodes_context,
             # Fallback for backward compatibility
             **self.global_vars,
             **node_inputs
         }
+        
+        # Log active namespaces for diagnostics
+        ns_count = len(self.global_vars.get("__namespaces__", {}))
+        if ns_count:
+            print(f"[BuilderEngine] Active Namespaces: {list(self.global_vars['__namespaces__'].keys())}")
+            
         return context
 
     def _map_port_to_handle(self, node_id: str, port_idx: Any) -> str:
