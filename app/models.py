@@ -41,6 +41,7 @@ class Scraper(Base):
     health = Column(String, default="untested")  # "untested" | "ok" | "failing"
     scraper_type = Column(String, default="python")  # "python" | "builder"
     flow_data = Column(Text, nullable=True)         # JSON encoded graph (nodes, edges)
+    browser_config = Column(Text, nullable=True)    # JSON encoded settings (remote, headless, etc)
     position = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

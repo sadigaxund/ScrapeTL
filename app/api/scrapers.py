@@ -77,6 +77,7 @@ def _scraper_dict(s: Scraper):
         "inputs": scraper_inputs,
         "scraper_type": s.scraper_type,
         "flow_data": json.loads(s.flow_data) if s.flow_data else None,
+        "browser_config": json.loads(s.browser_config) if s.browser_config else {},
         "last_run": s.logs[0].run_at.isoformat() + "Z" if s.logs else None,
     }
 
@@ -229,6 +230,7 @@ async def save_builder_flow(
     name: str = Form(...),
     description: str = Form(""),
     flow_data: str = Form(...),  # JSON string
+    browser_config: Optional[str] = Form(None), # JSON string
     scraper_id: Optional[int] = Form(None),
     db: Session = Depends(get_db)
 ):
@@ -237,6 +239,16 @@ async def save_builder_flow(
     """
     if not name.strip():
         raise HTTPException(status_code=400, detail="Name is required.")
+
+    if browser_config:
+        try:
+            config = json.loads(browser_config)
+            allowed_keys = {"timezone", "browser_headless", "browser_cdp_url"}
+            for key in config.keys():
+                if key not in allowed_keys:
+                    raise HTTPException(status_code=400, detail=f"Unknown setting key: {key}")
+        except json.JSONDecodeError:
+            raise HTTPException(status_code=400, detail="Invalid browser config JSON.")
 
     # Validate flow_data is valid JSON
     try:
@@ -254,6 +266,7 @@ async def save_builder_flow(
         scraper.name = name.strip()
         scraper.description = description.strip()
         scraper.flow_data = flow_data
+        scraper.browser_config = browser_config
         scraper.scraper_type = "builder"
     else:
         # Determine position
@@ -264,6 +277,7 @@ async def save_builder_flow(
             name=name.strip(),
             description=description.strip(),
             flow_data=flow_data,
+            browser_config=browser_config,
             scraper_type="builder",
             position=new_pos,
         )
@@ -294,6 +308,7 @@ async def update_scraper(
     thumbnail_url: str = Form(""),
     version_label: str = Form(""),
     commit_message: str = Form(""),
+    browser_config: Optional[str] = Form(None),
     scraper_file: Optional[UploadFile] = File(None),
     thumbnail_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
@@ -305,6 +320,8 @@ async def update_scraper(
     scraper.name = name.strip() or scraper.name
     scraper.description = description.strip()
     scraper.homepage_url = _normalize_url(homepage_url)
+    if browser_config is not None:
+        scraper.browser_config = browser_config
 
     # Handle thumbnail file upload
     if thumbnail_file and thumbnail_file.filename:
@@ -393,6 +410,7 @@ def duplicate_scraper(scraper_id: int, db: Session = Depends(get_db)):
         thumbnail_data=original.thumbnail_data,
         scraper_type=original.scraper_type,
         flow_data=original.flow_data,
+        browser_config=original.browser_config,
         position=new_pos,
         health="untested"
     )

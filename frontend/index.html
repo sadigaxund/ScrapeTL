@@ -761,6 +761,7 @@
           </div>
         </div>
 
+
         <div class="bar-divider"></div>
 
         <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderFullscreen()" id="toggle-fs-btn" 
@@ -807,24 +808,50 @@
       </div>
     </section>
 
-    <!-- ── Settings Tab ──────────────────────────── -->
     <section class="tab-panel" id="tab-settings">
       <div class="card">
         <div class="card-header">
-          <h2 class="card-title">Timezone</h2>
+          <h2 class="card-title">General Settings</h2>
         </div>
-        <p style="color:var(--text-secondary);font-size:14px;margin-bottom:16px">
-          All cron schedules are interpreted in this timezone. Changing this takes effect immediately.
-        </p>
-        <div class="form-row" style="align-items:flex-end">
-          <div class="form-group flex-2">
-            <label>IANA Timezone</label>
-            <input type="text" id="tz-input" list="tz-list" placeholder="Search timezone or UTC offset (e.g. +4) ..." />
-            <datalist id="tz-list"></datalist>
+        
+        <!-- Row 1: Timezone -->
+        <div style="padding-bottom:20px; border-bottom:1px solid var(--border-light); margin-bottom:20px;">
+          <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">🌍 Language & Time</h3>
+          <div class="form-row" style="align-items: flex-start;">
+            <div class="form-group" style="flex: 1;">
+              <label>IANA Timezone</label>
+              <input type="text" id="tz-input" list="tz-list" placeholder="Search timezone..." style="height:42px;" />
+              <datalist id="tz-list"></datalist>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Used for interpreting cron schedules.</p>
+            </div>
           </div>
-          <div class="form-group form-group--action" style="margin-bottom:0">
-            <button class="btn btn-primary" onclick="saveTimezone()">💾 Save Timezone</button>
+        </div>
+
+        <!-- Row 2: Browser Defaults -->
+        <div>
+          <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">🌐 Browser Defaults (Playwright)</h3>
+          <div class="form-row" style="align-items: flex-start;">
+            <div class="form-group" style="flex: 0 0 240px;">
+              <label>Default Mode</label>
+              <select id="setting-browser-headless" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
+                <option value="true">Headless (Background)</option>
+                <option value="false">Headed (Visible)</option>
+              </select>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Default execution visibility.</p>
+            </div>
+            <div class="form-group flex-2">
+              <label>Remote Playwright Server (CDP URL)</label>
+              <input type="text" id="setting-browser-cdp" placeholder="ws://localhost:3000 or http://..." style="height:42px;" />
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Leave blank to use local Chromium executable.</p>
+            </div>
           </div>
+        </div>
+
+        <!-- Sticky Footer for Save All -->
+        <div style="position: sticky; bottom: -20px; margin: 20px -20px -20px -20px; padding: 16px 20px; background: rgba(23, 23, 23, 0.85); backdrop-filter: blur(12px); border-top: 1px solid var(--border-light); display: flex; justify-content: flex-end; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; z-index: 10;">
+          <button class="btn btn-primary" onclick="saveAllAppSettings()" id="save-all-settings-btn" style="height: 44px; padding: 0 32px; font-weight: 700; box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.3);">
+            💾 Save All Changes
+          </button>
         </div>
       </div>
     </section>
@@ -842,103 +869,125 @@
       </div>
       <input type="hidden" id="edit-id" />
 
-      <div class="form-row" style="margin-bottom:14px">
-        <div class="form-group flex-2">
-          <label>Name *</label>
-          <input type="text" id="edit-name" placeholder="My Scraper" required />
-        </div>
+      <div class="wizard-tab-switcher" style="margin: -10px -24px 20px -24px; padding: 0 24px;">
+        <button class="wizard-tab-btn active" data-edit-tab="general" onclick="switchEditTab('general', this)">📋 General</button>
+        <button class="wizard-tab-btn" data-edit-tab="config" onclick="switchEditTab('config', this)">⚙️ Configuration</button>
       </div>
 
-      <div class="form-row" style="margin-bottom:14px">
-        <div class="form-group flex-2">
-          <label>Description</label>
-          <input type="text" id="edit-desc" placeholder="What does this scraper do?" />
-        </div>
-      </div>
-
-      <div class="form-row" style="margin-bottom:14px">
-        <div class="form-group flex-2">
-          <label>Homepage URL <span
-              style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-          <input type="text" id="edit-homepage" placeholder="youtube.com or https://example.com" />
-        </div>
-      </div>
-
-      <div
-        style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
-        <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
+      <!-- Tab 1: General -->
+      <div id="edit-tab-general" class="wizard-pane active">
+        <div class="form-row" style="margin-bottom:14px">
           <div class="form-group flex-2">
-            <label>Thumbnail Image <span
+            <label>Name *</label>
+            <input type="text" id="edit-name" placeholder="My Scraper" required />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group flex-2">
+            <label>Description</label>
+            <input type="text" id="edit-desc" placeholder="What does this scraper do?" />
+          </div>
+        </div>
+
+        <div class="form-row" style="margin-bottom:14px">
+          <div class="form-group flex-2">
+            <label>Homepage URL <span
                 style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-            <input type="text" id="edit-thumb" placeholder="Paste URL here..." oninput="previewEditThumb(this.value)"
-              style="margin-bottom:8px;" />
-            <div style="display:flex; align-items:center; gap:8px;">
-              <label for="edit-thumb-file" class="btn btn-ghost"
-                style="cursor:pointer; font-size:12px; padding:4px 10px;">
-                📁 Upload Photo...
-              </label>
-              <input type="file" id="edit-thumb-file" accept="image/*" style="display:none"
-                onchange="handleEditThumbFile(this)" />
-              <span id="edit-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
+            <input type="text" id="edit-homepage" placeholder="youtube.com or https://example.com" />
+          </div>
+        </div>
+
+        <div style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
+            <div class="form-group flex-2">
+              <label>Thumbnail Image <span
+                  style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+              <input type="text" id="edit-thumb" placeholder="Paste URL here..." oninput="previewEditThumb(this.value)"
+                style="margin-bottom:8px;" />
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label for="edit-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px;">
+                  📁 Upload Photo...
+                </label>
+                <input type="file" id="edit-thumb-file" accept="image/*" style="display:none" onchange="handleEditThumbFile(this)" />
+                <span id="edit-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
+              </div>
+            </div>
+            <div id="edit-thumb-preview" class="thumb-preview" style="width:84px; height:84px;">
+              <img id="edit-thumb-img" src="" alt="" style="display:none" />
+              <span id="edit-thumb-placeholder" class="thumb-placeholder" style="font-size:32px">🎌</span>
             </div>
           </div>
-          <div id="edit-thumb-preview" class="thumb-preview" style="width:84px; height:84px;">
-            <img id="edit-thumb-img" src="" alt="" style="display:none" />
-            <span id="edit-thumb-placeholder" class="thumb-placeholder" style="font-size:32px">🎌</span>
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px">
+          <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional — drag &amp; drop or click to upload a new .py)</span></label>
+          <div class="upload-zone wizard-upload-zone" id="edit-code-zone" onclick="document.getElementById('edit-code-file').click()">
+            <div style="font-size:24px; margin-bottom:8px;">📄</div>
+            <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop a new .py file here</div>
+            <div style="font-size:12px; margin-top:4px;">or click to browse — leave empty to keep existing code</div>
+            <input type="file" id="edit-code-file" accept=".py" style="display:none" onchange="handleEditCodeFile(this)" />
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-bottom:24px">
+          <label>Release Notes & Version</label>
+          <div id="edit-version-container" style="display:flex; align-items:flex-end; gap:12px;">
+            <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
+              <span style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
+              <div class="semver-part">
+                <button type="button" class="semver-up" onclick="bumpVersion('major')" title="Bump Major">▲</button>
+                <input type="text" id="edit-ver-major" value="1" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+              </div>
+              <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
+              <div class="semver-part">
+                <button type="button" class="semver-up" onclick="bumpVersion('minor')" title="Bump Minor">▲</button>
+                <input type="text" id="edit-ver-minor" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+              </div>
+              <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
+              <div class="semver-part">
+                <button type="button" class="semver-up" onclick="bumpVersion('patch')" title="Bump Patch">▲</button>
+                <input type="text" id="edit-ver-patch" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+              </div>
+            </div>
+            <input type="text" id="edit-commit" placeholder="What changed? e.g. Fixed regex matching" style="flex:1" />
           </div>
         </div>
       </div>
 
-      <div class="form-group" style="margin-bottom:24px">
-        <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional — drag
-            &amp; drop or click to upload a new .py)</span></label>
-        <div class="upload-zone wizard-upload-zone" id="edit-code-zone"
-          onclick="document.getElementById('edit-code-file').click()">
-          <div style="font-size:24px; margin-bottom:8px;">📄</div>
-          <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop a
-            new .py file here</div>
-          <div style="font-size:12px; margin-top:4px;">or click to browse — leave empty to keep existing code</div>
-          <input type="file" id="edit-code-file" accept=".py" style="display:none"
-            onchange="handleEditCodeFile(this)" />
-        </div>
-      </div>
-
-      <div class="form-group" style="margin-bottom:24px">
-        <label>Release Notes & Version</label>
-
-        <div id="edit-version-container" style="display:flex; align-items:flex-end; gap:12px;">
-          <div
-            style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
-            <span
-              style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
-
-            <div class="semver-part">
-              <button type="button" class="semver-up" onclick="bumpVersion('major')" title="Bump Major">▲</button>
-              <input type="text" id="edit-ver-major" value="1" class="semver-input" readonly
-                style="width:36px; padding:4px; text-align:center;" />
-            </div>
-            <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
-
-            <div class="semver-part">
-              <button type="button" class="semver-up" onclick="bumpVersion('minor')" title="Bump Minor">▲</button>
-              <input type="text" id="edit-ver-minor" value="0" class="semver-input" readonly
-                style="width:36px; padding:4px; text-align:center;" />
-            </div>
-            <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
-
-            <div class="semver-part">
-              <button type="button" class="semver-up" onclick="bumpVersion('patch')" title="Bump Patch">▲</button>
-              <input type="text" id="edit-ver-patch" value="0" class="semver-input" readonly
-                style="width:36px; padding:4px; text-align:center;" />
-            </div>
+      <!-- Tab 2: Configuration -->
+      <div id="edit-tab-config" class="wizard-pane">
+        <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:16px;">🌐 Browser Override Settings</h3>
+        
+        <div class="form-row" style="margin-bottom:20px; align-items: flex-start;">
+          <div class="form-group" style="flex: 0 0 180px;">
+            <label>Browser Mode</label>
+            <select id="edit-browser-headless" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
+              <option value="">Inherit Global</option>
+              <option value="true">Headless (Background)</option>
+              <option value="false">Headed (Visible)</option>
+            </select>
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Select execution visibility.</p>
           </div>
+          <div class="form-group flex-2">
+            <label>Custom CDP URL</label>
+            <input type="text" id="edit-browser-cdp" placeholder="ws://localhost:3000 (Overwrites global)" style="height:42px;" />
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Leave blank to use global settings or local Chromium.</p>
+          </div>
+        </div>
 
-          <input type="text" id="edit-commit" placeholder="What changed? e.g. Fixed regex matching" style="flex:1" />
+        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-strong); border-radius:12px; padding:16px;">
+           <div style="display:flex; align-items:center; gap:12px;">
+              <span style="font-size:24px;">ℹ️</span>
+              <p style="font-size:13px; line-height:1.5; color:var(--text-secondary); margin:0">
+                These settings specifically affect nodes using <strong>Playwright</strong>. <br/>
+                If set to <em>Inherit</em>, the global defaults defined in the app settings will be used.
+              </p>
+           </div>
         </div>
       </div>
 
-      <div
-        style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
+      <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px; margin-top:20px;">
         <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
         <button class="btn btn-primary" id="edit-submit-btn" onclick="saveEdit()">💾 Save Changes</button>
       </div>
@@ -1615,19 +1664,36 @@
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeSaveFlowModal()">✕</button>
       </div>
       <input type="hidden" id="flow-scraper-id" />
-      <div class="form-group" style="margin-bottom:16px">
-        <label>Scraper Name *</label>
-        <input type="text" id="flow-name" placeholder="My Builder Scraper" required />
+      <div class="modal-body" style="padding-top:0">
+        <div class="form-group" style="margin-bottom:16px;">
+          <label>Scraper Name *</label>
+          <input type="text" id="flow-name" placeholder="My New Scraper" required style="height:42px;" />
+        </div>
+        <div class="form-group" style="margin-bottom:20px;">
+          <label>Description</label>
+          <textarea id="flow-desc" class="markdown-editor" placeholder="What this scraper does..." style="height:80px; width:100%; resize:none; padding:10px;"></textarea>
+        </div>
+
+        <!-- Browser Overrides Section -->
+        <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px; padding-top:16px; border-top:1px solid var(--border-light)">🌐 Browser Overrides</h3>
+        <div class="form-row" style="align-items: flex-start; gap:16px;">
+          <div class="form-group" style="flex: 0 0 160px;">
+            <label>Mode</label>
+            <select id="flow-browser-headless" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
+              <option value="">Inherit Global</option>
+              <option value="true">Headless</option>
+              <option value="false">Headed</option>
+            </select>
+          </div>
+          <div class="form-group flex-1">
+            <label>Custom CDP URL</label>
+            <input type="text" id="flow-browser-cdp" placeholder="ws://localhost:3000" style="height:42px;" />
+          </div>
+        </div>
       </div>
-      <div class="form-group" style="margin-bottom:20px">
-        <label>Description</label>
-        <textarea id="flow-desc" class="markdown-editor" placeholder="What this scraper does..."
-          style="height:100px; width:100%; resize:none"></textarea>
-      </div>
-      <div
-        style="display:flex; gap:10px; justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
-        <button class="btn btn-ghost" onclick="closeSaveFlowModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn">💾 Confirm & Save</button>
+      <div style="display:flex; gap:12px; justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:20px; margin-top:12px;">
+        <button class="btn btn-ghost" onclick="closeSaveFlowModal()" style="height:42px; padding:0 24px;">Cancel</button>
+        <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn" style="height:42px; padding:0 24px;">💾 Confirm & Save</button>
       </div>
     </div>
   </div>

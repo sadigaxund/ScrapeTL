@@ -16,12 +16,13 @@ class BuilderEngine:
     and conditional branching (True/False paths).
     """
 
-    def __init__(self, flow_data: Dict[str, Any], global_vars: Dict[str, Any], db_session=None, custom_funcs: Dict[str, str] = None):
+    def __init__(self, flow_data: Dict[str, Any], global_vars: Dict[str, Any], db_session=None, custom_funcs: Dict[str, str] = None, browser_config: Dict[str, Any] = None):
         self.nodes = {str(n["id"]): n for n in flow_data.get("nodes", [])}
         self.edges = flow_data.get("edges", [])
         self.global_vars = global_vars
         self.db = db_session
         self.custom_funcs = custom_funcs or {}
+        self.browser_config = browser_config or {}
         # Internal cache for node results to prevent redundant execution
         self.results_cache: Dict[str, Any] = {}
 
@@ -49,15 +50,33 @@ class BuilderEngine:
         try:
             from playwright.sync_api import sync_playwright
             self._p = sync_playwright().start()
-            self._browser = self._p.chromium.launch(headless=True)
-            self._page = self._browser.new_page()
+            
+            cdp_url = self.browser_config.get("browser_cdp_url")
+            headless = str(self.browser_config.get("browser_headless", "true")).lower() == "true"
+
+            if cdp_url:
+                print(f"[BuilderEngine] Connecting to remote CDP: {cdp_url}")
+                self._browser = self._p.chromium.connect_over_cdp(cdp_url)
+            else:
+                print(f"[BuilderEngine] Launching local browser (headless={headless})")
+                self._browser = self._p.chromium.launch(headless=headless)
+            
+            self._context = self._browser.new_context()
+            self._page = self._context.new_page()
             self._page.on('dialog', lambda dialog: dialog.accept())
         except Exception as e:
             print(f"[BuilderEngine] Playwright setup failed: {e}")
+            if hasattr(self, '_p'): self._p.stop()
 
     def teardown(self):
         """Lifecycle hook called by Runner after batch execution."""
         if hasattr(self, '_browser'):
+            try:
+                self._browser.close()
+                self._p.stop()
+                print("[BuilderEngine] Playwright session closed.")
+            except:
+                pass
             try: self._browser.close()
             except: pass
         if hasattr(self, '_p'):
@@ -241,17 +260,21 @@ class BuilderEngine:
             "debug": debug_artifacts
         }
 
-    def _execute_node(self, node: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
-        ntype = str(node.get("type", "")).strip()
-        preset = str(node.get("preset", "")).strip()
-        if preset and preset not in ntype:
-            ntype = f"{ntype}_{preset}"
+    def _ensure_single_str(self, val):
+        if val is None: return ""
+        if isinstance(val, list):
+            # Take the first non-empty string or element
+            for item in val:
+                if item: return str(item).strip()
+            return ""
+        return str(val).strip()
 
-        data = node.get("config") or node.get("data", {})
+    def _execute_node(self, node: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
+        ntype = self._get_full_type(node)
+        data = node.get("config", {})
+        node_inputs = self._get_node_inputs(node["id"])
 
         print(f"[BuilderEngine] Executing {node['id']} (Resolved Type: '{ntype}')")
-
-        node_inputs = self._get_node_inputs(node["id"])
 
         # ── Inputs ──────────────────────────────────────────────────────
         if ntype == "input_external":
@@ -281,47 +304,48 @@ class BuilderEngine:
 
         # ── Sources & Actions ────────────────────────────────────────────
         elif ntype in ["action_fetch_url", "source_fetch_url", "source_fetch_html"]:
-            url = data.get("url") or node_inputs.get("url")
-            if not url:
+            url_input = data.get("url") or node_inputs.get("url")
+            if not url_input:
                 print("[BuilderEngine] Warning: Fetcher node has no URL input! Skipping.")
                 return None
 
-            url = resolve_expressions(url, self._get_execution_context(node_inputs)).strip()
-            print(f"[BuilderEngine] Fetcher resolved URL: {url}")
-
             headers_raw = data.get("headers") or {}
-            headers = {}
-            if isinstance(headers_raw, str):
-                try:
-                    headers = json.loads(headers_raw.strip() or "{}")
-                except:
-                    try:
-                        import ast
-                        headers = ast.literal_eval(headers_raw.strip() or "{}")
+            
+            def _fetch_single(u):
+                u = self._ensure_single_str(resolve_expressions(u, self._get_execution_context(node_inputs)))
+                if not u: return ""
+                print(f"[BuilderEngine] Fetcher resolved URL: {u}")
+                
+                headers = {}
+                if isinstance(headers_raw, str):
+                    try: headers = json.loads(headers_raw.strip() or "{}")
                     except:
-                        print(f"[BuilderEngine] Warning: Failed to parse headers: {headers_raw}")
-            else:
-                headers = headers_raw
+                        try:
+                            import ast
+                            headers = ast.literal_eval(headers_raw.strip() or "{}")
+                        except: pass
+                else: headers = headers_raw
+                
+                resp = requests.get(u, headers=headers, timeout=30)
+                resp.raise_for_status()
+                return resp.text
 
-            resp = requests.get(url, headers=headers, timeout=30)
-            resp.raise_for_status()
-            return resp.text
+            if isinstance(url_input, list):
+                return [_fetch_single(u) for u in url_input]
+            return _fetch_single(url_input)
 
         elif ntype in ["action_fetch_playwright", "source_fetch_playwright"]:
-            url = data.get("url") or node_inputs.get("url")
-            if not url: return None
+            url_input = data.get("url") or node_inputs.get("url")
+            if not url_input: return None
 
-            url = resolve_expressions(url, self._get_execution_context(node_inputs))
             headless = data.get("headless", True)
-            cdp_url = data.get("cdp_url")
-
             actions = data.get("actions", [])
             auto_dismiss = data.get("auto_dismiss", [])
             wait_sel = data.get("wait_for_selector") or data.get("wait_for")
             if not actions and wait_sel:
                 actions = [{"type": "wait_for_selector", "value": wait_sel}]
 
-            def _run_playwright_logic(page):
+            def _run_playwright_logic(page, url):
                 if auto_dismiss:
                     script = f"""
                     setInterval(() => {{
@@ -367,51 +391,84 @@ class BuilderEngine:
                             import base64
                             return f"data:image/png;base64,{base64.b64encode(bytes).decode()}"
                         elif atype == "fetch_image":
-                            # Use browser-side fetch to extract high-res original (bypasses CORS)
+                            # Use canvas-based extraction to bypass CORS (reads from visible DOM)
                             if not aval:
                                 raise Exception("fetch_image requires a selector to find the image src.")
                             
-                            src = page.locator(aval).first.get_attribute("src")
-                            if not src:
-                                raise Exception(f"No src found for image selector: {aval}")
-                            
-                            if not src.startswith("http") and not src.startswith("data:"):
-                                from urllib.parse import urljoin
-                                src = urljoin(page.url, src)
+                            try:
+                                data_url = page.evaluate("""
+                                    async (selector) => {
+                                        const img = document.querySelector(selector);
+                                        if (!img) throw new Error(`Selector "${selector}" matches no element`);
+                                        
+                                        // Wait for load
+                                        if (!img.complete) {
+                                            await new Promise(r => {
+                                                img.onload = () => r();
+                                                img.onerror = () => r();
+                                            });
+                                        }
 
-                            # Execute fetch in browser context to get original bytes/quality
-                            data_url = page.evaluate("""
-                                async (url) => {
-                                    const response = await fetch(url);
-                                    if (!response.ok) throw new Error(`HTTP ${response.status} failed to fetch ${url}`);
-                                    const blob = await response.blob();
-                                    return new Promise((resolve, reject) => {
-                                        const reader = new FileReader();
-                                        reader.onloadend = () => resolve(reader.result);
-                                        reader.onerror = reject;
-                                        reader.readAsDataURL(blob);
-                                    });
-                                }
-                            """, src)
-                            return data_url
+                                        const canvas = document.createElement('canvas');
+                                        canvas.width = img.naturalWidth || img.width;
+                                        canvas.height = img.naturalHeight || img.height;
+                                        const ctx = canvas.getContext('2d');
+                                        ctx.drawImage(img, 0, 0);
+                                        return canvas.toDataURL('image/jpeg', 0.9);
+                                    }
+                                """, aval)
+                                return data_url
+                            except Exception as canvas_err:
+                                # Fallback: page.request.get (bypasses browser CORS at the engine level)
+                                # Silence "Tainted Canvas" security errors as we have a working fallback
+                                if "SecurityError" not in str(canvas_err) and "Tainted canvases" not in str(canvas_err):
+                                    print(f"[BuilderEngine] Canvas fetch_image failed: {canvas_err}")
+                                
+                                src = page.locator(aval).first.get_attribute("src")
+                                if src:
+                                    if not src.startswith("http") and not src.startswith("data:"):
+                                        from urllib.parse import urljoin
+                                        src = urljoin(page.url, src)
+                                    
+                                    response = page.request.get(src)
+                                    if response.status == 200:
+                                        import base64
+                                        content_type = response.headers.get("content-type", "image/jpeg")
+                                        return f"data:{content_type};base64,{base64.b64encode(response.body()).decode()}"
+                                    raise Exception(f"Failed to fetch image via network: HTTP {response.status}")
+                                raise canvas_err
                     except Exception as e:
                         print(f"[BuilderEngine] Playwright Action Failed ({atype}): {e}")
+                        # Important: Do NOT return page.content() if a critical action failed
+                        # return f"[Error: Action {atype} failed: {e}]"
 
                 return page.content()
 
-            if hasattr(self, '_page'):
-                print("[BuilderEngine] Reusing shared Playwright session.")
-                return _run_playwright_logic(self._page)
-            else:
-                with sync_playwright() as p:
-                    if cdp_url:
-                        browser = p.chromium.connect_over_cdp(cdp_url)
-                    else:
-                        browser = p.chromium.launch(headless=headless)
+            def _pw_map(u):
+                u = self._ensure_single_str(resolve_expressions(u, self._get_execution_context(node_inputs)))
+                if not u: return ""
+                if hasattr(self, '_page'):
+                    return _run_playwright_logic(self._page, u)
+                else:
+                    from app.models import AppSetting
+                    from playwright.sync_api import sync_playwright
+                    db = self.db
+                    gh = db.get(AppSetting, "browser_headless").value if db and db.get(AppSetting, "browser_headless") else "true"
+                    gcdp = db.get(AppSetting, "browser_cdp_url").value if db and db.get(AppSetting, "browser_cdp_url") else ""
+                    sc = self.browser_config
+                    h = str(sc.get("browser_headless") or gh).lower() == "true"
+                    c = sc.get("browser_cdp_url") or gcdp
+                    with sync_playwright() as p:
+                        browser = p.chromium.connect_over_cdp(c) if c else p.chromium.launch(headless=h)
+                        pg = browser.new_page()
+                        pg.on('dialog', lambda dialog: dialog.accept())
+                        result = _run_playwright_logic(pg, u)
+                        browser.close()
+                        return result
 
-                    page = browser.new_page()
-                    page.on('dialog', lambda dialog: dialog.accept())
-                    return _run_playwright_logic(page)
+            if isinstance(url_input, list):
+                return [_pw_map(u) for u in url_input]
+            return _pw_map(url_input)
 
         # ── Actions ──────────────────────────────────────────────────────
         elif ntype == "action_bs4_select":

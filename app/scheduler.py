@@ -35,9 +35,14 @@ def reload_timezone(tz_str: str):
     """Hot-swap the scheduler's default timezone (called when settings change)."""
     try:
         new_tz = pytz.timezone(tz_str)
-        _scheduler.configure(timezone=new_tz)
-        print(f"[Scheduler] Timezone updated to: {tz_str}")
-        # Refresh all existing jobs with the new timezone
+        
+        # APScheduler cannot be reconfigured while running.
+        # However, since our job triggers explicitly use the DB-provided timezone,
+        # we can simply reload the jobs to apply the shift.
+        if not _scheduler.running:
+            _scheduler.configure(timezone=new_tz)
+            
+        print(f"[Scheduler] Hot-reloading jobs for new timezone: {tz_str}")
         load_schedules_from_db()
     except Exception as e:
         print(f"[Scheduler] Failed to update timezone: {e}")

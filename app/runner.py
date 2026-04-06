@@ -114,22 +114,25 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             if is_iter:
                 batch_input_name = k
                 iterable_source = v
-                break
-
-        # Instantiation
+                break        # Instantiation
         if not scraper_record.versions:
             raise ValueError("No code version found for this scraper.")
 
+        engine = None
+        scraper_instance = None
         if scraper_record.scraper_type == "builder":
-            scraper_instance = None # Will be instantiated inside retry loop
+            from app.builder.engine import BuilderEngine
+            # Parse flow data once for the execution
+            flow_data = json.loads(scraper_record.flow_data) if scraper_record.flow_data else json.loads(scraper_record.versions[0].code)
+            browser_config = json.loads(scraper_record.browser_config) if scraper_record.browser_config else {}
+            engine = BuilderEngine(flow_data, global_vars, db_session=db, custom_funcs=custom_funcs, browser_config=browser_config)
+            engine.setup()
         else:
             from app.scrapers import load_scraper_class_from_code
             scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
             scraper_instance = scraper_cls(homepage_url=scraper_record.homepage_url)
-
-        # Lifecycle Setup
-        if hasattr(scraper_instance, 'setup'):
-            scraper_instance.setup()
+            if hasattr(scraper_instance, 'setup'):
+                scraper_instance.setup()
 
         all_episodes = []
         is_streaming = isinstance(iterable_source, types.GeneratorType)
@@ -149,13 +152,6 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 else:
                     iter_inputs = item
 
-                # Parse flow data once for the iteration
-                flow_data = None
-                # Parse flow data once for the iteration
-                flow_data = None
-                if scraper_record.scraper_type == "builder":
-                    flow_data = json.loads(scraper_record.flow_data) if scraper_record.flow_data else json.loads(scraper_record.versions[0].code)
-
                 attempt_status = "failure"
                 iter_episodes = []
 
@@ -167,9 +163,6 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
                     try:
                         if scraper_record.scraper_type == "builder":
-                            from app.builder.engine import BuilderEngine
-                            # New engine every attempt = fresh brain
-                            engine = BuilderEngine(flow_data, global_vars, db_session=db, custom_funcs=custom_funcs)
                             res_bundle = engine.execute(iter_inputs, stop_event=stop_event)
                             iter_episodes = res_bundle.get("main", [])
                             all_debug_data.extend(res_bundle.get("debug", []))
@@ -200,7 +193,6 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                         else:
                             print(f"[Runner] ❌ Iteration failed after {attempt+1} attempts: {error_msg}")
                             attempt_status = "failure"
-                            status = "failure"
 
                 if attempt_status == "failure" and not is_streaming:
                     # In a static batch, fail the whole batch
@@ -245,9 +237,13 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 error_msg = str(exc)
 
         finally:
+            if engine:
+                try: engine.teardown()
+                except Exception as t_err: print(f"[Runner] Builder engine teardown error: {t_err}")
+
             if hasattr(scraper_instance, 'teardown'):
                 try: scraper_instance.teardown()
-                except Exception as t_err: print(f"[Runner] Teardown error: {t_err}")
+                except Exception as t_err: print(f"[Runner] Scraper instance teardown error: {t_err}")
 
         # Update health (unless cancelled)
         if status != "cancelled":

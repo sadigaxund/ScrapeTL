@@ -76,7 +76,11 @@ let state = {
         selected: null,          // { type: 'node'|'edge', id: any }
         copyBuffer: null,        // node data
         currentScraperId: null,   // track active scraper ID
-        currentScraperName: null // track active scraper name
+        currentScraperName: null, // track active scraper name
+        browser_config: {
+            headless: '',
+            cdp_url: ''
+        }
     }
 };
 
@@ -405,8 +409,8 @@ const NODE_PRESETS = {
     source: {
         fetch_url: {
             title: 'Fetch HTML',
-            inputs: ['URL'],
-            outputs: ['HTML'],
+            inputs: ['Source'],
+            outputs: ['Result'],
             configs: [
                 { key: 'method', type: 'select', label: 'Method', options: ['GET', 'POST'] },
                 { key: 'headers', type: 'text', label: 'Extra Headers (JSON)', placeholder: '{"User-Agent": "..."}' }
@@ -414,8 +418,8 @@ const NODE_PRESETS = {
         },
         fetch_playwright: {
             title: 'Playwright Fetch',
-            inputs: ['URL'],
-            outputs: ['HTML'],
+            inputs: ['Source'],
+            outputs: ['Result'],
             configs: [
                 { key: 'headless', type: 'checkbox', label: 'Headless Mode (Silent)', default: true },
                 { key: 'actions', type: 'action_list', label: 'Playwright Actions' },
@@ -1223,7 +1227,7 @@ function renderBuilderNodes() {
                 port.className = 'node-port node-port--input';
                 port.id = `node-${node.id}-input-${idx}`;
                 port.title = label;
-                
+
                 // Variadic/Dynamic handle mapping
                 let handle = null;
                 if (node.dynamic_ports) {
@@ -1249,7 +1253,7 @@ function renderBuilderNodes() {
             if (node.type !== 'input' && node.type !== 'sink' && node.type !== 'utility') {
                 const trigRow = document.createElement('div');
                 trigRow.className = 'node-port-row node-port-row--input node-port-row--universal';
-                
+
                 const trigPort = document.createElement('div');
                 trigPort.className = 'node-port node-port--input node-port--trigger';
                 trigPort.id = `node-${node.id}-input-trigger`;
@@ -1699,10 +1703,10 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     // 2. Input Parameters (External Inputs)
     if (filter !== 'comparator') {
         state.builder.nodes.forEach(n => {
-        if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
-            const item = document.createElement('div');
-            item.className = 'context-item';
-            item.innerHTML = `
+            if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
+                const item = document.createElement('div');
+                item.className = 'context-item';
+                item.innerHTML = `
                 <div class="item-icon">IN</div>
                 <div class="item-content">
                     <span class="item-title">${n.config.name}</span>
@@ -1710,16 +1714,16 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
                 </div>
                 <small class="item-badge" style="background:rgba(52,211,153,0.1); color:#34d399">Param</small>
             `;
-            item.onclick = () => {
-                inputEl.value = `{{${n.config.name}}}`;
-                updateNodeConfig(nodeId, configKey, inputEl.value);
-                renderBuilderNodes(); renderConnections();
-                menu.remove();
-            };
-            menu.appendChild(item);
-        }
-    });
-}
+                item.onclick = () => {
+                    inputEl.value = `{{${n.config.name}}}`;
+                    updateNodeConfig(nodeId, configKey, inputEl.value);
+                    renderBuilderNodes(); renderConnections();
+                    menu.remove();
+                };
+                menu.appendChild(item);
+            }
+        });
+    }
 
     // 3. Global Variables (DB Registry)
     if (state.variables && state.variables.length > 0 && filter !== 'comparator') {
@@ -1915,9 +1919,9 @@ function startConnection(e, fromId, portType, portIdx) {
                 const inPortIdx = conn.fromType === 'input' ? conn.fromPortIdx : targetPortIdx;
 
                 // Handle special universal ports (non-numeric indices)
-                const actualTargetIdx = targetPort.id.includes('trigger') ? 'trigger' : 
-                                     targetPort.id.includes('error') ? 'error' : targetPortIdx;
-                
+                const actualTargetIdx = targetPort.id.includes('trigger') ? 'trigger' :
+                    targetPort.id.includes('error') ? 'error' : targetPortIdx;
+
                 const actualSourceIdx = (conn.fromPortIdx === 'trigger' || conn.fromPortIdx === 'error') ? conn.fromPortIdx : outPortIdx;
 
                 const finalOutIdx = conn.fromType === 'output' ? actualSourceIdx : actualTargetIdx;
@@ -1938,7 +1942,7 @@ function startConnection(e, fromId, portType, portIdx) {
                     // For conditional nodes, tag the edge with its branch handle
                     const srcNode = state.builder.nodes.find(n => n.id === outNodeId);
                     let sourceHandle = undefined;
-                    
+
                     if (actualSourceIdx === 'error') sourceHandle = 'error';
                     else if (actualSourceIdx === 'trigger') sourceHandle = 'trigger';
                     // Any node in the 'logic' category has True (0) and False (1) outputs
@@ -1951,7 +1955,7 @@ function startConnection(e, fromId, portType, portIdx) {
                     if (targetedHandle) edge.targetHandle = targetedHandle;
 
                     // ⚡ SINGLE CONNECTION PER INPUT: Remove any existing edge that targets the same input port
-                    state.builder.edges = state.builder.edges.filter(e => 
+                    state.builder.edges = state.builder.edges.filter(e =>
                         !(e.to === inNodeId && e.toIdx === finalInIdx)
                     );
 
@@ -1959,7 +1963,7 @@ function startConnection(e, fromId, portType, portIdx) {
                     toast('Connection updated', 'success');
 
                     // 💡 AUTO-INJECTION logic (existing) ...
-                    
+
                     // ⚡ AUTO-PORT GROWTH: If wiring TO/FROM a Utility node's last port, expand it
                     const growNode = (id, key) => {
                         const target = state.builder.nodes.find(n => n.id === id);
@@ -1968,7 +1972,7 @@ function startConnection(e, fromId, portType, portIdx) {
                         if (target.type === 'utility' && (p.logicalInputs || p.logicalOutputs)) {
                             const curCount = Number(target.config[key] || (p.logicalInputs || p.logicalOutputs));
                             const portIdx = key === 'logicalInputs' ? finalInIdx : finalOutIdx;
-                            
+
                             // If we connected the last port (even if numeric index is handled as string), add one more
                             if (portIdx !== 'trigger' && portIdx !== 'error' && parseInt(portIdx) === curCount - 1) {
                                 target.config[key] = curCount + 1;
@@ -2008,20 +2012,20 @@ function getPortPos(nodeId, type, portIdx) {
     if (!portEl || !rect || rect.width === 0) {
         // Fallback to estimation for initial load
         const x = type === 'input' ? node.x : node.x + 200; // Estimated width
-        let y = node.y + 40; 
-        
+        let y = node.y + 40;
+
         if (portIdx === 'trigger' || portIdx === 'error') {
             const preset = NODE_PRESETS[node.preset] || {};
             const inputCount = (preset.inputs || []).length;
             const outputCount = (preset.outputs || []).length;
-            
+
             if (portIdx === 'trigger') {
                 return { x: node.x, y: node.y + 40 + (inputCount * 24) + 7 }; // +7 for 14px port center
             } else {
                 return { x: node.x + 200, y: node.y + 40 + (outputCount * 24) + 7 };
             }
         }
-        
+
         y += (parseInt(portIdx) || 0) * 24;
         return { x, y };
     }
@@ -2061,40 +2065,40 @@ function renderConnections() {
         path.setAttribute('class', pathClass);
         path.setAttribute('d', getBezierPath(fromPos.x, fromPos.y, toPos.x, toPos.y));
 
-            path.oncontextmenu = (e) => {
-                e.preventDefault();
-                const edge = state.builder.edges[index];
-                state.builder.edges.splice(index, 1);
+        path.oncontextmenu = (e) => {
+            e.preventDefault();
+            const edge = state.builder.edges[index];
+            state.builder.edges.splice(index, 1);
 
-                // ⚡ AUTO-PORT PRUNING: Shrink utility nodes if they have empty trailing ports
-                const pruneNode = (id, key, isInput) => {
-                    const target = state.builder.nodes.find(n => n.id === id);
-                    if (!target || target.type !== 'utility') return;
-                    const p = NODE_PRESETS[target.type][target.preset];
-                    const min = p.logicalInputs || p.logicalOutputs || 2;
-                    let curCount = Number(target.config[key] || min);
-                    
-                    // Check if the last port is now empty
-                    while (curCount > min) {
-                        const lastIdx = curCount - 1;
-                        const isLastBusy = state.builder.edges.some(eg => 
-                            isInput ? (eg.to === id && eg.toIdx === lastIdx) : (eg.from === id && eg.fromIdx === lastIdx)
-                        );
-                        if (!isLastBusy) {
-                            curCount--;
-                            target.config[key] = curCount;
-                        } else {
-                            break;
-                        }
+            // ⚡ AUTO-PORT PRUNING: Shrink utility nodes if they have empty trailing ports
+            const pruneNode = (id, key, isInput) => {
+                const target = state.builder.nodes.find(n => n.id === id);
+                if (!target || target.type !== 'utility') return;
+                const p = NODE_PRESETS[target.type][target.preset];
+                const min = p.logicalInputs || p.logicalOutputs || 2;
+                let curCount = Number(target.config[key] || min);
+
+                // Check if the last port is now empty
+                while (curCount > min) {
+                    const lastIdx = curCount - 1;
+                    const isLastBusy = state.builder.edges.some(eg =>
+                        isInput ? (eg.to === id && eg.toIdx === lastIdx) : (eg.from === id && eg.fromIdx === lastIdx)
+                    );
+                    if (!isLastBusy) {
+                        curCount--;
+                        target.config[key] = curCount;
+                    } else {
+                        break;
                     }
-                    renderBuilderNodes();
-                };
-
-                pruneNode(edge.from, 'logicalOutputs', false);
-                pruneNode(edge.to, 'logicalInputs', true);
-
-                renderConnections();
+                }
+                renderBuilderNodes();
             };
+
+            pruneNode(edge.from, 'logicalOutputs', false);
+            pruneNode(edge.to, 'logicalInputs', true);
+
+            renderConnections();
+        };
 
         if (state.builder.selected && state.builder.selected.type === 'edge' && state.builder.selected.id === index) {
             path.classList.add('selected');
@@ -2147,11 +2151,26 @@ function getBezierPath(x1, y1, x2, y2) {
 }
 
 // ── Persistence Logic ────────────────────────────────
+function syncBuilderBrowserConfig(source) {
+    const headless = source.id.includes('headless') ? source.value : null;
+    const cdp = source.id.includes('cdp') ? source.value.trim() : null;
+
+    if (headless !== null) state.builder.browser_config.headless = headless;
+    if (cdp !== null) state.builder.browser_config.cdp_url = cdp;
+}
+
 function openSaveFlowModal() {
     if (state.builder.nodes.length === 0) {
         toast('Cannot save an empty flow.', 'error');
         return;
     }
+
+    // Ensure modal is synced with current builder state/toolbar
+    const modalHeadless = document.getElementById('flow-browser-headless');
+    const modalCDP = document.getElementById('flow-browser-cdp');
+    if (modalHeadless) modalHeadless.value = state.builder.browser_config.headless;
+    if (modalCDP) modalCDP.value = state.builder.browser_config.cdp_url;
+
     document.getElementById('save-flow-modal').style.display = 'flex';
 }
 
@@ -2283,6 +2302,11 @@ function createNewFlow() {
     if (nameInput) nameInput.value = '';
     if (descInput) descInput.value = '';
 
+    // Clear Browser Overrides
+    state.builder.browser_config = { headless: '', cdp_url: '' };
+    if (document.getElementById('flow-browser-headless')) document.getElementById('flow-browser-headless').value = '';
+    if (document.getElementById('flow-browser-cdp')) document.getElementById('flow-browser-cdp').value = '';
+
     const canvas = document.getElementById('builder-canvas');
     const nodesContainer = document.getElementById('nodes-container');
     const svgLayer = document.getElementById('builder-svg-layer');
@@ -2338,6 +2362,14 @@ async function saveFlow() {
 
     const scraperId = document.getElementById('flow-scraper-id').value;
     if (scraperId) formData.append('scraper_id', scraperId);
+
+    // Browser Config Overrides
+    const bmode = document.getElementById('flow-browser-headless').value;
+    const bcdp = document.getElementById('flow-browser-cdp').value.trim();
+    const bConf = {};
+    if (bmode !== '') bConf.browser_headless = bmode === 'true';
+    if (bcdp !== '') bConf.browser_cdp_url = bcdp;
+    formData.append('browser_config', JSON.stringify(bConf));
 
     try {
         const savedScraper = await apiFetch('/api/scrapers/builder', { method: 'POST', body: formData });
@@ -2397,9 +2429,28 @@ async function editInBuilder(id) {
         state.builder.zoom = 1;
 
         // Setup save fields for updating
-        document.getElementById('flow-scraper-id').value = s.id;
-        document.getElementById('flow-name').value = s.name;
-        document.getElementById('flow-desc').value = s.description || '';
+        const scraperIdField = document.getElementById('flow-scraper-id');
+        const nameField = document.getElementById('flow-name');
+        const descField = document.getElementById('flow-desc');
+        if (scraperIdField) scraperIdField.value = s.id;
+        if (nameField) nameField.value = s.name;
+        if (descField) descField.value = s.description || '';
+
+        // Browser Config
+        const bConf = s.browser_config ? (typeof s.browser_config === 'string' ? JSON.parse(s.browser_config) : s.browser_config) : {};
+        const headlessStr = bConf.browser_headless !== undefined ? String(bConf.browser_headless) : '';
+        const cdpVal = bConf.browser_cdp_url || '';
+
+        state.builder.browser_config = {
+            headless: headlessStr,
+            cdp_url: cdpVal
+        };
+
+        // Populate Modal
+        const fHeadless = document.getElementById('flow-browser-headless');
+        const fCDP = document.getElementById('flow-browser-cdp');
+        if (fHeadless) fHeadless.value = headlessStr;
+        if (fCDP) fCDP.value = cdpVal;
 
         updateBuilderContextUI();
 
@@ -3230,7 +3281,7 @@ function toggleSchedExpand(event, id) {
     if (event.target.closest('.action-btn-group')) return;
     const el = document.getElementById(`sched-expand-${id}`);
     if (!el) return;
-    
+
     // Toggle using display style for table rows
     const isHidden = el.style.display === 'none';
     el.style.display = isHidden ? 'table-row' : 'none';
@@ -3663,20 +3714,20 @@ function renderPayload(payload, episodeCount = 0) {
                 let cellContent = '';
 
                 if (isHtml) {
-                        const encoded = b64EncodeUnicode(val);
-                        cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">🖼 Preview HTML</button>`;
-                    } else if (isDataImg) {
-                        cellContent = `
+                    const encoded = b64EncodeUnicode(val);
+                    cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">🖼 Preview HTML</button>`;
+                } else if (isDataImg) {
+                    cellContent = `
                         <div class="payload-img-wrapper" onclick="showImageModal('${val}')">
                             <img src="${val}" class="payload-img-preview" alt="Captured Image">
                             <div class="payload-img-overlay">🔍 View</div>
                         </div>`;
-                    } else {
-                        let v = val;
-                        if (v.length > 200) v = v.substring(0, 200) + '...';
-                        if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
-                        cellContent = v;
-                    }
+                } else {
+                    let v = val;
+                    if (v.length > 200) v = v.substring(0, 200) + '...';
+                    if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
+                    cellContent = v;
+                }
                 return `<td>${cellContent}</td>`;
             }).join('') + '</tr>';
         }).join('');
@@ -4403,7 +4454,7 @@ async function loadSettings() {
             apiFetch(API.settings),
             _allTimezones.length ? Promise.resolve(_allTimezones) : apiFetch(API.timezones),
         ]);
-        if (!_allTimezones.length) _allTimezones = timezones; // timezones is now array of objects {id, label}
+        if (!_allTimezones.length) _allTimezones = timezones;
 
         const current = settings.timezone || 'UTC';
         state.timezone = current;
@@ -4417,16 +4468,71 @@ async function loadSettings() {
         if (tzInp && document.activeElement !== tzInp) {
             tzInp.value = current;
         }
+
+        // Browser Defaults
+        const headless = settings.browser_headless !== undefined ? settings.browser_headless : 'true';
+        const cdp = settings.browser_cdp_url || '';
+        if (document.getElementById('setting-browser-headless')) {
+            document.getElementById('setting-browser-headless').value = String(headless);
+        }
+        if (document.getElementById('setting-browser-cdp')) {
+            document.getElementById('setting-browser-cdp').value = cdp;
+        }
+
     } catch (e) { toast(e.message, 'error'); }
 }
 
+async function saveAppSetting(key, value) {
+    try {
+        await apiFetch(`${API.settings}/${key}`, {
+            method: 'PUT',
+            body: JSON.stringify({ value: value })
+        });
+    } catch (e) {
+        throw new Error(`Failed to save ${key}: ${e.message}`);
+    }
+}
+
+async function saveAllAppSettings() {
+    const btn = document.getElementById('save-all-settings-btn');
+    const tz = document.getElementById('tz-input').value.trim();
+    const bHeadless = document.getElementById('setting-browser-headless').value;
+    const bCDP = document.getElementById('setting-browser-cdp').value.trim();
+
+    if (!tz) { toast('Please enter a timezone.', 'error'); return; }
+
+    btn.disabled = true;
+    btn.textContent = '⏳ Saving...';
+
+    try {
+        // Save all in parallel
+        await Promise.all([
+            apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: tz }) }),
+            saveAppSetting('browser_headless', bHeadless),
+            saveAppSetting('browser_cdp_url', bCDP)
+        ]);
+
+        // Post-timezone update logic
+        state.timezone = tz;
+        Object.keys(responseCache).forEach(k => { responseCache[k] = null; });
+        refreshAll();
+
+        toast('All settings saved successfully.', 'success');
+    } catch (e) {
+        toast(`Error saving settings: ${e.message}`, 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '💾 Save All Changes';
+    }
+}
+
 async function saveTimezone() {
+    // Keep for legacy/internal calls if any, but now wrapped in saveAllAppSettings for UI
     const val = document.getElementById('tz-input').value.trim();
     if (!val) { toast('Please enter a timezone.', 'error'); return; }
     try {
         await apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: val }) });
         state.timezone = val;
-        // Bust timestamp caches so all tabs re-render with new TZ
         Object.keys(responseCache).forEach(k => { responseCache[k] = null; });
         refreshAll();
         toast(`Timezone set to ${val}`, 'success');
@@ -4439,21 +4545,29 @@ async function saveTimezone() {
 function openEditModal(id) {
     const s = state.scrapers.find(x => x.id === id);
     if (!s) return;
+
+    // Reset Tabs
+    switchEditTab('general', document.querySelector('[data-edit-tab="general"]'));
+
     document.getElementById('edit-id').value = id;
     document.getElementById('edit-name').value = s.name;
     document.getElementById('edit-homepage').value = s.homepage_url || '';
     document.getElementById('edit-desc').value = s.description || '';
     document.getElementById('edit-thumb').value = s.thumbnail_url || '';
     document.getElementById('edit-thumb-filename').textContent = '';
+
+    // Browser Config
+    const bConf = s.browser_config ? (typeof s.browser_config === 'string' ? JSON.parse(s.browser_config) : s.browser_config) : {};
+    document.getElementById('edit-browser-headless').value = bConf.browser_headless !== undefined ? String(bConf.browser_headless) : '';
+    document.getElementById('edit-browser-cdp').value = bConf.browser_cdp_url || '';
+
     // Reset code zone
     document.getElementById('edit-code-text').textContent = 'Drag & Drop a new .py file here';
     document.getElementById('edit-code-zone').style.borderColor = '';
     document.getElementById('edit-code-zone').style.background = '';
     document.getElementById('edit-code-file').value = '';
 
-    // Container is always active now.
-    // Default version fields if we have a previous version, otherwise empty
-    let nextPatch = 1;
+    // Versioning
     let mj = '1', mn = '0', pt = '0';
     if (s.latest_version) {
         let parts = s.latest_version.split('.');
@@ -4470,7 +4584,19 @@ function openEditModal(id) {
     const ph = document.getElementById('edit-thumb-placeholder');
     if (s.thumbnail_url) { img.src = s.thumbnail_url; img.style.display = 'block'; ph.style.display = 'none'; }
     else { img.style.display = 'none'; img.src = ''; ph.style.display = 'flex'; ph.textContent = '🎌'; }
+
     document.getElementById('edit-modal').style.display = 'flex';
+}
+
+function switchEditTab(tabName, btn) {
+    // Buttons
+    document.querySelectorAll('[data-edit-tab]').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+
+    // Panes
+    document.querySelectorAll('#edit-modal .wizard-pane').forEach(p => p.classList.remove('active'));
+    const target = document.getElementById(`edit-tab-${tabName}`);
+    if (target) target.classList.add('active');
 }
 
 function closeEditModal(e) {
@@ -4534,6 +4660,14 @@ async function saveEdit() {
     const patch = document.getElementById('edit-ver-patch').value || '0';
     formData.append('version_label', `${major}.${minor}.${patch}`);
     formData.append('commit_message', document.getElementById('edit-commit').value.trim() || 'Updated script manually');
+
+    // Browser Config
+    const bmode = document.getElementById('edit-browser-headless').value;
+    const bcdp = document.getElementById('edit-browser-cdp').value.trim();
+    const bConf = {};
+    if (bmode !== '') bConf.browser_headless = bmode === 'true';
+    if (bcdp !== '') bConf.browser_cdp_url = bcdp;
+    formData.append('browser_config', JSON.stringify(bConf));
 
     try {
         await apiFetch(`${API.scrapers}/${id}`, {
@@ -5872,4 +6006,17 @@ window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && document.body.classList.contains('is-builder-fullscreen')) {
         toggleBuilderFullscreen(false);
     }
+});
+
+// ── Builder Configuration Sync Initialization ────────
+// Syncs the toolbar settings with the save modal settings bidirectionally
+document.addEventListener('DOMContentLoaded', () => {
+    const syncFields = ['flow-browser-headless', 'flow-browser-cdp'];
+    syncFields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', () => syncBuilderBrowserConfig(el));
+            el.addEventListener('change', () => syncBuilderBrowserConfig(el));
+        }
+    });
 });

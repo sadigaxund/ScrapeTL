@@ -83,12 +83,13 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE scrapers ADD COLUMN position INTEGER DEFAULT 0"))
             conn.commit()
             print("[DB] Added position to scrapers")
-        if "updated_at" not in cols:
-            conn.execute(text("ALTER TABLE scrapers ADD COLUMN updated_at DATETIME"))
-            # Default to created_at if it's new
             conn.execute(text("UPDATE scrapers SET updated_at = created_at WHERE updated_at IS NULL"))
             conn.commit()
             print("[DB] Added updated_at to scrapers")
+        if "browser_config" not in cols:
+            conn.execute(text("ALTER TABLE scrapers ADD COLUMN browser_config TEXT"))
+            conn.commit()
+            print("[DB] Added browser_config to scrapers")
 
         # Check global_variables
         res = conn.execute(text("PRAGMA table_info(global_variables)"))
@@ -141,5 +142,12 @@ def _seed_defaults():
             db.add(AppSetting(key="timezone", value=initial_tz))
             db.commit()
             print(f"[DB] Seeded default timezone = {initial_tz}")
+
+        # Seed Browser Defaults
+        if not db.get(AppSetting, "browser_headless"):
+            db.add(AppSetting(key="browser_headless", value="true"))
+        if not db.get(AppSetting, "browser_cdp_url"):
+            db.add(AppSetting(key="browser_cdp_url", value=""))
+        db.commit()
     finally:
         db.close()
