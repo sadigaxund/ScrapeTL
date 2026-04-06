@@ -1670,24 +1670,94 @@
   <script src="/static/app.js?v=55"></script>
   <!-- ── Save Flow Modal ─────────────────────────────── -->
   <div class="modal-overlay" id="save-flow-modal" style="display:none" onclick="closeSaveFlowModal(event)">
-    <div class="modal-box" style="max-width:500px">
+    <div class="modal-box" style="max-width:600px">
       <div class="modal-header">
         <h2 class="card-title">💾 Save Builder Flow</h2>
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeSaveFlowModal()">✕</button>
       </div>
       <input type="hidden" id="flow-scraper-id" />
-      <div class="modal-body" style="padding-top:0">
-        <div class="form-group" style="margin-bottom:16px;">
-          <label>Scraper Name *</label>
-          <input type="text" id="flow-name" placeholder="My New Scraper" required style="height:42px;" />
+      <div class="modal-body" style="padding:0 24px 24px 24px; max-height:80vh; overflow-y:auto;">
+        <div class="form-row" style="margin-bottom:16px;">
+          <div class="form-group flex-2">
+            <label>Scraper Name *</label>
+            <input type="text" id="flow-name" placeholder="My New Scraper" required style="height:42px;" />
+          </div>
         </div>
-        <div class="form-group" style="margin-bottom:20px;">
-          <label>Description</label>
-          <textarea id="flow-desc" class="markdown-editor" placeholder="What this scraper does..." style="height:80px; width:100%; resize:none; padding:10px;"></textarea>
+        <div class="form-row" style="margin-bottom:16px;">
+          <div class="form-group flex-2">
+            <label>Description</label>
+            <textarea id="flow-desc" class="markdown-editor" placeholder="What this scraper does..." style="height:80px; width:100%; resize:none; padding:10px;"></textarea>
+          </div>
+        </div>
+        <div class="form-row" style="margin-bottom:20px;">
+          <div class="form-group flex-2">
+            <label>Homepage URL <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+            <input type="text" id="flow-homepage" placeholder="youtube.com or https://example.com" style="height:42px;" />
+          </div>
+        </div>
+
+        <!-- Thumbnail Section -->
+        <div style="margin-bottom:24px; padding:16px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+          <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
+            <div class="form-group flex-2">
+              <label>Thumbnail Image <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+              <input type="text" id="flow-thumb-url" placeholder="Paste URL here..." oninput="previewFlowThumb(this.value)" style="margin-bottom:8px; height:42px;" />
+              <div style="display:flex; align-items:center; gap:8px;">
+                <label for="flow-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px; background:rgba(255,255,255,0.03);">
+                  📁 Upload Photo...
+                </label>
+                <input type="file" id="flow-thumb-file" accept="image/*" style="display:none" onchange="handleFlowThumbFile(this)" />
+                <span id="flow-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
+              </div>
+            </div>
+            <div id="flow-thumb-preview" class="thumb-preview" style="width:84px; height:84px; flex-shrink:0;">
+              <img id="flow-thumb-img" src="" alt="" style="display:none" />
+              <span id="flow-thumb-placeholder" class="thumb-placeholder" style="font-size:32px">🎌</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Versioning Toggle -->
+        <div class="toggle-row" style="margin-bottom:20px; padding:12px; background:rgba(var(--primary-rgb), 0.05); border:1px solid rgba(var(--primary-rgb), 0.1); border-radius:8px;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <strong style="font-size:13px; color:var(--text-primary);">Snapshot as new version</strong>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">Create a permanent version entry for this change.</p>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="flow-new-version" onchange="document.getElementById('flow-version-settings').style.display = this.checked ? 'block' : 'none'">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Versioning Section (Hidden by default) -->
+        <div id="flow-version-settings" style="display:none; margin-bottom:24px; padding-top:4px;">
+          <div class="form-group">
+            <label>Release Notes & Version</label>
+            <div style="display:flex; align-items:flex-end; gap:12px;">
+              <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
+                <span style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
+                <div class="semver-part">
+                  <button type="button" class="semver-up" onclick="bumpFlowVersion('major')" title="Bump Major">▲</button>
+                  <input type="text" id="flow-ver-major" value="1" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                </div>
+                <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
+                <div class="semver-part">
+                  <button type="button" class="semver-up" onclick="bumpFlowVersion('minor')" title="Bump Minor">▲</button>
+                  <input type="text" id="flow-ver-minor" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                </div>
+                <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
+                <div class="semver-part">
+                  <button type="button" class="semver-up" onclick="bumpFlowVersion('patch')" title="Bump Patch">▲</button>
+                  <input type="text" id="flow-ver-patch" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                </div>
+              </div>
+              <input type="text" id="flow-commit" placeholder="What changed? e.g. Fixed regex matching" style="flex:1; height:42px;" />
+            </div>
+          </div>
         </div>
 
         <!-- Browser Overrides Section -->
-        <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px; padding-top:16px; border-top:1px solid var(--border-light)">🌐 Browser Overrides</h3>
+        <h3 style="font-size:11px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.08em; margin-bottom:12px; padding-top:16px; border-top:1px solid var(--border-light)">🌐 Browser Defaults</h3>
         <div class="form-row" style="align-items: flex-start; gap:16px;">
           <div class="form-group" style="flex: 0 0 160px;">
             <label>Mode</label>
@@ -1703,9 +1773,9 @@
           </div>
         </div>
       </div>
-      <div style="display:flex; gap:12px; justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:20px; margin-top:12px;">
+      <div style="display:flex; gap:12px; justify-content:flex-end; border-top:1px solid var(--border-light); padding:20px 24px;">
         <button class="btn btn-ghost" onclick="closeSaveFlowModal()" style="height:42px; padding:0 24px;">Cancel</button>
-        <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn" style="height:42px; padding:0 24px;">💾 Confirm & Save</button>
+        <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn" style="height:42px; padding:0 24px; font-weight:600;">💾 Confirm & Save</button>
       </div>
     </div>
   </div>

@@ -2165,13 +2165,105 @@ function openSaveFlowModal() {
         return;
     }
 
-    // Ensure modal is synced with current builder state/toolbar
+    const nameField = document.getElementById('flow-name');
+    const descField = document.getElementById('flow-desc');
+    const homeField = document.getElementById('flow-homepage');
+    const thumbUrlField = document.getElementById('flow-thumb-url');
+    const snapToggle = document.getElementById('flow-new-version');
+    const scraperId = state.builder.currentScraperId;
+
+    if (scraperId) {
+        const s = state.scrapers.find(x => x.id === scraperId);
+        if (s) {
+            if (nameField) nameField.value = s.name || '';
+            if (descField) descField.value = s.description || '';
+            if (homeField) homeField.value = s.homepage_url || '';
+            
+            // Thumbnail logic
+            const isLocal = s.thumbnail_url && s.thumbnail_url.startsWith('/thumbnails/');
+            if (thumbUrlField) thumbUrlField.value = isLocal ? '' : (s.thumbnail_url || '');
+            previewFlowThumb(s.thumbnail_url || '');
+
+            // Version suggestion
+            const latestVer = s.latest_version || '1.0.0';
+            const parts = latestVer.replace(/^v/, '').split('.').map(Number);
+            if (parts.length === 3) {
+                document.getElementById('flow-ver-major').value = parts[0];
+                document.getElementById('flow-ver-minor').value = parts[1];
+                document.getElementById('flow-ver-patch').value = parts[2] + 1; // Suggest patch bump
+            }
+        }
+    } else {
+        // Reset for new scraper
+        if (nameField) nameField.value = state.builder.currentScraperName || '';
+        if (descField) descField.value = '';
+        if (homeField) homeField.value = '';
+        if (thumbUrlField) thumbUrlField.value = '';
+        previewFlowThumb('');
+        
+        document.getElementById('flow-ver-major').value = 1;
+        document.getElementById('flow-ver-minor').value = 0;
+        document.getElementById('flow-ver-patch').value = 0;
+    }
+
+    // Reset Snapshot toggle
+    if (snapToggle) {
+        snapToggle.checked = false;
+        document.getElementById('flow-version-settings').style.display = 'none';
+        document.getElementById('flow-commit').value = '';
+    }
+
+    // Ensure modal is synced with current builder state/toolbar for browser config
     const modalHeadless = document.getElementById('flow-browser-headless');
     const modalCDP = document.getElementById('flow-browser-cdp');
     if (modalHeadless) modalHeadless.value = state.builder.browser_config.headless;
     if (modalCDP) modalCDP.value = state.builder.browser_config.cdp_url;
 
     document.getElementById('save-flow-modal').style.display = 'flex';
+}
+
+function previewFlowThumb(url) {
+    const img = document.getElementById('flow-thumb-img');
+    const placeholder = document.getElementById('flow-thumb-placeholder');
+    if (!img || !placeholder) return;
+    if (url && url.trim().length > 0) {
+        img.src = url;
+        img.style.display = 'block';
+        placeholder.style.display = 'none';
+    } else {
+        img.style.display = 'none';
+        placeholder.style.display = 'flex';
+    }
+}
+
+function handleFlowThumbFile(input) {
+    const file = input.files[0];
+    const filenameEl = document.getElementById('flow-thumb-filename');
+    const urlEl = document.getElementById('flow-thumb-url');
+    if (file) {
+        if (filenameEl) filenameEl.textContent = file.name;
+        if (urlEl) urlEl.value = ''; // Direct file upload clears URL input
+        const reader = new FileReader();
+        reader.onload = e => previewFlowThumb(e.target.result);
+        reader.readAsDataURL(file);
+    }
+}
+
+function bumpFlowVersion(type) {
+    const maj = document.getElementById('flow-ver-major');
+    const min = document.getElementById('flow-ver-minor');
+    const pat = document.getElementById('flow-ver-patch');
+    let v_maj = parseInt(maj.value) || 0;
+    let v_min = parseInt(min.value) || 0;
+    let v_pat = parseInt(pat.value) || 0;
+
+    if (type === 'major') { v_maj++; v_min = 0; v_pat = 0; }
+    else if (type === 'minor') { v_min++; v_pat = 0; }
+    else if (type === 'patch') { v_pat++; }
+
+    maj.value = v_maj;
+    min.value = v_min;
+    pat.value = v_pat;
 }
 
 function closeSaveFlowModal(e) {
@@ -2358,10 +2450,25 @@ async function saveFlow() {
     const formData = new FormData();
     formData.append('name', name);
     formData.append('description', desc);
+    formData.append('homepage_url', document.getElementById('flow-homepage').value.trim());
+    formData.append('thumbnail_url', document.getElementById('flow-thumb-url').value.trim());
     formData.append('flow_data', flowData);
 
     const scraperId = document.getElementById('flow-scraper-id').value;
     if (scraperId) formData.append('scraper_id', scraperId);
+
+    // Versioning
+    const isSnap = document.getElementById('flow-new-version').checked;
+    formData.append('new_version', isSnap);
+    if (isSnap) {
+        const v = `${document.getElementById('flow-ver-major').value}.${document.getElementById('flow-ver-minor').value}.${document.getElementById('flow-ver-patch').value}`;
+        formData.append('version_label', v);
+        formData.append('commit_message', document.getElementById('flow-commit').value.trim() || 'Manual builder snapshot');
+    }
+
+    // Image Upload
+    const thumbFile = document.getElementById('flow-thumb-file').files[0];
+    if (thumbFile) formData.append('thumbnail_file', thumbFile);
 
     // Browser Config Overrides
     const bmode = document.getElementById('flow-browser-headless').value;
@@ -2379,7 +2486,7 @@ async function saveFlow() {
         state.builder.currentScraperName = savedScraper.name;
         document.getElementById('flow-scraper-id').value = savedScraper.id;
 
-        toast(scraperId ? 'Flow updated successfully!' : 'Flow saved successfully!', 'success');
+        toast(scraperId ? (isSnap ? 'Snapshot created successfully!' : 'Flow updated successfully!') : 'Flow saved successfully!', 'success');
         updateBuilderContextUI();
         closeSaveFlowModal();
         loadScrapers(); // Refresh scrapers list
@@ -4718,9 +4825,12 @@ async function openVersionsModal(scraperId) {
     list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Loading\u2026</div>';
     document.getElementById('versions-modal').style.display = 'flex';
     try {
-        const versions = await apiFetch(API.versions(scraperId));
+        let versions = await apiFetch(API.versions(scraperId));
+        // Filter out Builder Sync versions
+        versions = versions.filter(v => v.version_label !== 'Builder Sync');
+
         if (!versions.length) {
-            list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No versions recorded yet.</div>';
+            list.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No manual versions recorded yet.</div>';
             return;
         }
         list.innerHTML = versions.map(v => `

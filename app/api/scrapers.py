@@ -60,6 +60,10 @@ def _scraper_dict(s: Scraper):
     except Exception:
         pass
 
+    # Filter out Builder Sync versions for UI consistency
+    manual_versions = [v for v in s.versions if v.version_label != "Builder Sync"]
+    latest_v = manual_versions[0] if manual_versions else None
+
     return {
         "id": s.id,
         "name": s.name,
@@ -72,8 +76,8 @@ def _scraper_dict(s: Scraper):
         "updated_at": s.updated_at.isoformat() + "Z" if s.updated_at else None,
         "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in s.tags],
         "integrations": [{"id": i.id, "name": i.name, "type": i.type} for i in s.integrations],
-        "version_count": len(s.versions) if s.versions else 0,
-        "latest_version": s.versions[0].version_label if s.versions else None,
+        "version_count": len(manual_versions),
+        "latest_version": latest_v.version_label if latest_v else None,
         "inputs": scraper_inputs,
         "scraper_type": s.scraper_type,
         "flow_data": json.loads(s.flow_data) if s.flow_data else None,
@@ -229,9 +233,15 @@ async def register_scraper_wizard(
 async def save_builder_flow(
     name: str = Form(...),
     description: str = Form(""),
+    homepage_url: Optional[str] = Form(None),
+    thumbnail_url: Optional[str] = Form(None),
     flow_data: str = Form(...),  # JSON string
     browser_config: Optional[str] = Form(None), # JSON string
     scraper_id: Optional[int] = Form(None),
+    new_version: bool = Form(False),
+    version_label: Optional[str] = Form(None),
+    commit_message: Optional[str] = Form(None),
+    thumbnail_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -265,6 +275,7 @@ async def save_builder_flow(
     if scraper:
         scraper.name = name.strip()
         scraper.description = description.strip()
+        scraper.homepage_url = _normalize_url(homepage_url) if homepage_url else scraper.homepage_url
         scraper.flow_data = flow_data
         scraper.browser_config = browser_config
         scraper.scraper_type = "builder"
@@ -276,6 +287,7 @@ async def save_builder_flow(
         scraper = Scraper(
             name=name.strip(),
             description=description.strip(),
+            homepage_url=_normalize_url(homepage_url),
             flow_data=flow_data,
             browser_config=browser_config,
             scraper_type="builder",
@@ -286,16 +298,54 @@ async def save_builder_flow(
     db.commit()
     db.refresh(scraper)
 
+    # Handle thumbnail
+    if thumbnail_file and thumbnail_file.filename:
+        ext = thumbnail_file.filename.split(".")[-1].lower()
+        if ext not in ["jpg", "jpeg", "png", "webp", "gif"]:
+            ext = "jpg"
+        thumb_name = f"scraper_{scraper.id}_{uuid.uuid4().hex[:6]}.{ext}"
+        t_contents = await thumbnail_file.read()
+        scraper.local_thumbnail_path = thumb_name
+        scraper.thumbnail_data = t_contents
+        scraper.thumbnail_url = None
+    elif thumbnail_url:
+        if not thumbnail_url.startswith("/thumbnails/"):
+            new_thumb_url = _normalize_url(thumbnail_url)
+            if new_thumb_url != scraper.thumbnail_url:
+                scraper.thumbnail_url = new_thumb_url
+                if new_thumb_url:
+                    local_fname, local_bytes = _download_thumbnail(new_thumb_url, scraper.id)
+                    scraper.local_thumbnail_path = local_fname
+                    scraper.thumbnail_data = local_bytes
+                else:
+                    scraper.local_thumbnail_path = None
+                    scraper.thumbnail_data = None
+
+    db.commit()
+
     # Generate the Python code for the flow and snapshot it as a version
     generated_code = Generator.generate_code(flow_data, scraper.name, scraper.description)
-    _snapshot_version(
-        db, 
-        scraper, 
-        version_label="Builder Sync", 
-        commit_message=f"Sync flow to code: {name}", 
-        code=generated_code
-    )
+    
+    latest_v = scraper.versions[0] if scraper.versions else None
+    
+    if new_version or not latest_v or latest_v.version_label == "Builder Sync":
+        # If explicit snapshot, or first time saving, or the latest is just an auto-sync version, we can snapshot/update
+        if new_version:
+            _snapshot_version(db, scraper, version_label, commit_message, generated_code)
+        else:
+            if latest_v and latest_v.version_label == "Builder Sync":
+                # Update existing "Builder Sync" version
+                latest_v.code = generated_code
+                db.commit()
+            else:
+                # Create initial "Builder Sync"
+                _snapshot_version(db, scraper, "Builder Sync", f"Sync flow to code: {name}", generated_code)
+    else:
+        # Latest version is a user-defined snapshot (e.g. v1.0.0), so we MUST create a new "Builder Sync" 
+        # instance to reflect current builder code without overwriting history.
+        _snapshot_version(db, scraper, "Builder Sync", f"Sync flow to code: {name}", generated_code)
 
+    db.refresh(scraper)
     return _scraper_dict(scraper)
 
 
