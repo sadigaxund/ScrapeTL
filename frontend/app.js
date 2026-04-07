@@ -406,18 +406,18 @@ const NODE_PRESETS = {
             inputs: [],
             outputs: ['Val Out'],
             configs: [
-                { key: 'name', type: 'text', label: 'Arg Name', placeholder: 'my_param' },
-                { key: 'label', type: 'text', label: 'Form Label', placeholder: 'Human-readable label' },
+                { key: 'label', type: 'text', label: 'Form Label', placeholder: 'Starting Chapter', rerender: true },
+                { key: 'name', type: 'hidden' },
                 { key: 'dataType', type: 'select', label: 'Type', options: ['string', 'number', 'boolean', 'select'], rerender: true },
                 { key: 'default', type: 'text', label: 'Default Value' },
-                { key: 'description', type: 'text', label: 'Description', placeholder: 'Help text for users...' },
-                { 
-                    key: 'options', 
-                    type: 'string_array', 
-                    label: 'Select Options', 
+                { key: 'description', type: 'text', label: 'Description' },
+                {
+                    key: 'options',
+                    type: 'string_array',
+                    label: 'Select Options',
                     placeholder: 'Option value',
                     btnLabel: '+ Add Option',
-                    visible: (n) => n.config.dataType === 'select' 
+                    visible: (n) => n.config.dataType === 'select'
                 }
             ]
         },
@@ -1386,7 +1386,30 @@ function renderBuilderNodes() {
                             input.className = 'node-input';
                             input.value = node.config[cfg.key] || '';
                             input.placeholder = cfg.placeholder || '';
-                            input.oninput = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                            input.oninput = (e) => {
+                                const val = e.target.value;
+                                updateNodeConfig(node.id, cfg.key, val);
+
+                                // ONE-TIME AUTO-SLUGIFY for External Parameter: label -> name
+                                if (node.preset === 'external' && cfg.key === 'label' && !node.config.name) {
+                                    let newSlug = val.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+
+                                    if (newSlug) {
+                                        // COLLISION CHECK: Ensure this slug is unique among other external params
+                                        let finalSlug = newSlug;
+                                        let counter = 1;
+                                        const otherNames = state.builder.nodes
+                                            .filter(n => n.id !== node.id && n.preset === 'external')
+                                            .map(n => n.config.name);
+
+                                        while (otherNames.includes(finalSlug)) {
+                                            finalSlug = `${newSlug}_${counter++}`;
+                                        }
+
+                                        updateNodeConfig(node.id, 'name', finalSlug);
+                                    }
+                                }
+                            };
                             group.appendChild(input);
                         }
                     } else if (cfg.type === 'select') {
@@ -1746,7 +1769,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
                 item.innerHTML = `
                 <div class="item-icon ${type.cls}">${type.text}</div>
                 <div class="item-content">
-                    <span class="item-title">${n.config.name}</span>
+                    <span class="item-title">${n.config.label || n.config.name}</span>
                     <span class="item-subtitle">${n.config.dataType || 'string'}</span>
                 </div>
                 <small class="item-badge" style="background:rgba(52,211,153,0.1); color:#34d399">Param</small>
@@ -2203,6 +2226,12 @@ function openSaveFlowModal() {
         return;
     }
 
+    // Force finish rename if in progress
+    const renameInp = document.querySelector('#builder-name-container input');
+    if (renameInp) {
+        finishRenameBuilderScraper(renameInp, state.builder.currentScraperName);
+    }
+
     const nameField = document.getElementById('flow-name');
     const descField = document.getElementById('flow-desc');
     const homeField = document.getElementById('flow-homepage');
@@ -2213,10 +2242,10 @@ function openSaveFlowModal() {
     if (scraperId) {
         const s = state.scrapers.find(x => x.id === scraperId);
         if (s) {
-            if (nameField) nameField.value = s.name || '';
+            if (nameField) nameField.value = state.builder.currentScraperName || s.name || '';
             if (descField) descField.value = s.description || '';
             if (homeField) homeField.value = s.homepage_url || '';
-            
+
             // Thumbnail logic
             const isLocal = s.thumbnail_url && s.thumbnail_url.startsWith('/thumbnails/');
             if (thumbUrlField) thumbUrlField.value = isLocal ? '' : (s.thumbnail_url || '');
@@ -2238,7 +2267,7 @@ function openSaveFlowModal() {
         if (homeField) homeField.value = '';
         if (thumbUrlField) thumbUrlField.value = '';
         previewFlowThumb('');
-        
+
         document.getElementById('flow-ver-major').value = 1;
         document.getElementById('flow-ver-minor').value = 0;
         document.getElementById('flow-ver-patch').value = 0;
@@ -2524,15 +2553,22 @@ async function saveFlow() {
         state.builder.currentScraperName = savedScraper.name;
         document.getElementById('flow-scraper-id').value = savedScraper.id;
 
+        const idx = state.scrapers.findIndex(s => s.id === savedScraper.id);
+        if (idx !== -1) {
+            state.scrapers[idx] = savedScraper;
+        } else {
+            state.scrapers.push(savedScraper);
+        }
+
         toast(scraperId ? (isSnap ? 'Snapshot created successfully!' : 'Flow updated successfully!') : 'Flow saved successfully!', 'success');
         updateBuilderContextUI();
         closeSaveFlowModal();
-        loadScrapers(); // Refresh scrapers list
+        loadScrapers(); // Refresh scrapers list in background
     } catch (e) {
         toast(e.message, 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = '💾 Confirm & Save';
+        btn.textContent = 'Confirm & Save';
     }
 }
 
@@ -2959,15 +2995,22 @@ function handleWizThumbFile(input) {
 
 async function runScraper(id, btn) {
     const scraper = state.scrapers.find(s => s.id === id);
+    if (!scraper) {
+        toast('Scraper not found in local cache.', 'error');
+        return;
+    }
+
     const inputs = (scraper && scraper.inputs) ? scraper.inputs : [];
+    console.log(`[ScraperRun] ID: ${id}, Name: ${scraper.name}, Inputs Found: ${inputs.length}`, inputs);
 
     if (inputs.length > 0) {
         // Show inputs modal; it will call _doRunScraper on submit
-        openRunInputsModal(id, inputs, btn);
+        openRunInputsModal(id, inputs, btn, `Run: ${scraper.name}`);
     } else {
         await _doRunScraper(id, {}, btn);
     }
 }
+
 
 async function _doRunScraper(id, inputValues, btn, force = false) {
     if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
@@ -3860,7 +3903,7 @@ function renderPayload(payload, episodeCount = 0) {
                 const rawVal = (obj[k] !== null && obj[k] !== undefined) ? obj[k] : '—';
                 const isObj = typeof rawVal === 'object' && rawVal !== null;
                 const strVal = isObj ? JSON.stringify(rawVal) : String(rawVal);
-                
+
                 const isHtml = typeof rawVal === 'string' && strVal.length > 10 && (strVal.trim().startsWith('<') || strVal.includes('</'));
                 const isDataImg = typeof rawVal === 'string' && strVal.startsWith('data:image/');
                 let cellContent = '';
@@ -4721,7 +4764,7 @@ async function saveAllAppSettings() {
         toast(`Error saving settings: ${e.message}`, 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = '💾 Save All Changes';
+        btn.textContent = 'Save All Changes';
     }
 }
 
@@ -4877,7 +4920,7 @@ async function saveEdit() {
         document.getElementById('edit-modal').style.display = 'none';
         loadScrapers();
     } catch (e) { toast(e.message, 'error'); }
-    finally { btn.disabled = false; btn.textContent = '💾 Save Changes'; }
+    finally { btn.disabled = false; btn.textContent = 'Save Changes'; }
 }
 
 function bumpVersion(type) {
@@ -4989,14 +5032,14 @@ setInterval(refreshAll, 5000);
 /* ════════════════════════════════════════════════
    RUN INPUTS MODAL
 ════════════════════════════════════════════════ */
-let _runInputsCallback = null;  // {type:'run', id, btn} or {type:'schedule', fn}
+let _runInputsCallback = null;
 
-function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
-    _runInputsCallback = scheduleCb
-        ? { type: 'schedule', fn: scheduleCb }
-        : { type: 'run', id: scraperId, btn };
+function openRunInputsModal(id, inputs, btn, title = '▶ Run Scraper', scheduleCb = null) {
+    _runInputsCallback = (vals) => {
+        if (scheduleCb) scheduleCb(vals);
+        else _doRunScraper(id, vals, btn);
+    };
 
-    const title = scheduleCb ? 'Set Schedule Inputs' : 'Run with Inputs';
     document.getElementById('run-inputs-title').textContent = title;
 
     const submitBtn = document.getElementById('run-inputs-submit-btn');
@@ -5006,18 +5049,21 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
 
     const form = document.getElementById('run-inputs-form');
     form.innerHTML = inputs.map(inp => {
-        const id = `ri-${inp.name}`;
-        const def = inp.default !== undefined ? inp.default : '';
+        const rid = `ri-${inp.name}`;
+        const def = inp.default !== undefined && inp.default !== null ? inp.default : '';
         const desc = inp.description ? `<p class="input-desc">${inp.description}</p>` : '';
         let field = '';
-        if (inp.type === 'select' && inp.options) {
+
+        const itype = (inp.type || 'string').toLowerCase();
+
+        if (itype === 'select' && inp.options) {
             const opts = inp.options.map(o =>
                 `<option value="${o}" ${String(o) === String(def) ? 'selected' : ''}>${o}</option>`
             ).join('');
-            field = `<select id="${id}" class="inp">${opts}</select>`;
-        } else if (inp.type === 'boolean') {
+            field = `<select id="${rid}" class="inp">${opts}</select>`;
+        } else if (inp.type === 'boolean' || inp.dataType === 'boolean') {
             field = `<label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-                <input type="checkbox" id="${id}" ${def ? 'checked' : ''} style="width:16px;height:16px">
+                <input type="checkbox" id="${rid}" ${def ? 'checked' : ''} style="width:16px;height:16px" />
                 <span style="font-size:14px">${inp.label || inp.name}</span>
             </label>`;
         } else if (inp.type === 'generator') {
@@ -5041,32 +5087,33 @@ function openRunInputsModal(scraperId, inputs, btn, scheduleCb = null) {
                 </optgroup>` : '';
 
             field = `
-            <select id="${id}" class="inp">
+            <select id="${rid}" class="inp">
                 <option value="">-- Select Source --</option>
                 ${builtinOpts}
                 ${streamOpts}
                 ${staticOpts}
             </select>`;
-        } else if (inp.type === 'list') {
+        } else if (inp.type === 'list' || inp.dataType === 'list') {
             const varOpts = state.variables.filter(v => v.value_type === 'json').map(v =>
                 `<option value="{{${v.key}}}" ${`{{${v.key}}}` === String(def) ? 'selected' : ''}>[Var] ${v.key}</option>`
             ).join('');
-            const listId = `dl-${id}`;
+            const listId = `dl-${rid}`;
             field = `
-            <input type="text" id="${id}" data-ptype="list" class="inp" list="${listId}" value="${def}" placeholder='e.g. ["url1"] or {{var}}'>
+            <input type="text" id="${rid}" data-ptype="list" class="inp" list="${listId}" value="${def}" placeholder='e.g. ["url1"] or {{var}}'>
             <datalist id="${listId}">${varOpts}</datalist>
             `;
         } else {
-            const t = inp.type === 'number' ? 'number' : 'text';
-            field = `<input type="${t}" id="${id}" class="inp" value="${def}" placeholder="${inp.label || inp.name}">`;
+            const t = (inp.type === 'number' || inp.dataType === 'number' || inp.dataType === 'float' || inp.dataType === 'int') ? 'number' : 'text';
+            field = `<input type="${t}" id="${rid}" class="inp" value="${def}" placeholder="${inp.label || inp.name}">`;
         }
-        const lbl = inp.type !== 'boolean'
-            ? `<label class="form-label" for="${id}">${inp.label || inp.name}</label>` : '';
+        const lbl = (inp.type !== 'boolean' && inp.dataType !== 'boolean')
+            ? `<label class="form-label" for="${rid}">${inp.label || inp.name}</label>` : '';
         return `<div class="form-group--modal">${lbl}${field}${desc}</div>`;
     }).join('');
 
     document.getElementById('run-inputs-modal').style.display = 'flex';
 }
+
 
 function closeRunInputsModal(e) {
     if (e && e.target !== document.getElementById('run-inputs-modal')) return;
@@ -5098,13 +5145,12 @@ async function submitRunInputs() {
 
     document.getElementById('run-inputs-modal').style.display = 'none';
 
-    if (cb.type === 'run') {
-        await _doRunScraper(cb.id, inputValues, cb.btn);
-    } else if (cb.type === 'schedule') {
-        await cb.fn(inputValues);
+    if (typeof cb === 'function') {
+        await cb(inputValues);
     }
     _runInputsCallback = null;
 }
+
 
 /**
  * ── Builder: Run Trigger ──────────────────────────

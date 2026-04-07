@@ -48,10 +48,13 @@ def _download_thumbnail(url: str, scraper_id: int) -> tuple[Optional[str], Optio
 
 
 def _scraper_dict(s: Scraper):
-    # Attempt to extract the `inputs` schema from the stored code
+    # Attempt to extract the `inputs` schema
     scraper_inputs = []
     try:
-        if s.versions:
+        if s.scraper_type == "builder" and s.flow_data:
+            from app.builder.generator import Generator
+            scraper_inputs = Generator.extract_inputs(s.flow_data)
+        elif s.versions:
             from app.scrapers import load_scraper_class_from_code
             cls = load_scraper_class_from_code(s.versions[0].code)
             raw = getattr(cls, 'inputs', [])

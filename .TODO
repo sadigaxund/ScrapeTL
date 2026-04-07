@@ -1,32 +1,37 @@
 NOTE: If you are AI, do not read this file, it is only for human reference.
 
-7. schema registry
+5. replace frontend with more maintainble framework
 6. AI html scraping that detects schema
+
 ---
 "an sqlite integration where I can provide all the connection parameters, as well as, the schema and table and whatever is needed to save the data. Also I want you implement the "
 
 20. investigate why is there 2 retries when i manually ran the scraper, it should be applied only to the integration, where if and only if after the message is scraped, it retries the message sending process not the scraping process, which has to be idempotent unless stated otherwise.[NOT SURE]
 14. rework the integration part to be similar to scraper/schedules creation part, but where at the top  [NOT SURE]
 26. Rename Schedules to Routines[NOT SURE]
+36. reverse the sort of scrapers list, so that new scraper starts on top [NOTSURE]
+37. add validation [NOTSURE] since you can just add comparator functions
 
 
+11. Implement USERS, PROJECTS, PERMISSIONS, SANDBOX/TEST/DEV MODE
 33. scraper connected dashboard
-12. somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain
 35. add an external api access to run or overall control the scraper like (1) start (2) stop (3) create/delete/pause schedule (4) list all schedules/scrapers/integrations (5) get status of each scraper/schedule/integration (6) and etc...
 
-36. add schema to the context registry
-
-28. add return types to the functions
+7. schema registry -- 36. add schema to the context registry -- 28. add return types to the functions
 
 2. more integrations: SQL: sqlite, postgres, microsoft sql server, mysql
 13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
 19. When a scraper contains some new library thats not in the app's environment, scraper does not run, maybe a way of dynamically installing libraries.
-29. better error output from nodes, so that I can pass to the debug output node
-31. rework nodes so that onsuccess return data, on failure return error
 
-37. add validation
 31. ability to Select which fields to send to integrations.
-27. a button to save a version within builder, like a snapshot. I think after reverting to certain version then snapshotting, it should just create a new version and append to the end of versions list. Not sure how to select the version number
 
-33. make icon of the integrations the same size and shorter description so that single row
-34. fix schedules table
+
+34. implement a markdown wiki per scraper as means of documentation.
+33. implement import and export of a flow. which means it should also contain coordinates and parameters.
+35. collapse and expand all button for logs menu
+36. when i press run button within builder menu, and even though i have an external parameter node defined, why does not it prompt me for the values. even the same from scrapers menu.
+
+
+12. [TEST]somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain 
+32. [TEST] create same named variables in context registry, function input, function name, namespace itself, and scraper externam input to see if the names collide
+36. [TEST] the changes that were made to split JSON type from BATCH type broke the way output is getting combined. Initially i intended to trigger the downstream flow coming out of BSoup node per html element if multiple were passed due to mode='all', however, this time at the end the system output node collects them all and treats them as a JSON object thus outputting this as a columnar fashion, instead of spreading and combining outputs into csv like output as we have implemented before this change.

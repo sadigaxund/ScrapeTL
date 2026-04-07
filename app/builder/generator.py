@@ -7,22 +7,36 @@ class Generator:
     """
 
     @staticmethod
-    def generate_code(flow_data: str, name: str, description: str) -> str:
-        # 1. Extract inputs for the class attribute
-        data = json.loads(flow_data)
+    def extract_inputs(flow_data: str) -> list:
+        # Extract inputs for the class attribute
+        data = json.loads(flow_data) if isinstance(flow_data, str) else flow_data
         nodes = data.get("nodes", [])
-        
+
         inputs_schema = []
         for node in nodes:
-            if node["type"] == "input_external":
-                d = node.get("data", {})
+            # Match frontend schema: type="input", preset="external"
+            if node.get("type") == "input" and node.get("preset") == "external":
+                c = node.get("config", {})
+                name_attr = c.get("name")
+                label = c.get("label") or name_attr or "parameter"
+                if not name_attr:
+                    name_attr = label.lower().replace(" ", "_")
+
                 inputs_schema.append({
-                    "name": d.get("name"),
-                    "label": d.get("label") or d.get("name"),
-                    "type": d.get("type", "text"),
-                    "default": d.get("default"),
-                    "required": d.get("required", False)
+                    "name": name_attr,
+                    "label": label,
+                    "type": c.get("dataType", "string"),
+                    "default": c.get("default"),
+                    "required": c.get("required", False),
+                    "description": c.get("description", ""),
+                    "options": c.get("options", [])
                 })
+        return inputs_schema
+
+    @staticmethod
+    def generate_code(flow_data: str, name: str, description: str) -> str:
+        data = json.loads(flow_data)
+        inputs_schema = Generator.extract_inputs(data)
 
         # 2. Build the Python script string
         code = f'''\
@@ -37,29 +51,30 @@ from app.builder.engine import BuilderEngine
 class GeneratedScraper(BaseScraper):
     name = "{name}"
     description = "{description or 'ScrapeTL Builder Flow'}"
-    
+
     # Declarative inputs for the UI
-    inputs = json.loads({repr(json.dumps(inputs_schema))})
+    inputs = {repr(inputs_schema)}
 
     def scrape(self, vars=None, db=None, **kwargs) -> List[Dict[str, Any]]:
         """
         Executes the builder DAG flow.
         """
-        flow_data = json.loads({repr(json.dumps(data))})
-        
+        flow_data = {repr(data)}
+
         # Initialize the engine
         engine = BuilderEngine(
             flow_data=flow_data,
             global_vars=vars or {{}},
             db_session=db
         )
-        
+
         # Run execution
         results = engine.execute(runtime_inputs=kwargs)
-        
+
         # Persist debug info for the runner to collect
         self.debug_payload = getattr(engine, "_debug_info", [])
-        
+
         return results
 '''
         return code
+

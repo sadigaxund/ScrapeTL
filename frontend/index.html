@@ -16,10 +16,12 @@
       visibility: hidden;
       transition: opacity 0.2s ease-in-out, visibility 0.2s;
     }
+
     #variables-list-body tr:hover .action-btn-group {
       opacity: 1;
       visibility: visible;
     }
+
     /* Keep editing rows always visible */
     #variables-list-body tr.editing-row .action-btn-group,
     #variables-list-body tr.group-header .action-btn-group {
@@ -457,8 +459,8 @@
                 <th style="width:80px">Photo</th>
                 <th onclick="sortQueue('scraper_name')" style="cursor:pointer; user-select:none;">Scraper <span
                     class="sort-icon" id="sort-icon-scraper_name"></span></th>
-                <th onclick="sortQueue('scheduled_for')" style="cursor:pointer; user-select:none; width:150px">Scheduled For <span
-                    class="sort-icon" id="sort-icon-scheduled_for">▼</span></th>
+                <th onclick="sortQueue('scheduled_for')" style="cursor:pointer; user-select:none; width:150px">Scheduled
+                  For <span class="sort-icon" id="sort-icon-scheduled_for">▼</span></th>
                 <th onclick="sortQueue('note')" style="cursor:pointer; user-select:none;">Label / Note <span
                     class="sort-icon" id="sort-icon-note"></span></th>
                 <th onclick="sortQueue('status')" style="cursor:pointer; user-select:none; width:120px">Status <span
@@ -497,9 +499,14 @@
           </div>
 
           <div class="connector-card" onclick="openConnectorModal('http_request')" style="user-select:none;">
-            <span class="connector-icon"
-              style="background:linear-gradient(135deg,#0ea5e9,#6366f1); color:white;">
-              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-globe"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span class="connector-icon" style="background:linear-gradient(135deg,#0ea5e9,#6366f1); color:white;">
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="lucide lucide-globe">
+                <circle cx="12" cy="12" r="10" />
+                <line x1="2" y1="12" x2="22" y2="12" />
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+              </svg>
             </span>
             <div class="connector-info">
               <h3>HTTP Request</h3>
@@ -530,7 +537,7 @@
               accessible by all scrapers.</p>
           </div>
           <div style="display:flex; gap:10px">
-            <button class="btn btn-primary" onclick="promptAddNamespace()" 
+            <button class="btn btn-primary" onclick="promptAddNamespace()"
               style="box-shadow: 0 4px 14px var(--accent-glow)">🏷️ Create Namespace</button>
           </div>
         </div>
@@ -573,9 +580,9 @@
         <!-- ── Environment View ────────────────────────────── -->
         <div id="ctx-env-view" style="display:none; padding:16px 0;">
           <div class="table-wrapper">
-             <div id="environment-list-container">
-                <!-- Rendered as a single table -->
-             </div>
+            <div id="environment-list-container">
+              <!-- Rendered as a single table -->
+            </div>
           </div>
         </div>
 
@@ -651,7 +658,7 @@
     <!-- ── Builder Tab ────────────────────────────── -->
     <section class="tab-panel" id="tab-builder"
       style="padding:0; height:calc(100vh - 110px); overflow:hidden; position:relative;">
-      
+
       <!-- Unified Builder Top Bar (Pinned to workspace box) -->
       <div class="builder-top-bar">
         <!-- Status & Type -->
@@ -660,15 +667,16 @@
         </div>
         <span id="builder-context-type"
           style="font-size:10px; font-weight:800; text-transform:uppercase; color:var(--primary); letter-spacing:0.08em; line-height:1; margin-right:4px;">NEW</span>
-        
+
         <div class="bar-divider"></div>
-        
+
         <!-- Scraper Name -->
         <div id="builder-name-container" onclick="startRenameBuilderScraper()"
           style="display:flex; align-items:center; gap:6px; cursor:pointer; pointer-events:auto; padding:0 8px;"
           title="Click to rename scraper">
           <span id="builder-current-name"
-            style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New Scraper Flow</span>
+            style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New
+            Scraper Flow</span>
         </div>
 
         <div class="bar-divider"></div>
@@ -677,11 +685,12 @@
         <button class="btn btn-ghost builder-tool-btn" onclick="createNewFlow()" title="New Flow (Clear Canvas)"
           style="padding:0 12px; height:28px; color:var(--text-primary) !important; font-weight:700; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);">New</button>
         <button class="btn btn-primary builder-tool-btn" onclick="openSaveFlowModal()"
-          style="padding:0 12px; height:28px; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 10px rgba(16,185,129,0.2); font-weight:700;">
+          style="padding:0 12px; height:28px; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 10px rgba(16,185,129,0.2); font-weight:700; margin-left:4px;">
           Save
         </button>
-        <button class="btn btn-primary builder-tool-btn" id="builder-run-btn" onclick="runScraperFromBuilder()" title="Run Scraper"
-          style="padding:0 12px; height:28px; background:linear-gradient(135deg, #7c6af7, #6366f1) !important; border:none; box-shadow:0 0 10px rgba(124,106,247,0.2); font-weight:700; margin-left:4px; min-width:85px; justify-content:center;">
+        <button class="btn btn-primary builder-tool-btn" id="builder-run-btn" onclick="runScraperFromBuilder()"
+          title="Run Scraper"
+          style="padding:0 12px; height:28px; background:linear-gradient(135deg, #7c6af7, #6366f1) !important; border:none; box-shadow:0 0 10px rgba(124,106,247,0.2); font-weight:700; margin-left:4px;">
           Run
         </button>
 
@@ -706,7 +715,8 @@
           </button>
           <div class="bt-menu">
             <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_url')">Fetch HTML</button>
-            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">Playwright Fetch</button>
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">Playwright
+              Fetch</button>
           </div>
         </div>
 
@@ -716,7 +726,8 @@
             Action <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'bs4_select')">BeautifulSoup Selector</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'bs4_select')">BeautifulSoup
+              Selector</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'html_children')">HTML Children</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'regex_extract')">Regex Extraction</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'text_transform')">Text Transform</button>
@@ -737,7 +748,7 @@
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'custom_logic')">Custom Logic</button>
           </div>
         </div>
- 
+
         <div class="bt-dropdown" id="dropdown-utility">
           <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderToolDropdown(event, 'utility')"
             id="tool-utility">
@@ -764,7 +775,7 @@
 
         <div class="bar-divider"></div>
 
-        <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderFullscreen()" id="toggle-fs-btn" 
+        <button class="btn btn-ghost builder-tool-btn" onclick="toggleBuilderFullscreen()" id="toggle-fs-btn"
           title="Focus Mode (Maximize Workspace)" style="padding:0 10px; height:28px;">
           <span style="font-size:15px; opacity:0.8;">⛶</span>
         </button>
@@ -795,10 +806,9 @@
         style="position:fixed; bottom:30px; right:30px; z-index:1000; display:flex; align-items:center; gap:8px; padding:6px 12px; background:rgba(23,23,23,0.85); border:1px solid rgba(255,255,255,0.15); border-radius:8px; backdrop-filter:blur(10px); box-shadow:0 4px 20px rgba(0,0,0,0.5); pointer-events:none; transition: all 0.3s ease;">
         <span id="zoom-value"
           style="font-size:12px; font-weight:700; color:var(--text-secondary); min-width:35px; text-align:right;">100%</span>
-        
+
         <div class="zoom-slider-container" style="width: 140px; margin: 0 8px; overflow: visible;">
-          <input type="range" id="zoom-slider" min="0" max="100" step="1" value="50" 
-            style="width: 140px;"
+          <input type="range" id="zoom-slider" min="0" max="100" step="1" value="50" style="width: 140px;"
             oninput="setZoom(sliderToZoom(this.value))" />
         </div>
 
@@ -813,10 +823,12 @@
         <div class="card-header">
           <h2 class="card-title">General Settings</h2>
         </div>
-        
+
         <!-- Row 1: Timezone -->
         <div style="padding-bottom:20px; border-bottom:1px solid var(--border-light); margin-bottom:20px;">
-          <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">🌍 Language & Time</h3>
+          <h3
+            style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">
+            🌍 Language & Time</h3>
           <div class="form-row" style="align-items: flex-start;">
             <div class="form-group" style="flex: 1;">
               <label>IANA Timezone</label>
@@ -829,11 +841,14 @@
 
         <!-- Row 2: Browser Defaults -->
         <div style="padding-bottom:20px; border-bottom:1px solid var(--border-light); margin-bottom:20px;">
-          <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">🌐 Browser Defaults (Playwright)</h3>
+          <h3
+            style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">
+            🌐 Browser Defaults (Playwright)</h3>
           <div class="form-row" style="align-items: flex-start;">
             <div class="form-group" style="flex: 0 0 240px;">
               <label>Default Mode</label>
-              <select id="setting-browser-headless" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
+              <select id="setting-browser-headless"
+                style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
                 <option value="true">Headless (Background)</option>
                 <option value="false">Headed (Visible)</option>
               </select>
@@ -841,27 +856,35 @@
             </div>
             <div class="form-group flex-2">
               <label>Remote Playwright Server (CDP URL)</label>
-              <input type="text" id="setting-browser-cdp" placeholder="ws://localhost:3000 or http://..." style="height:42px;" />
-              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Leave blank to use local Chromium executable.</p>
+              <input type="text" id="setting-browser-cdp" placeholder="ws://localhost:3000 or http://..."
+                style="height:42px;" />
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Leave blank to use local Chromium
+                executable.</p>
             </div>
           </div>
         </div>
 
         <div style="padding-bottom:20px; border-bottom:1px solid var(--border-light); margin-bottom:20px;">
-          <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">📊 Memory & History</h3>
+          <h3
+            style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">
+            📊 Memory & History</h3>
           <div class="form-row" style="align-items: flex-start;">
             <div class="form-group" style="flex: 1;">
-              <label>Log Preview Row Limit <span style="font-weight:400;color:var(--text-muted);text-transform:none">(0 for unlimited)</span></label>
+              <label>Log Preview Row Limit <span style="font-weight:400;color:var(--text-muted);text-transform:none">(0
+                  for unlimited)</span></label>
               <input type="number" id="setting-log-preview-limit" style="height:42px" placeholder="10" min="0" />
-              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Number of rows saved and displayed in log details.</p>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Number of rows saved and displayed in log
+                details.</p>
             </div>
             <div style="flex: 1;"></div>
           </div>
         </div>
 
         <!-- Sticky Footer for Save All -->
-        <div style="position: sticky; bottom: -20px; margin: 20px -20px -20px -20px; padding: 16px 24px; background: var(--bg-surface); border-top: 1px solid var(--border-strong); display: flex; justify-content: flex-end; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; z-index: 10; box-shadow: 0 -10px 25px rgba(0,0,0,0.2);">
-          <button class="btn btn-primary" onclick="saveAllAppSettings()" id="save-all-settings-btn" style="height: 42px; padding: 0 42px; font-weight: 700; box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.3); justify-content: center;">
+        <div
+          style="position: sticky; bottom: -20px; margin: 20px -20px -20px -20px; padding: 16px 24px; background: var(--bg-surface); border-top: 1px solid var(--border-strong); display: flex; justify-content: flex-end; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; z-index: 10; box-shadow: 0 -10px 25px rgba(0,0,0,0.2);">
+          <button class="btn btn-primary" onclick="saveAllAppSettings()" id="save-all-settings-btn"
+            style="height: 42px; padding: 0 42px; font-weight: 700; box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.3); justify-content: center;">
             Save
           </button>
         </div>
@@ -882,8 +905,10 @@
       <input type="hidden" id="edit-id" />
 
       <div class="wizard-tab-switcher" style="margin: -10px -24px 20px -24px; padding: 0 24px;">
-        <button class="wizard-tab-btn active" data-edit-tab="general" onclick="switchEditTab('general', this)">📋 General</button>
-        <button class="wizard-tab-btn" data-edit-tab="config" onclick="switchEditTab('config', this)">⚙️ Configuration</button>
+        <button class="wizard-tab-btn active" data-edit-tab="general" onclick="switchEditTab('general', this)">📋
+          General</button>
+        <button class="wizard-tab-btn" data-edit-tab="config" onclick="switchEditTab('config', this)">⚙️
+          Configuration</button>
       </div>
 
       <!-- Tab 1: General -->
@@ -910,7 +935,8 @@
           </div>
         </div>
 
-        <div style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+        <div
+          style="margin-bottom:20px; padding:12px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
           <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
             <div class="form-group flex-2">
               <label>Thumbnail Image <span
@@ -918,10 +944,12 @@
               <input type="text" id="edit-thumb" placeholder="Paste URL here..." oninput="previewEditThumb(this.value)"
                 style="margin-bottom:8px;" />
               <div style="display:flex; align-items:center; gap:8px;">
-                <label for="edit-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px;">
+                <label for="edit-thumb-file" class="btn btn-ghost"
+                  style="cursor:pointer; font-size:12px; padding:4px 10px;">
                   📁 Upload Photo...
                 </label>
-                <input type="file" id="edit-thumb-file" accept="image/*" style="display:none" onchange="handleEditThumbFile(this)" />
+                <input type="file" id="edit-thumb-file" accept="image/*" style="display:none"
+                  onchange="handleEditThumbFile(this)" />
                 <span id="edit-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
               </div>
             </div>
@@ -933,33 +961,42 @@
         </div>
 
         <div class="form-group" style="margin-bottom:24px">
-          <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional — drag &amp; drop or click to upload a new .py)</span></label>
-          <div class="upload-zone wizard-upload-zone" id="edit-code-zone" onclick="document.getElementById('edit-code-file').click()">
+          <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional —
+              drag &amp; drop or click to upload a new .py)</span></label>
+          <div class="upload-zone wizard-upload-zone" id="edit-code-zone"
+            onclick="document.getElementById('edit-code-file').click()">
             <div style="font-size:24px; margin-bottom:8px;">📄</div>
-            <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop a new .py file here</div>
+            <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop
+              a new .py file here</div>
             <div style="font-size:12px; margin-top:4px;">or click to browse — leave empty to keep existing code</div>
-            <input type="file" id="edit-code-file" accept=".py" style="display:none" onchange="handleEditCodeFile(this)" />
+            <input type="file" id="edit-code-file" accept=".py" style="display:none"
+              onchange="handleEditCodeFile(this)" />
           </div>
         </div>
 
         <div class="form-group" style="margin-bottom:24px">
           <label>Release Notes & Version</label>
           <div id="edit-version-container" style="display:flex; align-items:flex-end; gap:12px;">
-            <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
-              <span style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
+            <div
+              style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
+              <span
+                style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
               <div class="semver-part">
                 <button type="button" class="semver-up" onclick="bumpVersion('major')" title="Bump Major">▲</button>
-                <input type="text" id="edit-ver-major" value="1" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                <input type="text" id="edit-ver-major" value="1" class="semver-input" readonly
+                  style="width:36px; padding:4px; text-align:center;" />
               </div>
               <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
               <div class="semver-part">
                 <button type="button" class="semver-up" onclick="bumpVersion('minor')" title="Bump Minor">▲</button>
-                <input type="text" id="edit-ver-minor" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                <input type="text" id="edit-ver-minor" value="0" class="semver-input" readonly
+                  style="width:36px; padding:4px; text-align:center;" />
               </div>
               <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
               <div class="semver-part">
                 <button type="button" class="semver-up" onclick="bumpVersion('patch')" title="Bump Patch">▲</button>
-                <input type="text" id="edit-ver-patch" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                <input type="text" id="edit-ver-patch" value="0" class="semver-input" readonly
+                  style="width:36px; padding:4px; text-align:center;" />
               </div>
             </div>
             <input type="text" id="edit-commit" placeholder="What changed? e.g. Fixed regex matching" style="flex:1" />
@@ -969,12 +1006,15 @@
 
       <!-- Tab 2: Configuration -->
       <div id="edit-tab-config" class="wizard-pane">
-        <h3 style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:16px;">🌐 Browser Override Settings</h3>
-        
+        <h3
+          style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:16px;">
+          🌐 Browser Override Settings</h3>
+
         <div class="form-row" style="margin-bottom:20px; align-items: flex-start;">
           <div class="form-group" style="flex: 0 0 180px;">
             <label>Browser Mode</label>
-            <select id="edit-browser-headless" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
+            <select id="edit-browser-headless"
+              style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
               <option value="">Inherit Global</option>
               <option value="true">Headless (Background)</option>
               <option value="false">Headed (Visible)</option>
@@ -983,25 +1023,29 @@
           </div>
           <div class="form-group flex-2">
             <label>Custom CDP URL</label>
-            <input type="text" id="edit-browser-cdp" placeholder="ws://localhost:3000 (Overwrites global)" style="height:42px;" />
-            <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Leave blank to use global settings or local Chromium.</p>
+            <input type="text" id="edit-browser-cdp" placeholder="ws://localhost:3000 (Overwrites global)"
+              style="height:42px;" />
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Leave blank to use global settings or local
+              Chromium.</p>
           </div>
         </div>
 
-        <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border-strong); border-radius:12px; padding:16px;">
-           <div style="display:flex; align-items:center; gap:12px;">
-              <span style="font-size:24px;">ℹ️</span>
-              <p style="font-size:13px; line-height:1.5; color:var(--text-secondary); margin:0">
-                These settings specifically affect nodes using <strong>Playwright</strong>. <br/>
-                If set to <em>Inherit</em>, the global defaults defined in the app settings will be used.
-              </p>
-           </div>
+        <div
+          style="background:rgba(255,255,255,0.02); border:1px solid var(--border-strong); border-radius:12px; padding:16px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:24px;">ℹ️</span>
+            <p style="font-size:13px; line-height:1.5; color:var(--text-secondary); margin:0">
+              These settings specifically affect nodes using <strong>Playwright</strong>. <br />
+              If set to <em>Inherit</em>, the global defaults defined in the app settings will be used.
+            </p>
+          </div>
         </div>
       </div>
 
-      <div style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px; margin-top:20px;">
+      <div
+        style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px; margin-top:20px;">
         <button class="btn btn-ghost" onclick="closeEditModal()">Cancel</button>
-        <button class="btn btn-primary" id="edit-submit-btn" onclick="saveEdit()">💾 Save Changes</button>
+        <button class="btn btn-primary" id="edit-submit-btn" onclick="saveEdit()">Save Changes</button>
       </div>
     </div>
   </div>
@@ -1596,7 +1640,7 @@
       <div
         style="display:flex;gap:10px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:16px">
         <button class="btn btn-ghost" onclick="closeEditScheduleModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveEditSchedule()">💾 Save Changes</button>
+        <button class="btn btn-primary" onclick="saveEditSchedule()">Save Changes</button>
       </div>
     </div>
   </div>
@@ -1650,11 +1694,11 @@
         <div
           style="display:flex; justify-content:flex-end; gap:12px; padding-top:16px; border-top:1px solid var(--border-light);">
           <button class="btn btn-ghost" onclick="closeEditFuncModal()">Cancel</button>
-          <button class="btn btn-primary" onclick="saveEditFunc()" style="padding:10px 24px; font-weight:600;">💾 Save
+          <button class="btn btn-primary" onclick="saveEditFunc()" style="padding:10px 24px; font-weight:600;">Save
             Changes</button>
         </div>
       </div>
-        </div>
+    </div>
   </div>
 
   <div class="side-drawer" id="debug-inspector-drawer" style="width: 600px; right: -600px;">
@@ -1672,7 +1716,7 @@
   <div class="modal-overlay" id="save-flow-modal" style="display:none" onclick="closeSaveFlowModal(event)">
     <div class="modal-box" style="max-width:600px">
       <div class="modal-header">
-        <h2 class="card-title">💾 Save Builder Flow</h2>
+        <h2 class="card-title">Save Builder Flow</h2>
         <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeSaveFlowModal()">✕</button>
       </div>
       <input type="hidden" id="flow-scraper-id" />
@@ -1686,27 +1730,35 @@
         <div class="form-row" style="margin-bottom:16px;">
           <div class="form-group flex-2">
             <label>Description</label>
-            <textarea id="flow-desc" class="markdown-editor" placeholder="What this scraper does..." style="height:80px; width:100%; resize:none; padding:10px;"></textarea>
+            <textarea id="flow-desc" class="markdown-editor" placeholder="What this scraper does..."
+              style="height:80px; width:100%; resize:none; padding:10px;"></textarea>
           </div>
         </div>
         <div class="form-row" style="margin-bottom:20px;">
           <div class="form-group flex-2">
-            <label>Homepage URL <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-            <input type="text" id="flow-homepage" placeholder="youtube.com or https://example.com" style="height:42px;" />
+            <label>Homepage URL <span
+                style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+            <input type="text" id="flow-homepage" placeholder="youtube.com or https://example.com"
+              style="height:42px;" />
           </div>
         </div>
 
         <!-- Thumbnail Section -->
-        <div style="margin-bottom:24px; padding:16px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
+        <div
+          style="margin-bottom:24px; padding:16px; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm)">
           <div style="display:flex; justify-content:space-between; align-items:flex-end; gap:16px;">
             <div class="form-group flex-2">
-              <label>Thumbnail Image <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
-              <input type="text" id="flow-thumb-url" placeholder="Paste URL here..." oninput="previewFlowThumb(this.value)" style="margin-bottom:8px; height:42px;" />
+              <label>Thumbnail Image <span
+                  style="font-weight:400;color:var(--text-muted);text-transform:none">(optional)</span></label>
+              <input type="text" id="flow-thumb-url" placeholder="Paste URL here..."
+                oninput="previewFlowThumb(this.value)" style="margin-bottom:8px; height:42px;" />
               <div style="display:flex; align-items:center; gap:8px;">
-                <label for="flow-thumb-file" class="btn btn-ghost" style="cursor:pointer; font-size:12px; padding:4px 10px; background:rgba(255,255,255,0.03);">
+                <label for="flow-thumb-file" class="btn btn-ghost"
+                  style="cursor:pointer; font-size:12px; padding:4px 10px; background:rgba(255,255,255,0.03);">
                   📁 Upload Photo...
                 </label>
-                <input type="file" id="flow-thumb-file" accept="image/*" style="display:none" onchange="handleFlowThumbFile(this)" />
+                <input type="file" id="flow-thumb-file" accept="image/*" style="display:none"
+                  onchange="handleFlowThumbFile(this)" />
                 <span id="flow-thumb-filename" style="font-size:12px; color:var(--text-muted)"></span>
               </div>
             </div>
@@ -1718,13 +1770,16 @@
         </div>
 
         <!-- Versioning Toggle -->
-        <div class="toggle-row" style="margin-bottom:20px; padding:12px; background:rgba(var(--primary-rgb), 0.05); border:1px solid rgba(var(--primary-rgb), 0.1); border-radius:8px;">
+        <div class="toggle-row"
+          style="margin-bottom:20px; padding:12px; background:rgba(var(--primary-rgb), 0.05); border:1px solid rgba(var(--primary-rgb), 0.1); border-radius:8px;">
           <div style="display:flex; flex-direction:column; gap:2px;">
             <strong style="font-size:13px; color:var(--text-primary);">Snapshot as new version</strong>
-            <p style="font-size:11px; color:var(--text-muted); margin:0;">Create a permanent version entry for this change.</p>
+            <p style="font-size:11px; color:var(--text-muted); margin:0;">Create a permanent version entry for this
+              change.</p>
           </div>
           <label class="switch">
-            <input type="checkbox" id="flow-new-version" onchange="document.getElementById('flow-version-settings').style.display = this.checked ? 'block' : 'none'">
+            <input type="checkbox" id="flow-new-version"
+              onchange="document.getElementById('flow-version-settings').style.display = this.checked ? 'block' : 'none'">
             <span class="slider"></span>
           </label>
         </div>
@@ -1734,34 +1789,46 @@
           <div class="form-group">
             <label>Release Notes & Version</label>
             <div style="display:flex; align-items:flex-end; gap:12px;">
-              <div style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
-                <span style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
+              <div
+                style="display:flex; align-items:center; background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 12px; width:max-content;">
+                <span
+                  style="color:var(--text-secondary); font-weight:600; font-size:14px; margin-right:4px; margin-top:14px;">v</span>
                 <div class="semver-part">
-                  <button type="button" class="semver-up" onclick="bumpFlowVersion('major')" title="Bump Major">▲</button>
-                  <input type="text" id="flow-ver-major" value="1" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                  <button type="button" class="semver-up" onclick="bumpFlowVersion('major')"
+                    title="Bump Major">▲</button>
+                  <input type="text" id="flow-ver-major" value="1" class="semver-input" readonly
+                    style="width:36px; padding:4px; text-align:center;" />
                 </div>
                 <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
                 <div class="semver-part">
-                  <button type="button" class="semver-up" onclick="bumpFlowVersion('minor')" title="Bump Minor">▲</button>
-                  <input type="text" id="flow-ver-minor" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                  <button type="button" class="semver-up" onclick="bumpFlowVersion('minor')"
+                    title="Bump Minor">▲</button>
+                  <input type="text" id="flow-ver-minor" value="0" class="semver-input" readonly
+                    style="width:36px; padding:4px; text-align:center;" />
                 </div>
                 <span style="color:var(--border-strong); font-weight:bold; margin:14px 4px 0 4px;">.</span>
                 <div class="semver-part">
-                  <button type="button" class="semver-up" onclick="bumpFlowVersion('patch')" title="Bump Patch">▲</button>
-                  <input type="text" id="flow-ver-patch" value="0" class="semver-input" readonly style="width:36px; padding:4px; text-align:center;" />
+                  <button type="button" class="semver-up" onclick="bumpFlowVersion('patch')"
+                    title="Bump Patch">▲</button>
+                  <input type="text" id="flow-ver-patch" value="0" class="semver-input" readonly
+                    style="width:36px; padding:4px; text-align:center;" />
                 </div>
               </div>
-              <input type="text" id="flow-commit" placeholder="What changed? e.g. Fixed regex matching" style="flex:1; height:42px;" />
+              <input type="text" id="flow-commit" placeholder="What changed? e.g. Fixed regex matching"
+                style="flex:1; height:42px;" />
             </div>
           </div>
         </div>
 
         <!-- Browser Overrides Section -->
-        <h3 style="font-size:11px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.08em; margin-bottom:12px; padding-top:16px; border-top:1px solid var(--border-light)">🌐 Browser Defaults</h3>
+        <h3
+          style="font-size:11px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.08em; margin-bottom:12px; padding-top:16px; border-top:1px solid var(--border-light)">
+          🌐 Browser Defaults</h3>
         <div class="form-row" style="align-items: flex-start; gap:16px;">
           <div class="form-group" style="flex: 0 0 160px;">
             <label>Mode</label>
-            <select id="flow-browser-headless" style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
+            <select id="flow-browser-headless"
+              style="background:var(--bg-input); border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px; width:100%; height:42px; color:var(--text-primary);">
               <option value="">Inherit Global</option>
               <option value="true">Headless</option>
               <option value="false">Headed</option>
@@ -1773,9 +1840,12 @@
           </div>
         </div>
       </div>
-      <div style="display:flex; gap:12px; justify-content:flex-end; border-top:1px solid var(--border-light); padding:20px 24px;">
-        <button class="btn btn-ghost" onclick="closeSaveFlowModal()" style="height:42px; padding:0 24px;">Cancel</button>
-        <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn" style="height:42px; padding:0 24px; font-weight:600;">💾 Confirm & Save</button>
+      <div
+        style="display:flex; gap:12px; justify-content:flex-end; border-top:1px solid var(--border-light); padding:20px 24px;">
+        <button class="btn btn-ghost" onclick="closeSaveFlowModal()"
+          style="height:42px; padding:0 24px;">Cancel</button>
+        <button class="btn btn-primary" onclick="saveFlow()" id="save-flow-btn"
+          style="height:42px; padding:0 24px; font-weight:600;">Confirm & Save</button>
       </div>
     </div>
   </div>
