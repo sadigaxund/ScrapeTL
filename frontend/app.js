@@ -588,7 +588,7 @@ const NODE_PRESETS = {
             outputs: ['OUT'],
             logicalInputs: 2,
             configs: [
-                { key: 'mode', type: 'select', label: '', options: ['list', 'flatten', 'merge_object'], default: 'list' }
+                { key: 'mode', type: 'select', label: '', options: ['list', 'zip', 'flatten', 'merge_object'], default: 'list' }
             ]
         }
     }
@@ -1141,7 +1141,7 @@ function renderBuilderNodes() {
             el.appendChild(title);
 
             // 2. Universal Node Label - Processors only (Type 'action')
-            if (node.type === 'action') {
+            if (node.type === 'action' && node.preset !== 'type_convert') {
                 const nameGroup = document.createElement('div');
                 nameGroup.className = 'node-label-container';
                 const nameInput = document.createElement('input');

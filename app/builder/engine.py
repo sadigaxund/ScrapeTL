@@ -36,6 +36,11 @@ class BuilderEngine:
             if src not in self.adj: self.adj[src] = []
             self.adj[src].append(tgt)
             self.in_degree[tgt] += 1
+        
+        # 🧪 STATE RESET: We keep a copy of the original in-degree map 
+        # so we can reset it before every execute() call.
+        self._orig_in_degree = self.in_degree.copy()
+        self.initial_nodes = [nid for nid, deg in self.in_degree.items() if deg == 0]
 
     def _get_full_type(self, node: Dict[str, Any]) -> str:
         """Resolves the combined type_preset string for a node."""
@@ -106,12 +111,16 @@ class BuilderEngine:
 
     def execute(self, runtime_inputs: Dict[str, Any], stop_event: Optional[threading.Event] = None) -> List[Dict[str, Any]]:
         """Main entry point for execution."""
-        queue = [nid for nid, deg in self.in_degree.items() if deg == 0]
+        # 🛤️ RESET ENGINE STATE FOR EACH RUN
+        self.in_degree = self._orig_in_degree.copy()
+        self.active_edges = set() 
+        self.results_cache = {}
+        self.execution_statuses = {}
 
+        queue = self.initial_nodes.copy()
         combined_results = []
         debug_artifacts = []
         processed_nodes = set()
-        self.execution_statuses = {} # Track success/failed/skipped for each node
 
         while queue:
             if stop_event and stop_event.is_set():
@@ -193,34 +202,36 @@ class BuilderEngine:
                 
                 should_trigger_neighbor = False
                 for edge in matching_edges:
-                    # Resolve handle from source perspective
-                    handle = edge.get("sourceHandle")
-                    if not handle and "fromIdx" in edge:
-                        handle = self._map_port_to_handle(current_id, edge["fromIdx"])
-                    
-                    if not handle: handle = "data"
+                    # Resolve handles consistently
+                    src_handle = edge.get("sourceHandle")
+                    if not src_handle and "fromIdx" in edge:
+                        src_handle = self._map_port_to_handle(current_id, edge["fromIdx"])
+                    if not src_handle: src_handle = "data"
+
+                    handle = src_handle # Local alias for the logic below
                     
                     if status == "success":
-                        # Success: follow standard (non-error) paths
+                        # 🛤️ VALUE-BASED LOGICAL ROUTING:
+                        # Logical branches ('True', 'False', 'Data') are ALWAYS followed on success.
+                        # Downstream nodes use their 'Trigger' guard to abort if they receive a 'False' value.
                         if handle != "error": should_trigger_neighbor = True
                     elif status == "failed":
                         # Failure: ONLY follow 'error' path
                         if handle == "error": should_trigger_neighbor = True
-                    elif status == "skipped":
-                        # Skipped nodes usually don't trigger anything unless we want to propagate failure?
-                        # User: "if it receives error/null, it should not execute". 
-                        # We stay silent on the success path, but maybe allow error path to propagate skip?
-                        # For now, let's keep it simple: skip means total silence for this node's children.
-                        pass
                 
-                if should_trigger_neighbor:
+                    # 🛠️ ALWAYS decrement in_degree to prevent "stuck DAG" deadlocks.
+                    # But only mark it as "active" if it was actually triggered.
+                    if should_trigger_neighbor:
+                        edge_key = (str(current_id), str(neighbor), str(src_handle))
+                        self.active_edges.add(edge_key)
+                    
                     self.in_degree[neighbor] -= 1
                     if self.in_degree[neighbor] == 0:
                         queue.append(neighbor)
-                else:
-                    print(f"[BuilderEngine] ⎇ Skipping path {current_id} -> {neighbor} (status={status})")
-
-            processed_nodes.add(current_id)
+                
+                # Cleanup: logging
+                # if not any(edge_key for edge_key in self.active_edges if edge_key[0] == current_id):
+                #     print(f"[BuilderEngine] ⎇ Skipping all paths from {current_id}")
 
             processed_nodes.add(current_id)
 
@@ -648,6 +659,19 @@ class BuilderEngine:
                 for item in input_list:
                     if isinstance(item, dict): result.update(item)
                 return result
+            elif mode == "zip":
+                # Aligns array elements row-by-row, repeating scalars.
+                max_len = max((len(v) if isinstance(v, list) else 1) for v in input_list) if input_list else 0
+                zipped = []
+                for i in range(max_len):
+                    row = []
+                    for v in input_list:
+                        if isinstance(v, list):
+                            row.append(v[i] if i < len(v) else None)
+                        else:
+                            row.append(v)  # Repeat scalar
+                    zipped.append(row)
+                return Batch(zipped)
             
             return input_list # Default: list
 
@@ -748,36 +772,51 @@ class BuilderEngine:
                     except: return False
 
             elif mode == "binary":
-                # Numeric or string comparison between input A and compare_value
-                raw_a = str(a).strip() if a is not None else ""
-                raw_b = str(compare_val).strip()
-                # Try numeric
-                try:
-                    av = float(raw_a.replace(",", ""))
-                    bv = float(raw_b.replace(",", ""))
-                    numeric = True
-                except ValueError:
-                    av, bv = raw_a, raw_b
-                    numeric = False
-
-                if operation == "eq":
-                    return av == bv
-                elif operation == "neq":
-                    return av != bv
-                elif operation == "gt":
-                    return av > bv
-                elif operation == "gte":
-                    return av >= bv
-                elif operation == "lt":
-                    return av < bv
-                elif operation == "lte":
-                    return av <= bv
-                elif operation == "between":
-                    # compare_value format: "10,20"
+                # Binary comparison between Input A and Input B (or static compare_value)
+                b = input_vals[1] if len(input_vals) > 1 else compare_val
+                
+                def _compare_single(va, vb):
+                    raw_a = str(va).strip() if va is not None else ""
+                    raw_b = str(vb).strip() if vb is not None else ""
+                    
+                    # Try numeric comparison
                     try:
-                        parts = [float(x.strip()) for x in raw_b.split(",")]
-                        return parts[0] <= float(raw_a.replace(",", "")) <= parts[1]
-                    except: return False
+                        # Strip commas for standard numeric parsing
+                        av = float(raw_a.replace(",", ""))
+                        bv = float(raw_b.replace(",", ""))
+                        numeric = True
+                    except (ValueError, TypeError):
+                        av, bv = raw_a, raw_b
+                        numeric = False
+
+                    if operation == "eq": return av == bv
+                    elif operation == "neq": return av != bv
+                    elif operation == "gt": return av > bv
+                    elif operation == "gte": return av >= bv
+                    elif operation == "lt": return av < bv
+                    elif operation == "lte": return av <= bv
+                    elif operation == "between":
+                        try:
+                            parts = [float(x.strip()) for x in raw_b.split(",")]
+                            return parts[0] <= float(raw_a.replace(",", "")) <= parts[1]
+                        except: return False
+                    return False
+
+                # Vectorized Evaluation:
+                if isinstance(a, list) and not isinstance(b, list):
+                    return Batch([_compare_single(va, b) for va in a])
+                elif isinstance(b, list) and not isinstance(a, list):
+                    return Batch([_compare_single(a, vb) for vb in b])
+                elif isinstance(a, list) and isinstance(b, list):
+                    max_len = max(len(a), len(b))
+                    res = []
+                    for i in range(max_len):
+                        va = a[i] if i < len(a) else None
+                        vb = b[i] if i < len(b) else None
+                        res.append(_compare_single(va, vb))
+                    return Batch(res)
+                
+                return _compare_single(a, b)
 
             elif mode == "custom":
                 func_expr = data.get("custom_func", "").strip()
@@ -859,13 +898,34 @@ class BuilderEngine:
                 src_id = str(edge.get("source") or edge.get("from"))
                 src_output = self.results_cache.get(src_id)
 
+                # Resolve standard source handle (from node perspective)
+                src_handle = edge.get("sourceHandle")
+                if not src_handle and "fromIdx" in edge:
+                    src_handle = self._map_port_to_handle(src_id, edge["fromIdx"])
+                if not src_handle: src_handle = "data"
+
+                # 🛤️ BRANCHING FILTER: If this edge was not "activated" by the source node,
+                # we do NOT provide its output to the target node.
+                edge_key = (src_id, str(node_id), str(src_handle))
+                if edge_key not in self.active_edges:
+                    continue
+
+                # ☯️ VALUE-BASED LOGICAL ROUTING: 
+                # If a condition returned a boolean (or Batch of booleans), the "False" port explicitly carries the inverted boolean.
+                if str(src_handle).lower() == "false":
+                    if isinstance(src_output, bool):
+                        src_output = not src_output
+                    elif isinstance(src_output, list) and all(isinstance(x, bool) for x in src_output):
+                        src_output = Batch([not x for x in src_output])
+
+                # Target handle (to node perspective)
                 handle = edge.get("targetHandle")
                 if not handle and "toIdx" in edge:
                     handle = self._map_port_to_handle(node_id, edge["toIdx"])
 
                 if not handle:
                     handle = "data"
-                
+
                 # Multi-edge support: Collect results into a list if multiple nodes connect to the same port
                 if handle in inputs:
                     if not isinstance(inputs[handle], list):
