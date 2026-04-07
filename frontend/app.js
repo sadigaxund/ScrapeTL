@@ -3307,7 +3307,7 @@ async function loadSchedules(skipFetch = false) {
                             <button class="icon-btn" onclick="duplicateSchedule(${s.id})" title="Duplicate Schedule">📄</button>
                             <button class="icon-btn icon-btn-danger" onclick="deleteSchedule(${s.id})" title="Delete">✕</button>
                         </div>
-                        <button class="btn ${s.enabled ? 'btn-danger' : 'btn-primary'}" style="padding: 6px 14px; min-width: 100px; font-size: 12px;" onclick="toggleSchedule(${s.id})">
+                        <button class="btn ${s.enabled ? 'btn-danger' : 'btn-success'}" style="padding: 6px 14px; min-width: 100px; font-size: 12px;" onclick="toggleSchedule(${s.id})">
                             ${s.enabled ? '⏹ Disable' : '▶ Enable'}
                         </button>
                     </div>
