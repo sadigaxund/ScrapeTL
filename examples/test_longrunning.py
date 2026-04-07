@@ -2,7 +2,7 @@
 Scraper for "Revenge of the Iron-Blooded Sword Hound".
 
 The homepage URL is passed in at runtime from the registered homepage_url
-stored in the scraper registry — no hardcoding needed.
+stored in the scraper registry - no hardcoding needed.
 
 Resilience strategy (tried in order):
   1. Look for div with both class "bixbox" + "epcheck" (or similar), then find

@@ -5,8 +5,8 @@ New config shape:
   url:            str
   method:         "POST" | "PUT" | "PATCH" | "GET"
   dispatch_mode:  "all_at_once" | "per_element"
-  send_as_file:   bool  — when true, sends multipart/form-data with a .json file
-  headers:        dict  — extra HTTP headers
+  send_as_file:   bool  - when true, sends multipart/form-data with a .json file
+  headers:        dict  - extra HTTP headers
   retry_max:      int
   delay_sec:      float
   description:    str
@@ -32,7 +32,7 @@ def _send_with_retry(
         try:
             req_kwargs: dict = {"url": url, "headers": headers, "timeout": 20}
             if files:
-                # multipart — don't pass Content-Type (requests sets boundary automatically)
+                # multipart - don't pass Content-Type (requests sets boundary automatically)
                 h = {k: v for k, v in headers.items() if k.lower() != "content-type"}
                 req_kwargs["headers"] = h
                 req_kwargs["files"] = files
@@ -72,7 +72,7 @@ def send_http(
 
     url = config.get("url", "").strip()
     if not url:
-        print("[HTTP] No URL configured — skipping.")
+        print("[HTTP] No URL configured - skipping.")
         return None
 
     method = config.get("method", "POST").upper()

@@ -155,7 +155,7 @@ def send_notification(
 
     url = config.get("webhook_url") or _ENV_WEBHOOK
     if not url:
-        print("[Discord] No webhook URL configured — skipping notification.")
+        print("[Discord] No webhook URL configured - skipping notification.")
         return None
 
     dispatch_mode, format_style, send_as_file = _resolve_config(config)
@@ -185,7 +185,7 @@ def send_notification(
                 for ep in episodes:
                     file_data = json.dumps(ep, indent=2).encode("utf-8")
                     files = {"file": ("element.json", file_data, "application/json")}
-                    payload = {"content": (mention + f"**{display_name}** — element").strip()}
+                    payload = {"content": (mention + f"**{display_name}** - element").strip()}
                     post({"url": url, "data": payload, "files": files})
                     time.sleep(delay_sec)
             else:  # all_at_once
@@ -197,7 +197,7 @@ def send_notification(
         elif dispatch_mode == "all_at_once":
             preview = json.dumps(episodes[:5], indent=2)
             suffix = f"\n… +{len(episodes)-5} more" if len(episodes) > 5 else ""
-            content = mention + f"**{display_name}** — {len(episodes)} item(s) found\n```json\n{preview}{suffix}\n```"
+            content = mention + f"**{display_name}** - {len(episodes)} item(s) found\n```json\n{preview}{suffix}\n```"
             post({"url": url, "json": {"content": content.strip()}})
 
         elif format_style == "text":

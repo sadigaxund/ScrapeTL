@@ -2,7 +2,7 @@
 Scraper for "Revenge of the Iron-Blooded Sword Hound".
 
 The homepage URL is passed in at runtime from the registered homepage_url
-stored in the scraper registry — no hardcoding needed.
+stored in the scraper registry - no hardcoding needed.
 
 Resilience strategy (tried in order):
   1. Look for div with both class "bixbox" + "epcheck" (or similar), then find
@@ -119,13 +119,13 @@ class Scraper(BaseScraper):
 
     def _parse_li(self, thumbnail_url, li: Tag) -> dict | None:
         """Extract chapter data from a single <li> element."""
-        # Chapter URL — first <a> with href
+        # Chapter URL - first <a> with href
         a = li.find("a", href=True)
         if not a:
             return None
         url = a["href"].strip()
 
-        # Title — prefer a span whose class contains "chapter" or "num"
+        # Title - prefer a span whose class contains "chapter" or "num"
         title_span = a.find("span", class_=re.compile(r"chapter|num", re.I))
         if not title_span:
             # Fallback: any span that looks like "Chapter NNN"
@@ -135,7 +135,7 @@ class Scraper(BaseScraper):
                     break
         title = title_span.get_text(strip=True) if title_span else a.get_text(strip=True)
 
-        # Release date — span whose class contains "date"
+        # Release date - span whose class contains "date"
         date_span = a.find("span", class_=re.compile(r"date|time", re.I))
         if not date_span:
             date_span = li.find("span", class_=re.compile(r"date|time", re.I))

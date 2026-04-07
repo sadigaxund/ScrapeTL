@@ -134,7 +134,7 @@ def download_log_payload(
             headers={"Content-Disposition": f'attachment; filename="{base_filename}.json"'},
         )
 
-    # CSV — flatten all keys across all rows
+    # CSV - flatten all keys across all rows
     if not data:
         raise HTTPException(status_code=404, detail="Payload is empty.")
 

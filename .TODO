@@ -11,13 +11,15 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 26. Rename Schedules to Routines[NOT SURE]
 36. reverse the sort of scrapers list, so that new scraper starts on top [NOTSURE]
 37. add validation [NOTSURE] since you can just add comparator functions
+38. when running the app a cmd argument to set a location logs, maybe in the future, being able to push into kafka or whatever
+32. Quality of like change, ability to rearrange ports on added nodes [NOTSURE]
 
 
 11. Implement USERS, PROJECTS, PERMISSIONS, SANDBOX/TEST/DEV MODE
 33. scraper connected dashboard
 35. add an external api access to run or overall control the scraper like (1) start (2) stop (3) create/delete/pause schedule (4) list all schedules/scrapers/integrations (5) get status of each scraper/schedule/integration (6) and etc...
 
-7. schema registry -- 36. add schema to the context registry -- 28. add return types to the functions
+7. schema registry -- 36. add schema to the context registry -- 28. add return types to the functions, also dont forget to display the types in the pick modal
 
 2. more integrations: SQL: sqlite, postgres, microsoft sql server, mysql
 13. ability to import module not just single script file. and make sure to save properly. this also allows separation of input as a separate config file.
@@ -28,8 +30,7 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 
 34. implement a markdown wiki per scraper as means of documentation.
 33. implement import and export of a flow. which means it should also contain coordinates and parameters.
-35. collapse and expand all button for logs menu
-36. when i press run button within builder menu, and even though i have an external parameter node defined, why does not it prompt me for the values. even the same from scrapers menu.
+35. grouping for scrapers, possibly general project
 
 
 12. [TEST]somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain 

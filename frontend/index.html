@@ -270,7 +270,7 @@
                   style="width:100%">
                   <button type="button" class="tag-chip" id="summary-sched-scraper"
                     style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); font-size:14px; font-weight:500; padding: 0 16px;">
-                    <span>— Select —</span> <span style="font-size:10px; opacity:0.5">▼</span>
+                    <span>- Select -</span> <span style="font-size:10px; opacity:0.5">▼</span>
                   </button>
                   <div class="custom-dropdown-menu" id="sched-menu-scrapers" onclick="event.stopPropagation()"
                     style="width:100%"></div>
@@ -794,10 +794,10 @@
         </label>
       </div>
 
-      <div class="builder-viewport" id="builder-viewport"
+      <div class="builder-viewport builder-viewport--infinite" id="builder-viewport"
         style="width:100%; height:100%; overflow:hidden; position:relative;">
         <div class="builder-canvas no-drag-transition" id="builder-canvas"
-          style="width:8000px; height:8000px; background-image:radial-gradient(rgba(255,255,255,0.15) 1px, transparent 1px); background-size:30px 30px; position:absolute; top:0; left:0; transform-origin:0 0; transform:translate(-2000px, -2000px) scale(1);">
+          style="width:8000px; height:8000px; position:absolute; top:0; left:0; transform-origin:0 0; transform:translate(-2000px, -2000px) scale(1);">
           <svg class="builder-svg-layer" id="builder-svg-layer">
             <!-- Connection lines drawn here -->
           </svg>
@@ -989,14 +989,14 @@
         </div>
 
         <div class="form-group" style="margin-bottom:24px">
-          <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional —
+          <label>Replace Script <span style="font-weight:400;color:var(--text-muted);text-transform:none">(optional -
               drag &amp; drop or click to upload a new .py)</span></label>
           <div class="upload-zone wizard-upload-zone" id="edit-code-zone"
             onclick="document.getElementById('edit-code-file').click()">
             <div style="font-size:24px; margin-bottom:8px;">📄</div>
             <div id="edit-code-text" style="font-size:14px; font-weight:500; color:var(--text-primary);">Drag &amp; Drop
               a new .py file here</div>
-            <div style="font-size:12px; margin-top:4px;">or click to browse — leave empty to keep existing code</div>
+            <div style="font-size:12px; margin-top:4px;">or click to browse - leave empty to keep existing code</div>
             <input type="file" id="edit-code-file" accept=".py" style="display:none"
               onchange="handleEditCodeFile(this)" />
           </div>
@@ -1466,7 +1466,7 @@
 
           <!-- Extra headers -->
           <div class="form-group" style="margin-bottom:16px;">
-            <label>Extra Headers <span style="font-weight:400;color:var(--text-muted);text-transform:none;">— JSON,
+            <label>Extra Headers <span style="font-weight:400;color:var(--text-muted);text-transform:none;">- JSON,
                 optional</span></label>
             <div class="code-textarea-wrap">
               <textarea id="conn-http-headers" spellcheck="false"
@@ -1553,7 +1553,7 @@
           <input type="hidden" id="ot-scraper" onchange="renderOneTimeParams()">
           <button class="tag-chip" id="summary-ot-scraper" onclick="toggleDropdown(event, 'dd-ot-scraper')"
             style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:var(--bg-input); font-size:14px; font-weight:500; padding: 0 16px;">
-            <span>— Select —</span> <span style="font-size:10px; opacity:0.5">▼</span>
+            <span>- Select -</span> <span style="font-size:10px; opacity:0.5">▼</span>
           </button>
           <div class="custom-dropdown-menu" id="ot-menu-scrapers" style="width:100%">
             <!-- Populated via app.js -->

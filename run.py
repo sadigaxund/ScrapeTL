@@ -1,4 +1,4 @@
-"""Entry point — start the FastAPI development server."""
+"""Entry point - start the FastAPI development server."""
 import uvicorn
 from dotenv import load_dotenv
 
@@ -8,4 +8,5 @@ if __name__ == "__main__":
         "app.main:app",
         host="0.0.0.0",
         port=8000,
+        reload=True
     )

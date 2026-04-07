@@ -1,5 +1,5 @@
 """
-Scraper runner — executes a scraper plugin and persists results.
+Scraper runner - executes a scraper plugin and persists results.
 After a run it fires all integrations assigned to the scraper.
 Supports configurable retry with exponential backoff (reads from AppSetting keys
 'retry_max' and 'retry_backoff_seconds'; defaults: 2 retries, 5 s backoff).
@@ -166,7 +166,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                     if stop_event and stop_event.is_set():
                         status = "cancelled"
                         error_msg = "Stop requested by user."
-                        print(f"[Runner] 🛑 {scraper_record.name} — cancelled.")
+                        print(f"[Runner] 🛑 {scraper_record.name} - cancelled.")
                         break
 
                     # Prepare Iteration Inputs
@@ -202,7 +202,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                         except ScrapeSkip as skip:
                             skip_message = str(skip) or "Skipped by scraper."
                             attempt_status = "skipped"
-                            print(f"[Runner] ⏭  {scraper_record.name} — skipped: {skip_message}")
+                            print(f"[Runner] ⏭  {scraper_record.name} - skipped: {skip_message}")
                             break
                         except Exception as exc:
                             error_msg = str(exc)
@@ -353,7 +353,7 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
             import json as _json
             config = _json.loads(integ.config)
             
-            # Check triggers — default to [success, failure] if missing
+            # Check triggers - default to [success, failure] if missing
             triggers = config.get("triggers", ["success", "failure"])
             if status not in triggers:
                 continue

@@ -1,5 +1,5 @@
 """
-Integrations API — create/list/update/delete integrations and assign them to scrapers.
+Integrations API - create/list/update/delete integrations and assign them to scrapers.
 Currently supports type: "discord_webhook".
 """
 import json
@@ -127,7 +127,7 @@ def verify_integration(integ_id: int, db: Session = Depends(get_db)):
         try:
             resp = requests.post(
                 webhook_url,
-                json={"content": f"🔔 **ScrapeTL** — Test ping from integration **{integ.name}**. It works!"},
+                json={"content": f"🔔 **ScrapeTL** - Test ping from integration **{integ.name}**. It works!"},
                 timeout=10,
             )
             resp.raise_for_status()

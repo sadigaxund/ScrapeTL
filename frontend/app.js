@@ -1,5 +1,5 @@
 /* ════════════════════════════════════════════════
-   ScrapeTL — Frontend Logic  v2
+   ScrapeTL - Frontend Logic  v2
    Vanilla JS, no dependencies
 ════════════════════════════════════════════════ */
 
@@ -119,12 +119,12 @@ function toast(msg, type = 'info') {
 }
 
 function formatDate(isoStr) {
-    if (!isoStr) return '—';
+    if (!isoStr) return '-';
     if (typeof isoStr === 'string' && !isoStr.includes('Z') && !isoStr.includes('+')) {
         isoStr = isoStr.replace(' ', 'T') + 'Z';
     }
     const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return '—';
+    if (isNaN(d.getTime())) return '-';
     return d.toLocaleString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -137,12 +137,12 @@ function formatDate(isoStr) {
 }
 
 function formatDateOnly(isoStr) {
-    if (!isoStr) return '—';
+    if (!isoStr) return '-';
     if (typeof isoStr === 'string' && !isoStr.includes('Z') && !isoStr.includes('+')) {
         isoStr = isoStr.replace(' ', 'T') + 'Z';
     }
     const d = new Date(isoStr);
-    if (isNaN(d.getTime())) return '—';
+    if (isNaN(d.getTime())) return '-';
     return d.toLocaleDateString(undefined, {
         year: 'numeric',
         month: 'short',
@@ -152,13 +152,13 @@ function formatDateOnly(isoStr) {
 }
 
 function formatRelativeDate(isoStr) {
-    if (!isoStr) return '—';
+    if (!isoStr) return '-';
     if (typeof isoStr === 'string' && !isoStr.includes('Z') && !isoStr.includes('+')) {
         isoStr = isoStr.replace(' ', 'T') + 'Z';
     }
     const d = new Date(isoStr);
     const now = new Date();
-    if (isNaN(d.getTime())) return '—';
+    if (isNaN(d.getTime())) return '-';
 
     const diffMs = now - d;
     if (diffMs < 0) return formatDate(isoStr); // Future date
@@ -201,7 +201,7 @@ function statusBadge(status) {
  * stringifying objects to prevent [object Object]. 
  */
 function formatValueForUI(val) {
-    if (val === null || val === undefined) return '—';
+    if (val === null || val === undefined) return '-';
     if (typeof val === 'object') {
         try { return JSON.stringify(val); }
         catch (e) { return String(val); }
@@ -734,13 +734,13 @@ function getConditionalOps(modeOrPreset) {
 
     const ops = {
         logical: [
-            { value: 'AND', label: 'AND — All inputs truthy' },
-            { value: 'OR', label: 'OR — Any input truthy' },
-            { value: 'NAND', label: 'NAND — Not all truthy' },
-            { value: 'NOR', label: 'NOR — None truthy' },
-            { value: 'XOR', label: 'XOR — Odd count truthy' },
-            { value: 'XNOR', label: 'XNOR — Even count truthy' },
-            { value: 'NOT', label: 'NOT — Negate Input A' },
+            { value: 'AND', label: 'AND - All inputs truthy' },
+            { value: 'OR', label: 'OR - Any input truthy' },
+            { value: 'NAND', label: 'NAND - Not all truthy' },
+            { value: 'NOR', label: 'NOR - None truthy' },
+            { value: 'XOR', label: 'XOR - Odd count truthy' },
+            { value: 'XNOR', label: 'XNOR - Even count truthy' },
+            { value: 'NOT', label: 'NOT - Negate Input A' },
         ],
         unary: [
             { value: 'is_truthy', label: 'Is Truthy' },
@@ -802,6 +802,7 @@ function initBuilder() {
 
     // Apply saved offset and initial zoom
     canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+    updateInfiniteBackground();
     updateZoomHUD();
 
     // Only attach events once
@@ -829,6 +830,7 @@ function initBuilder() {
         // B1. Handle Panning
         if (state.builder.activeTool === 'pan') {
             if (e.button === 0) { // Left Click
+                e.preventDefault(); // Stop text selection
                 state.builder.isDragging = true;
                 state.builder.startX = e.clientX - state.builder.x;
                 state.builder.startY = e.clientY - state.builder.y;
@@ -983,8 +985,28 @@ function setZoom(newZoom, mouseX = null, mouseY = null) {
     state.builder.zoom = newZoom;
     canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
 
+    updateInfiniteBackground();
     updateZoomHUD();
     renderConnections();
+}
+
+/**
+ * Syncs the viewport background dots with the canvas translation and zoom.
+ * This creates the illusion of an infinite grid.
+ */
+function updateInfiniteBackground() {
+    const viewport = document.getElementById('builder-viewport');
+    if (!viewport) return;
+
+    const x = state.builder.x;
+    const y = state.builder.y;
+    const zoom = state.builder.zoom;
+
+    // Grid dots are spaced at 30px (base)
+    const gridSize = 30 * zoom;
+
+    viewport.style.backgroundSize = `${gridSize}px ${gridSize}px`;
+    viewport.style.backgroundPosition = `${x}px ${y}px`;
 }
 
 function updateZoomHUD() {
@@ -1154,8 +1176,8 @@ function renderBuilderNodes() {
             }
 
             // Variadic Control Bar (Add/Remove Ports)
-            // EXCLUSION: Utility nodes use Auto-Port growth instead of manual buttons
-            if ((preset.logicalInputs || preset.logicalOutputs) && node.type !== 'utility') {
+            // EXCLUSION: Utility and Logic nodes use Auto-Port growth instead of manual buttons
+            if ((preset.logicalInputs || preset.logicalOutputs) && node.type !== 'utility' && node.type !== 'logic') {
                 const type = preset.logicalInputs ? 'Inputs' : 'Outputs';
                 const configKey = preset.logicalInputs ? 'logicalInputs' : 'logicalOutputs';
                 const count = Number(node.config[configKey] || (preset.logicalInputs || preset.logicalOutputs));
@@ -1274,7 +1296,7 @@ function renderBuilderNodes() {
 
             // 3.1 Universal Trigger Port (Bottom of Inputs)
             // EXCLUSION: Skip for 'input', 'sink', and 'utility' nodes
-            if (node.type !== 'input' && node.type !== 'sink' && node.type !== 'utility') {
+            if (node.type !== 'input') {
                 const trigRow = document.createElement('div');
                 trigRow.className = 'node-port-row node-port-row--input node-port-row--universal';
 
@@ -1309,7 +1331,8 @@ function renderBuilderNodes() {
                 const port = document.createElement('div');
                 // Colour True/False ports on standard conditional nodes
                 let portClass = 'node-port node-port--output';
-                if (node.type === 'logic' && (node.preset === 'conditional' || node.preset === 'comparison' || node.preset === 'string_match' || node.preset === 'status_check' || node.preset === 'custom_logic')) {
+                const booleanPresets = ['logic_gate', 'conditional', 'comparison', 'string_match', 'status_check', 'custom_logic'];
+                if (node.type === 'logic' && booleanPresets.includes(node.preset)) {
                     portClass += idx === 0 ? ' node-port--true' : ' node-port--false';
                 }
                 port.className = portClass;
@@ -1506,6 +1529,7 @@ window.addEventListener('mousemove', (e) => {
         state.builder.x = e.clientX - state.builder.startX;
         state.builder.y = e.clientY - state.builder.startY;
         canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+        updateInfiniteBackground();
         renderConnections();
     } else if (state.builder.draggedNode) {
         const vRect = viewport.getBoundingClientRect();
@@ -1778,7 +1802,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             const item = document.createElement('div');
             item.className = 'context-item';
             const displayKey = v.namespace ? `${v.namespace}.${v.key}` : v.key;
-            
+
             item.innerHTML = `
                 <div class="item-icon ${type.cls}">${type.text}</div>
                 <div class="item-content">
@@ -2003,22 +2027,24 @@ function startConnection(e, fromId, portType, portIdx) {
 
                     // 💡 AUTO-INJECTION logic (existing) ...
 
-                    // ⚡ AUTO-PORT GROWTH: If wiring TO/FROM a Utility node's last port, expand it
+                    // ⚡ AUTO-PORT GROWTH: If wiring TO/FROM a Utility/Logic node's last port, expand it
                     const growNode = (id, key) => {
-                        const target = state.builder.nodes.find(n => n.id === id);
-                        if (!target) return;
-                        const p = NODE_PRESETS[target.type][target.preset];
-                        if (target.type === 'utility' && (p.logicalInputs || p.logicalOutputs)) {
-                            const curCount = Number(target.config[key] || (p.logicalInputs || p.logicalOutputs));
-                            const portIdx = key === 'logicalInputs' ? finalInIdx : finalOutIdx;
+                        try {
+                            const target = state.builder.nodes.find(n => n.id == id);
+                            if (!target) return;
+                            const p = NODE_PRESETS[target.type][target.preset];
+                            if ((target.type === 'utility' || target.type === 'logic') && (p.logicalInputs || p.logicalOutputs)) {
+                                const curCount = Number(target.config[key] || (p.logicalInputs || p.logicalOutputs));
+                                const portIdx = key === 'logicalInputs' ? finalInIdx : finalOutIdx;
 
-                            // If we connected the last port (even if numeric index is handled as string), add one more
-                            if (portIdx !== 'trigger' && portIdx !== 'error' && parseInt(portIdx) === curCount - 1) {
-                                target.config[key] = curCount + 1;
-                                renderBuilderNodes();
-                                renderConnections();
+                                // If we connected the last port (even if numeric index is handled as string), add one more
+                                if (portIdx !== 'trigger' && portIdx !== 'error' && parseInt(portIdx) === curCount - 1) {
+                                    target.config[key] = curCount + 1;
+                                    renderBuilderNodes();
+                                    renderConnections();
+                                }
                             }
-                        }
+                        } catch (e) { console.error("[Builder] growNode failed:", e); }
                     };
 
                     if (conn.fromType === 'output') {
@@ -2109,28 +2135,30 @@ function renderConnections() {
             const edge = state.builder.edges[index];
             state.builder.edges.splice(index, 1);
 
-            // ⚡ AUTO-PORT PRUNING: Shrink utility nodes if they have empty trailing ports
+            // ⚡ AUTO-PORT PRUNING: Shrink nodes if they have empty trailing ports
             const pruneNode = (id, key, isInput) => {
-                const target = state.builder.nodes.find(n => n.id === id);
-                if (!target || target.type !== 'utility') return;
-                const p = NODE_PRESETS[target.type][target.preset];
-                const min = p.logicalInputs || p.logicalOutputs || 2;
-                let curCount = Number(target.config[key] || min);
+                try {
+                    const target = state.builder.nodes.find(n => n.id == id);
+                    if (!target || (target.type !== 'utility' && target.type !== 'logic')) return;
+                    const p = NODE_PRESETS[target.type][target.preset];
+                    const min = p.logicalInputs || p.logicalOutputs || 2;
+                    let curCount = Number(target.config[key] || min);
 
-                // Check if the last port is now empty
-                while (curCount > min) {
-                    const lastIdx = curCount - 1;
-                    const isLastBusy = state.builder.edges.some(eg =>
-                        isInput ? (eg.to === id && eg.toIdx === lastIdx) : (eg.from === id && eg.fromIdx === lastIdx)
-                    );
-                    if (!isLastBusy) {
-                        curCount--;
-                        target.config[key] = curCount;
-                    } else {
-                        break;
+                    // Check if the last port is now empty
+                    while (curCount > min) {
+                        const lastIdx = curCount - 1;
+                        const isLastBusy = state.builder.edges.some(eg =>
+                            isInput ? (eg.to == id && eg.toIdx === lastIdx) : (eg.from == id && eg.fromIdx === lastIdx)
+                        );
+                        if (!isLastBusy) {
+                            curCount--;
+                            target.config[key] = curCount;
+                        } else {
+                            break;
+                        }
                     }
-                }
-                renderBuilderNodes();
+                    renderBuilderNodes();
+                } catch (e) { console.error("[Builder] pruneNode failed:", e); }
             };
 
             pruneNode(edge.from, 'logicalOutputs', false);
@@ -3432,7 +3460,7 @@ async function createSchedule() {
         document.getElementById('sched-cron').value = '';
         document.getElementById('sched-label').value = '';
         document.getElementById('sched-scraper').value = '';
-        document.getElementById('summary-sched-scraper').innerHTML = `<span>— Select —</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
+        document.getElementById('summary-sched-scraper').innerHTML = `<span>- Select -</span> <span style="font-size:10px;opacity:0.5">▼</span>`;
         document.getElementById('summary-sched-preset').innerHTML = `<span>Presets</span> <span style="font-size:10px; opacity:0.5">▼</span>`;
         document.getElementById('sched-thumb-url').value = '';
         document.getElementById('sched-thumb-file').value = '';
@@ -3576,7 +3604,7 @@ async function saveEditSchedule() {
 }
 
 /* ════════════════════════════════════════════════
-   LOGS — collapsible card view
+   LOGS - collapsible card view
 ════════════════════════════════════════════════ */
 function toggleDropdown(e, id) {
     e.stopPropagation();
@@ -3884,7 +3912,7 @@ function renderPayload(payload, episodeCount = 0) {
 
         let tbody = payload.map(obj => {
             return '<tr>' + keys.map(k => {
-                const rawVal = (obj[k] !== null && obj[k] !== undefined) ? obj[k] : '—';
+                const rawVal = (obj[k] !== null && obj[k] !== undefined) ? obj[k] : '-';
                 const isObj = typeof rawVal === 'object' && rawVal !== null;
                 const strVal = isObj ? JSON.stringify(rawVal) : String(rawVal);
 
@@ -4188,7 +4216,7 @@ function renderQueueTasks() {
                 <div style="font-weight:600; font-size:14px; color:var(--text-primary)">${t.scraper_name || 'N/A'}</div>
             </td>
             <td style="white-space:nowrap"><span style="color:var(--text-primary); font-weight:500;">${formatDateOnCondition(t.scheduled_for)}</span>${timeLeftStr}</td>
-            <td><div style="font-size:12px; color:#d1d5db; max-width:200px; overflow:hidden; text-overflow:ellipsis">${t.note || '—'}</div></td>
+            <td><div style="font-size:12px; color:#d1d5db; max-width:200px; overflow:hidden; text-overflow:ellipsis">${t.note || '-'}</div></td>
             <td>${statusBadge(t.status)}</td>
             <td style="text-align:right">${removeBtn}</td>
         </tr>`;
@@ -4196,7 +4224,7 @@ function renderQueueTasks() {
 }
 
 function formatDateOnCondition(isoStr) {
-    if (!isoStr) return '—';
+    if (!isoStr) return '-';
     const d = new Date(isoStr);
     const now = new Date();
     // If it's today, show only time, else show date only
@@ -5592,7 +5620,7 @@ function renderVariablesList() {
                             </span>
                         </div>
                     </td>
-                    <td><div style="color:#d1d5db; opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || '—'}</div></td>
+                    <td><div style="color:#d1d5db; opacity:0.8; font-size:13px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap">${v.description || '-'}</div></td>
                     <td class="action-cell" style="text-align:right">
                         <div class="action-btn-group" style="justify-content:flex-end; gap:8px">
                             <button class="icon-btn" onclick="toggleVariableSecret(${idx})" title="${v.is_secret ? 'Show' : 'Hide'} value">${v.is_secret ? '👁️' : '🔒'}</button>
@@ -6235,7 +6263,7 @@ let _liveLogInterval = null;
 async function openSystemLogViewer(logId, scraperName = '') {
     const isRunning = String(logId).startsWith('run_');
     const realId = isRunning ? parseInt(logId.replace('run_', '')) : logId;
-    
+
     const drawer = document.getElementById('debug-inspector-drawer');
     const body = document.getElementById('debug-inspector-body');
     const title = document.getElementById('debug-inspector-title');
@@ -6246,7 +6274,7 @@ async function openSystemLogViewer(logId, scraperName = '') {
         _liveLogInterval = null;
     }
 
-    const titleStr = scraperName ? `System Log — ${scraperName} (#${realId})` : `System Log #${realId}`;
+    const titleStr = scraperName ? `System Log - ${scraperName} (#${realId})` : `System Log #${realId}`;
     title.innerHTML = `${titleStr} <span style="color:var(--text-muted); font-weight:400; font-size:13px; margin-left:8px;">${isRunning ? '(Live)' : ''}</span>`;
     body.innerHTML = `
         <div style="padding:20px; text-align:center; opacity:0.5;">
@@ -6261,7 +6289,7 @@ async function openSystemLogViewer(logId, scraperName = '') {
         const content = data.content || "";
         const path = data.path || "";
         const basePath = data.base_path || "";
-        
+
         // Abstract path for display
         let displayPath = path;
         if (path && basePath && path.toLowerCase().startsWith(basePath.toLowerCase())) {
@@ -6280,7 +6308,7 @@ async function openSystemLogViewer(logId, scraperName = '') {
                 <span class="pulse-dot"></span> Streaming live logs...
             </div>` : ''}
         `;
-        
+
         // Auto-scroll to bottom
         const pre = document.getElementById('log-pre-container');
         if (pre) pre.scrollTop = pre.scrollHeight;
@@ -6291,13 +6319,13 @@ async function openSystemLogViewer(logId, scraperName = '') {
             const url = isRunning ? `/api/run/${realId}/logs/live` : `/api/logs/${realId}/raw`;
             const data = await apiFetch(url);
             updateUI(data);
-            
+
             // If it was running but is no longer "active", stop interval
             if (isRunning && data.active === false) {
                 clearInterval(_liveLogInterval);
                 _liveLogInterval = null;
                 // Refresh title
-                const titleStr = scraperName ? `System Log — ${scraperName} (#${realId})` : `System Log #${realId}`;
+                const titleStr = scraperName ? `System Log - ${scraperName} (#${realId})` : `System Log #${realId}`;
                 title.innerHTML = `${titleStr} <span style="color:var(--text-muted); font-weight:400; font-size:13px; margin-left:8px;">(Finished)</span>`;
             }
         } catch (e) {
@@ -6364,7 +6392,7 @@ function toggleBuilderFullscreen(forceState) {
     }
 
     if (isFS) {
-        toast('Focus Mode Active — ESC to exit', 'info');
+        toast('Focus Mode Active - ESC to exit', 'info');
     }
 
     // Re-verify viewport dimensions after layout shift to ensure nodes/edges align

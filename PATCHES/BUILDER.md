@@ -1,6 +1,6 @@
 # 🏗️ Scraper Builder Manual
 
-Welcome to the ScrapeTL Builder—a no-code visual engine for designing complex, multi-step web scrapers. This document covers every node, feature, and logic rule you need to build robust flows.
+Welcome to the ScrapeTL Builder-a no-code visual engine for designing complex, multi-step web scrapers. This document covers every node, feature, and logic rule you need to build robust flows.
 
 ---
 

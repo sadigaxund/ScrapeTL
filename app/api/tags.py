@@ -1,5 +1,5 @@
 """
-Tags API — create/list/delete tags and assign/remove them on scrapers.
+Tags API - create/list/delete tags and assign/remove them on scrapers.
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel

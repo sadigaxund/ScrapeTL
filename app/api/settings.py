@@ -1,5 +1,5 @@
 """
-App Settings API — read/write key-value app configuration (e.g. timezone).
+App Settings API - read/write key-value app configuration (e.g. timezone).
 """
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel

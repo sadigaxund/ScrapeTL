@@ -132,24 +132,79 @@ class BuilderEngine:
             node_inputs = self._get_node_inputs(current_id)
             
             # --- 1. Trigger Guard (Skip Check) ---
-            # EXCLUSION: 'input' and 'sink' nodes never have a trigger guard.
+            # EXCLUSION: 'input' nodes never have a trigger guard.
             skip_node = False
-            if node.get("type") not in ["input", "sink"] and "trigger" in node_inputs:
-                t_vals = node_inputs.get("trigger")
-                if not isinstance(t_vals, list):
-                    t_vals = [t_vals]
-                
-                # Logic: Skip if NO signals are satisfied (None) 
-                # OR if ANY signal specifically received a False/Error that should abort this path.
-                # However, many users use Trigger as an OR gate. 
-                # But here, we follow the user's specific request: "skip if error or false".
-                for t in t_vals:
-                    if t is None or t is False or (isinstance(t, dict) and "__error__" in t):
+            
+            # A. Check if a trigger PORT is connected (even if no signal arrived due to upstream skip)
+            # We check the raw editor edges to see if the user intended a dependency here.
+            has_trigger_connection = any(
+                str(e.get("target") or e.get("to")) == str(current_id) and e.get("targetHandle") == "trigger"
+                for e in self.edges
+            )
+
+            if node.get("type") not in ["input"]:
+                if "trigger" in node_inputs:
+                    t_vals = node_inputs.get("trigger")
+                    if not isinstance(t_vals, list):
+                        t_vals = [t_vals]
+                    
+                    # Logic: We only skip if all signals explicitly abort, OR if there's an error.
+                    # If a trigger is a Batch, we consider it valid if AT LEAST ONE element is True.
+                    has_valid_signal = False
+                    for t in t_vals:
+                        if isinstance(t, dict) and "__error__" in t:
+                            skip_node = True
+                            has_valid_signal = False
+                            break
+                        
+                        # Use bool() for robust truthiness (0, None, "", etc = False)
+                        if isinstance(t, list):
+                            if any(bool(x) for x in t):
+                                has_valid_signal = True
+                        elif bool(t):
+                            has_valid_signal = True
+
+                    if not has_valid_signal and not skip_node:
                         skip_node = True
-                        break
                 
-                if skip_node:
-                    print(f"[BuilderEngine] ⏩ Skipping node {current_id} ({node['type']}) - Trigger Guard active.")
+                elif has_trigger_connection:
+                    # Connection exists but NO signal arrived -> Upstream was skipped
+                    print(f"[BuilderEngine] ⏩ Skipping node {current_id} ({node['type']}) - Source triggered nodes were skipped.")
+                    skip_node = True
+
+            if skip_node:
+                print(f"[BuilderEngine] ⏩ Skipping node {current_id} ({node['type']}) - Trigger Guard active.")
+                # We record the skipped state and let it fall through to neighbor propagation
+                self.results_cache[current_id] = None
+                
+            # 🔪 UNIVERSAL BATCH FILTERING: If the node is allowed to run,
+            # filter ANY incoming Batch lists according to the boolean trigger Batch!
+            if not skip_node and "trigger" in node_inputs:
+                t_input = node_inputs.get("trigger")
+                
+                # Check if t_input is a flat array of booleans/values, or a nested array
+                trigger_mask = None
+                if isinstance(t_input, list):
+                    # If it contains lists (multi-edge), try to find the first list
+                    if any(isinstance(t, list) for t in t_input):
+                        for t in t_input:
+                            if isinstance(t, list):
+                                trigger_mask = t
+                                break
+                    else:
+                        # It is a flat list (e.g. Batch of booleans), use it directly
+                        trigger_mask = t_input
+                
+                if trigger_mask:
+                    for key, val in node_inputs.items():
+                        if key == "trigger": continue
+                        if isinstance(val, list):
+                            filtered_val = []
+                            for idx, item in enumerate(val):
+                                t_val = trigger_mask[idx] if idx < len(trigger_mask) else trigger_mask[-1] if trigger_mask else False
+                                if bool(t_val):
+                                    filtered_val.append(item)
+                            node_inputs[key] = Batch(filtered_val)
 
             # --- 2. Node Execution ---
             status = "success"
@@ -157,7 +212,7 @@ class BuilderEngine:
             
             if not skip_node:
                 try:
-                    res = self._execute_node(node, runtime_inputs)
+                    res = self._execute_node(node, node_inputs, runtime_inputs)
                     
                     # Global check: If a node returns an error string, escalate it as a failure
                     if isinstance(res, str) and res.startswith("[Error: "):
@@ -304,10 +359,9 @@ class BuilderEngine:
             return ""
         return str(val).strip()
 
-    def _execute_node(self, node: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
+    def _execute_node(self, node: Dict[str, Any], node_inputs: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
         ntype = self._get_full_type(node)
         data = node.get("config", {})
-        node_inputs = self._get_node_inputs(node["id"])
 
         print(f"[BuilderEngine] Executing {node['id']} (Resolved Type: '{ntype}')")
 
@@ -844,22 +898,96 @@ class BuilderEngine:
             if isinstance(var_key, str) and var_key.startswith("{{") and var_key.endswith("}}"):
                 var_key = var_key[2:-2].strip()
 
-            # Handle namespaced keys (e.g. auth.token)
             actual_key = var_key.split('.')[-1] if '.' in var_key else var_key
+            namespace = var_key.split('.')[0] if '.' in var_key else None
 
-            value = node_inputs.get("value")
-            if self.db and actual_key:
-                var = self.db.query(GlobalVariable).filter(GlobalVariable.key == actual_key).first()
-                if var and not var.is_readonly:
-                    var.value = str(value)
-                    self.db.commit()
-            return value
+            # Map both 'data' and 'value' depending on how the frontend passes the port
+            value = node_inputs.get("data") if "data" in node_inputs else node_inputs.get("value")
+            trigger = node_inputs.get("trigger")
+
+            if self.db:
+                # 🔍 NAMESPACED RESOLUTION: Handle 'Namespace.Key' splitting
+                var = None
+                if "." in var_key:
+                    ns, k = var_key.split(".", 1)
+                    var = self.db.query(GlobalVariable).filter(
+                        GlobalVariable.namespace == ns,
+                        GlobalVariable.key == k
+                    ).first()
+                
+                # 🔍 FALLBACK: Exact key match or slug match
+                if not var:
+                    var = self.db.query(GlobalVariable).filter(GlobalVariable.key == var_key).first()
+                if not var and actual_key:
+                    var = self.db.query(GlobalVariable).filter(GlobalVariable.key == actual_key).first()
+                
+                if not var:
+                    print(f"[BuilderEngine] ❌ Context Setup Error: Variable '{var_key}' not found in registry.")
+                    return value
+
+                if var.is_readonly:
+                    print(f"[BuilderEngine] ⚠️ Context Update Skipped: Variable '{var.key}' is marked as READ-ONLY.")
+                    return value
+
+                final_value = value
+                
+                # 📊 BATCH LOGIC: The values are already filtered by the generic Trigger Guard.
+                # We just pick the maximum numeric value among all valid incoming items.
+                if isinstance(value, list):
+                    candidates = []
+                    for v in value:
+                        try:
+                            num = float(str(v).replace(",",""))
+                            candidates.append((num, v))
+                        except:
+                            candidates.append((0, v))
+                    
+                    if not candidates:
+                        return None
+                    
+                    try:
+                        best_pair = max(candidates, key=lambda x: x[0])
+                        final_value = best_pair[1]
+                    except:
+                        if candidates: final_value = candidates[0][1]
+                
+                # 📝 WRITE & SYNC
+                import json
+                if final_value is None:
+                    save_str = None
+                elif isinstance(final_value, (list, dict)):
+                    save_str = json.dumps(final_value)
+                else:
+                    save_str = str(final_value)
+
+                var.value = save_str
+                self.db.commit()
+                print(f"[BuilderEngine] ✅ Context Update: '{var.namespace + '.' if var.namespace else ''}{var.key}' set to '{save_str}'")
+
+                # Local runtime sync (Standard + Namespace)
+                self.global_vars[var.key] = final_value
+                if var.namespace:
+                    if "__namespaces__" not in self.global_vars: self.global_vars["__namespaces__"] = {}
+                    if var.namespace not in self.global_vars["__namespaces__"]: self.global_vars["__namespaces__"][var.namespace] = {}
+                    self.global_vars["__namespaces__"][var.namespace][var.key] = final_value
+                
+                return final_value
 
         elif ntype == "sink_system_output":
-            sink_data = node_inputs.get("data") or node_inputs.get("error") or next(iter(node_inputs.values()), None)
+            # Strict Resolution: Use "data", "data rows", or "error". 
+            sink_data = node_inputs.get("data") or node_inputs.get("data rows") or node_inputs.get("error")
+            trigger = node_inputs.get("trigger")
+            
+            # If nothing found, but port is connected, use None
+            # If not connected at all, it's a flow error but we'll return empty list
+            if sink_data is None:
+                return []
+
             import types
             if isinstance(sink_data, types.GeneratorType):
                 sink_data = list(sink_data)
+                
+            # (Note: Universal batch filtering handles the Trigger array slicing off-node)
 
             label = str(node.get("config", {}).get("label") or "Results")
 
@@ -870,20 +998,19 @@ class BuilderEngine:
             # 🛠️ DATA SHAPING (Sink Output)
             # We want to provide a list of dicts for the tabular UI.
             # If the user passed a list or specialized Batch/Generator, handle each item.
-            if isinstance(sink_data, (types.GeneratorType, Batch)):
+            if isinstance(sink_data, (types.GeneratorType, Batch)) or isinstance(sink_data, list):
                 # If each item is a dict, return as-is (tabular formatting). 
                 # Otherwise, wrap each item under the label.
                 return [(item if isinstance(item, dict) else {label: item}) for item in sink_data]
             
             # For SINGLE items:
-            # We ALWAYS wrap under the label to prevent "exploding" 
-            # a single complex JSON variable into multiple columns.
-            # This ensures {{ABC.ARRAY}} shows as ONE cell with the full JSON.
             return [{label: sink_data}]
 
+
         elif ntype == "sink_debug":
-            val = node_inputs.get("data") or node_inputs.get("error") or next(iter(node_inputs.values()), None)
-            print(f"[BuilderEngine] DEBUG [{node['id']}]: {val}")
+            val = node_inputs.get("data") or node_inputs.get("log data") or node_inputs.get("error")
+            if val is not None:
+                print(f"[BuilderEngine] DEBUG [{node['id']}]: {val}")
             return val
 
         return None
@@ -928,7 +1055,7 @@ class BuilderEngine:
 
                 # Multi-edge support: Collect results into a list if multiple nodes connect to the same port
                 if handle in inputs:
-                    if not isinstance(inputs[handle], list):
+                    if type(inputs[handle]) is not list:
                         inputs[handle] = [inputs[handle]]
                     inputs[handle].append(src_output)
                 else:

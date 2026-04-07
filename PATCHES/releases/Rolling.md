@@ -35,7 +35,7 @@ Scrapers can now declare a schema of input parameters, allowing for more flexibl
 
 **Architecture:**
 - `BaseScraper` has an `inputs = []` class attribute. Subclasses override it.
-- The `scrape()` method accepts `**kwargs` — the runner unpacks and passes inputs as keyword arguments.
+- The `scrape()` method accepts `**kwargs` - the runner unpacks and passes inputs as keyword arguments.
 - `app/api/scrapers.py` → `_scraper_dict()` uses `load_scraper_class_from_code()` to dynamically introspect the `inputs` schema from stored code and return it in the API. **Note:** `load_scraper_class_from_code()` seeds the exec namespace with the canonical `BaseScraper` to ensure `issubclass()` identity works correctly.
 - `app/models.py` → `Schedule.input_values` (Text/JSON) stores per-schedule input values.
 - `app/runner.py` → `run_scraper(input_values=None)` passes them as `**kwargs` to `scrape()`.

@@ -512,7 +512,7 @@ def list_versions(scraper_id: int, db: Session = Depends(get_db)):
     return [
         {
             "id": v.id,
-            "version_label": v.version_label or "—",
+            "version_label": v.version_label or "-",
             "commit_message": v.commit_message or "",
             "created_at": v.created_at.isoformat() + "Z"
         }

@@ -1,5 +1,5 @@
 """
-APScheduler integration — manages cron-based scraper schedules and the catch-up queue.
+APScheduler integration - manages cron-based scraper schedules and the catch-up queue.
 Timezone is read dynamically from the DB (AppSetting key="timezone"), falling back to
 the APP_TIMEZONE env var or UTC.
 """
@@ -57,7 +57,7 @@ def _make_job_id(schedule_id: int) -> str:
 
 
 def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: dict = None):
-    """Called by APScheduler — runs inside a thread."""
+    """Called by APScheduler - runs inside a thread."""
     from app.database import SessionLocal
     from app.models import Schedule
     from app.runner import run_scraper
