@@ -47,6 +47,15 @@ class BuilderEngine:
 
     def setup(self):
         """Lifecycle hook called by Runner before batch execution to share browser context."""
+        # 1. SCAN: See if any node in the flow actually requires Playwright.
+        # This prevents unnecessary browser launches when executing simple logic flows.
+        node_types = {self._get_full_type(n) for n in self.nodes.values()}
+        needs_playwright = any("playwright" in nt.lower() for nt in node_types)
+        
+        if not needs_playwright:
+            # We don't print anything here to keep the log clean for simple flows
+            return
+
         try:
             from playwright.sync_api import sync_playwright
             self._p = sync_playwright().start()
@@ -70,18 +79,30 @@ class BuilderEngine:
 
     def teardown(self):
         """Lifecycle hook called by Runner after batch execution."""
+        # 1. Close browser if it was actually initialized
         if hasattr(self, '_browser'):
             try:
                 self._browser.close()
-                self._p.stop()
-                print("[BuilderEngine] Playwright session closed.")
             except:
                 pass
-            try: self._browser.close()
-            except: pass
+            try: 
+                self._browser.close()
+            except: 
+                pass
+        
+        # 2. Stop playwright if it was actually started
         if hasattr(self, '_p'):
-            try: self._p.stop()
-            except: pass
+            try: 
+                self._p.stop()
+                if hasattr(self, '_browser'):
+                    # Only log closure if a browser session was actually active
+                    print("[BuilderEngine] Playwright session closed.")
+            except: 
+                pass
+            try: 
+                self._p.stop()
+            except: 
+                pass
 
     def execute(self, runtime_inputs: Dict[str, Any], stop_event: Optional[threading.Event] = None) -> List[Dict[str, Any]]:
         """Main entry point for execution."""
@@ -250,6 +271,9 @@ class BuilderEngine:
             for k, col in columns.items():
                 if i < len(col):
                     row[k] = col[i]
+                elif len(col) == 1:
+                    # Broadcast the single value to all rows (like "tee")
+                    row[k] = col[0]
                 else:
                     row[k] = None
             final_results.append(row)
@@ -331,7 +355,7 @@ class BuilderEngine:
                 return resp.text
 
             if isinstance(url_input, list):
-                return [_fetch_single(u) for u in url_input]
+                return Batch([_fetch_single(u) for u in url_input])
             return _fetch_single(url_input)
 
         elif ntype in ["action_fetch_playwright", "source_fetch_playwright"]:
@@ -467,7 +491,7 @@ class BuilderEngine:
                         return result
 
             if isinstance(url_input, list):
-                return [_pw_map(u) for u in url_input]
+                return Batch([_pw_map(u) for u in url_input])
             return _pw_map(url_input)
 
         # ── Actions ──────────────────────────────────────────────────────
@@ -510,7 +534,7 @@ class BuilderEngine:
                 mapped = [_process_html(h) for h in html_input]
                 if mode == "all":
                     return Batch([item for sublist in mapped if sublist for item in sublist])
-                return mapped
+                return Batch(mapped)
             else:
                 return _process_html(html_input)
 
@@ -566,7 +590,7 @@ class BuilderEngine:
                 return t
 
             if isinstance(text_input, list):
-                return [_transform(t) for t in text_input]
+                return Batch([_transform(t) for t in text_input])
             return _transform(text_input)
 
         elif ntype == "action_type_convert":
@@ -586,7 +610,7 @@ class BuilderEngine:
                 return str(v)
 
             if isinstance(val_input, list):
-                return [_convert(v) for v in val_input]
+                return Batch([_convert(v) for v in val_input])
             return _convert(val_input)
 
         elif ntype == "action_html_children":
@@ -618,7 +642,7 @@ class BuilderEngine:
                 for item in input_list:
                     if isinstance(item, list): result.extend(item)
                     else: result.append(item)
-                return result
+                return Batch(result)
             elif mode == "merge_object":
                 result = {}
                 for item in input_list:

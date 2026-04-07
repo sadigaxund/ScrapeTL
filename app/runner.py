@@ -155,142 +155,150 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         all_episodes = []
         is_streaming = isinstance(iterable_source, types.GeneratorType)
 
-        try:
-            for item in iterable_source:
-                if stop_event and stop_event.is_set():
-                    status = "cancelled"
-                    error_msg = "Stop requested by user."
-                    print(f"[Runner] 🛑 {scraper_record.name} — cancelled.")
-                    break
-
-                # Prepare Iteration Inputs
-                if batch_input_name:
-                    iter_inputs = _input_values.copy()
-                    iter_inputs[batch_input_name] = item
-                else:
-                    iter_inputs = item
-
-                attempt_status = "failure"
-                iter_episodes = []
-
-                # Retry loop PER ELEMENT
-                for attempt in range(max_retries + 1):
+        # 4. Integrate Logger to capture stdout to file
+        from app.logging_manager import get_scraper_logger
+        # Use queue_task_id or a dummy ID for the filename
+        log_run_id = queue_task_id or int(time.time())
+        
+        with get_scraper_logger(db, scraper_record.name, log_run_id) as captured_log_path:
+            try:
+                for item in iterable_source:
                     if stop_event and stop_event.is_set():
-                        attempt_status = "cancelled"
+                        status = "cancelled"
+                        error_msg = "Stop requested by user."
+                        print(f"[Runner] 🛑 {scraper_record.name} — cancelled.")
                         break
 
-                    try:
-                        if scraper_record.scraper_type == "builder":
-                            res_bundle = engine.execute(iter_inputs, stop_event=stop_event)
-                            iter_episodes = res_bundle.get("main", [])
-                            all_debug_data.extend(res_bundle.get("debug", []))
-                        else:
-                            kwargs = {**iter_inputs, "vars": global_vars, "db": db}
-                            import inspect
-                            if "stop_event" in inspect.signature(scraper_instance.scrape).parameters:
-                                kwargs["stop_event"] = stop_event
-                            iter_episodes = scraper_instance.scrape(**kwargs)
+                    # Prepare Iteration Inputs
+                    if batch_input_name:
+                        iter_inputs = _input_values.copy()
+                        iter_inputs[batch_input_name] = item
+                    else:
+                        iter_inputs = item
 
-                        attempt_status = "success"
-                        break # exit retry loop
-                    except ScrapeSkip as skip:
-                        skip_message = str(skip) or "Skipped by scraper."
-                        attempt_status = "skipped"
-                        print(f"[Runner] ⏭  {scraper_record.name} — skipped: {skip_message}")
-                        break
-                    except Exception as exc:
-                        error_msg = str(exc)
-                        if attempt < max_retries:
-                            retry_count += 1
-                            wait = backoff_seconds * (2 ** attempt)
-                            print(f"[Runner] ⚠️ Iteration failed: {error_msg}. Retrying in {wait:.0f}s…")
-                            if stop_event and stop_event.wait(timeout=wait):
-                                attempt_status = "cancelled"
-                                break
-                            else: time.sleep(wait)
-                        else:
-                            print(f"[Runner] ❌ Iteration failed after {attempt+1} attempts: {error_msg}")
-                            attempt_status = "failure"
+                    attempt_status = "failure"
+                    iter_episodes = []
 
-                if attempt_status == "failure" and not is_streaming:
-                    # In a static batch, fail the whole batch
+                    # Retry loop PER ELEMENT
+                    for attempt in range(max_retries + 1):
+                        if stop_event and stop_event.is_set():
+                            attempt_status = "cancelled"
+                            break
+
+                        try:
+                            if scraper_record.scraper_type == "builder":
+                                res_bundle = engine.execute(iter_inputs, stop_event=stop_event)
+                                iter_episodes = res_bundle.get("main", [])
+                                all_debug_data.extend(res_bundle.get("debug", []))
+                            else:
+                                kwargs = {**iter_inputs, "vars": global_vars, "db": db}
+                                import inspect
+                                if "stop_event" in inspect.signature(scraper_instance.scrape).parameters:
+                                    kwargs["stop_event"] = stop_event
+                                iter_episodes = scraper_instance.scrape(**kwargs)
+
+                            attempt_status = "success"
+                            break # exit retry loop
+                        except ScrapeSkip as skip:
+                            skip_message = str(skip) or "Skipped by scraper."
+                            attempt_status = "skipped"
+                            print(f"[Runner] ⏭  {scraper_record.name} — skipped: {skip_message}")
+                            break
+                        except Exception as exc:
+                            error_msg = str(exc)
+                            if attempt < max_retries:
+                                retry_count += 1
+                                wait = backoff_seconds * (2 ** attempt)
+                                print(f"[Runner] ⚠️ Iteration failed: {error_msg}. Retrying in {wait:.0f}s…")
+                                if stop_event and stop_event.wait(timeout=wait):
+                                    attempt_status = "cancelled"
+                                    break
+                                else: time.sleep(wait)
+                            else:
+                                print(f"[Runner] ❌ Iteration failed after {attempt+1} attempts: {error_msg}")
+                                attempt_status = "failure"
+
+                    if attempt_status == "failure" and not is_streaming:
+                        # In a static batch, fail the whole batch
+                        status = "failure"
+                        raise Exception(f"Batch item failed: {error_msg}")
+                    elif attempt_status == "skipped" and not is_streaming:
+                        # Treat the single-run skip as final skipped list
+                        status = "skipped"
+                        if not error_msg: error_msg = skip_message
+
+                    if iter_episodes:
+                        all_episodes.extend(iter_episodes)
+
+                    # STREAMING DISPATCH
+                    if is_streaming and iter_episodes and attempt_status == "success":
+                        print(f"[Runner] 🔄 Streaming chunk: {len(iter_episodes)} items.")
+                        results = _fire_integrations(scraper_record, "success", iter_episodes, None, triggered_by)
+
+                        chunk_log = ScrapeLog(
+                            scraper_id=scraper_id,
+                            status="success",
+                            payload=json.dumps([dict(ep) for ep in (iter_episodes[:log_preview_limit] if log_preview_limit > 0 else iter_episodes)]),
+                            episode_count=len(iter_episodes),
+                            error_msg="Streaming Chunk",
+                            run_at=datetime.utcnow(),
+                            triggered_by=triggered_by,
+                            schedule_id=schedule_id,
+                            integration_details=json.dumps(results) if results else None,
+                            debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", [])) if hasattr(scraper_instance, 'debug_payload') else None,
+                            log_file_path=captured_log_path
+                        )
+                        db.add(chunk_log)
+                        db.commit()
+
+                if status not in ("cancelled", "skipped", "failure"):
+                    status = "success"
+
+            except Exception as exc:
+                if status != "cancelled":
+                    import traceback
+                    traceback.print_exc()
                     status = "failure"
-                    raise Exception(f"Batch item failed: {error_msg}")
-                elif attempt_status == "skipped" and not is_streaming:
-                    # Treat the single-run skip as final skipped list
-                    status = "skipped"
-                    if not error_msg: error_msg = skip_message
+                    error_msg = str(exc)
 
-                if iter_episodes:
-                    all_episodes.extend(iter_episodes)
+            finally:
+                if engine:
+                    try: engine.teardown()
+                    except Exception as t_err: print(f"[Runner] Builder engine teardown error: {t_err}")
 
-                # STREAMING DISPATCH
-                if is_streaming and iter_episodes and attempt_status == "success":
-                    print(f"[Runner] 🔄 Streaming chunk: {len(iter_episodes)} items.")
-                    results = _fire_integrations(scraper_record, "success", iter_episodes, None, triggered_by)
+                if hasattr(scraper_instance, 'teardown'):
+                    try: scraper_instance.teardown()
+                    except Exception as t_err: print(f"[Runner] Scraper instance teardown error: {t_err}")
 
-                    chunk_log = ScrapeLog(
-                        scraper_id=scraper_id,
-                        status="success",
-                        payload=json.dumps([dict(ep) for ep in (iter_episodes[:log_preview_limit] if log_preview_limit > 0 else iter_episodes)]),
-                        episode_count=len(iter_episodes),
-                        error_msg="Streaming Chunk",
-                        run_at=datetime.utcnow(),
-                        triggered_by=triggered_by,
-                        schedule_id=schedule_id,
-                        integration_details=json.dumps(results) if results else None,
-                        debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", [])) if hasattr(scraper_instance, 'debug_payload') else None
-                    )
-                    db.add(chunk_log)
-                    db.commit()
-
-            if status not in ("cancelled", "skipped", "failure"):
-                status = "success"
-
-        except Exception as exc:
+            # Update health (unless cancelled)
             if status != "cancelled":
-                import traceback
-                traceback.print_exc()
-                status = "failure"
-                error_msg = str(exc)
+                scraper_record.health = "ok" if status in ("success", "skipped") else "failing"
 
-        finally:
-            if engine:
-                try: engine.teardown()
-                except Exception as t_err: print(f"[Runner] Builder engine teardown error: {t_err}")
+            # Prepare summary fields
+            payload_list = [dict(ep) for ep in all_episodes]
+            episode_count = len(all_episodes)
+            payload_dict = payload_list[0] if payload_list else None
 
-            if hasattr(scraper_instance, 'teardown'):
-                try: scraper_instance.teardown()
-                except Exception as t_err: print(f"[Runner] Scraper instance teardown error: {t_err}")
+            # Persist log entry
+            def _safe_json(obj):
+                import types
+                if isinstance(obj, types.GeneratorType): return list(obj)
+                return str(obj)
 
-        # Update health (unless cancelled)
-        if status != "cancelled":
-            scraper_record.health = "ok" if status in ("success", "skipped") else "failing"
-
-        # Prepare summary fields
-        payload_list = [dict(ep) for ep in all_episodes[:50]]
-        episode_count = len(all_episodes)
-        payload_dict = payload_list[0] if payload_list else None
-
-        # Persist log entry
-        def _safe_json(obj):
-            import types
-            if isinstance(obj, types.GeneratorType): return list(obj)
-            return str(obj)
-
-        log = ScrapeLog(
-            scraper_id=scraper_id,
-            status=status,
-            payload=json.dumps(payload_list[:log_preview_limit] if log_preview_limit > 0 else payload_list, default=_safe_json) if payload_list else (json.dumps([payload_dict], default=_safe_json) if payload_dict else None),
-            episode_count=episode_count,
-            error_msg=error_msg,
-            run_at=datetime.utcnow(),
-            triggered_by=triggered_by,
-            retry_count=retry_count,
-            schedule_id=schedule_id,
-            debug_payload=json.dumps(all_debug_data, default=_safe_json)
-        )
-        db.add(log)
+            log = ScrapeLog(
+                scraper_id=scraper_id,
+                status=status,
+                payload=json.dumps(payload_list[:log_preview_limit] if log_preview_limit > 0 else payload_list, default=_safe_json) if payload_list else (json.dumps([payload_dict], default=_safe_json) if payload_dict else None),
+                episode_count=episode_count,
+                error_msg=error_msg,
+                run_at=datetime.utcnow(),
+                triggered_by=triggered_by,
+                retry_count=retry_count,
+                schedule_id=schedule_id,
+                debug_payload=json.dumps(all_debug_data, default=_safe_json),
+                log_file_path=captured_log_path
+            )
+            db.add(log)
 
         if queue_task:
             db.delete(queue_task)

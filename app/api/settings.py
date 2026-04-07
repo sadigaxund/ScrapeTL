@@ -47,7 +47,10 @@ def list_timezones():
 
 @router.put("/{key}")
 def update_setting(key: str, payload: SettingUpdate, db: Session = Depends(get_db)):
-    allowed_keys = {"timezone", "browser_headless", "browser_cdp_url", "log_preview_limit"}
+    allowed_keys = {
+        "timezone", "browser_headless", "browser_cdp_url", "log_preview_limit",
+        "log_directory", "log_retention_days", "log_max_size_kb"
+    }
     if key not in allowed_keys:
         raise HTTPException(status_code=400, detail=f"Unknown setting key: {key}")
 

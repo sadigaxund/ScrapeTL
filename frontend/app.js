@@ -1759,31 +1759,8 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     head.textContent = 'Context Registry';
     menu.appendChild(head);
 
-    // 2. Input Parameters (External Inputs)
-    if (filter !== 'comparator') {
-        state.builder.nodes.forEach(n => {
-            if (n.id !== nodeId && n.type === 'input' && n.preset === 'external' && n.config.name) {
-                const type = getTypeIndicator(n.config.dataType || 'string');
-                const item = document.createElement('div');
-                item.className = 'context-item';
-                item.innerHTML = `
-                <div class="item-icon ${type.cls}">${type.text}</div>
-                <div class="item-content">
-                    <span class="item-title">${n.config.label || n.config.name}</span>
-                    <span class="item-subtitle">${n.config.dataType || 'string'}</span>
-                </div>
-                <small class="item-badge" style="background:rgba(52,211,153,0.1); color:#34d399">Param</small>
-            `;
-                item.onclick = () => {
-                    inputEl.value = `{{${n.config.name}}}`;
-                    updateNodeConfig(nodeId, configKey, inputEl.value);
-                    renderBuilderNodes(); renderConnections();
-                    menu.remove();
-                };
-                menu.appendChild(item);
-            }
-        });
-    }
+    // 2. Input Parameters (Skipped: Now using direct connections or Registry)
+
 
     // 3. Global Variables (DB Registry)
     if (state.variables && state.variables.length > 0 && filter !== 'comparator') {
@@ -1801,12 +1778,13 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             const item = document.createElement('div');
             item.className = 'context-item';
             const displayKey = v.namespace ? `${v.namespace}.${v.key}` : v.key;
+            
             item.innerHTML = `
                 <div class="item-icon ${type.cls}">${type.text}</div>
                 <div class="item-content">
-                    <div style="display:flex; align-items:center; gap:6px">
+                    <div style="display:flex; align-items:center; width:100%">
                         <span class="item-title" style="font-weight:700">${v.key}</span>
-                        <span style="font-size:9px; background:rgba(124,106,247,0.1); color:var(--accent); padding:1px 4px; border-radius:3px; font-weight:800; letter-spacing:0.05em">@${(v.namespace || 'REGISTRY').toUpperCase()}</span>
+                        <span style="margin-left:auto; font-size:9px; background:rgba(52,211,153,0.1); color:#34d399; padding:1px 6px; border-radius:3px; font-weight:800; letter-spacing:0.05em">${(v.namespace || 'REGISTRY').toUpperCase()}</span>
                     </div>
                 </div>
             `;
@@ -3770,7 +3748,7 @@ async function loadLogs(page = null) {
                     <div class="log-tabs" style="display:flex; gap:8px; margin-bottom:12px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
                         <button class="log-tab-btn active" onclick="switchLogTab('${log.id}', 'results', this)">Results</button>
                         <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'debug', this)">Debug Assets (${log.debug_payload.length})</button>
-                        <button class="btn btn-ghost btn-sm" style="margin-left:auto; color:var(--accent); font-size:10px; display:flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid var(--accent-glow);" onclick="openDebugInspector(${log.id})">🔬 Inspect Raw Data</button>
+                        <button class="btn btn-ghost btn-sm" style="margin-left:auto; color:var(--accent); font-size:10px; display:flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid var(--accent-glow);" onclick="openSystemLogViewer(${log.id}, '${(log.scraper_name || 'N/A').replace(/'/g, "\\'")}')">View System Logs</button>
                     </div>
                     ` : ''}
 
@@ -3819,6 +3797,12 @@ function toggleLogDetails(id) {
     } else {
         state.expandedLogs.add(id);
     }
+}
+
+function collapseAllLogs() {
+    state.expandedLogs.clear();
+    responseCache['logs'] = null; // Clear cache to force re-render
+    loadLogs();
 }
 
 function switchLogTab(logId, tab, btn) {
@@ -3937,7 +3921,7 @@ function renderPayload(payload, episodeCount = 0) {
 
         let msg = '';
         if (episodeCount && episodeCount > payload.length) {
-            msg = `<div class="payload-truncation-notice">✨ Displaying <b>${payload.length}</b> out of <b>${episodeCount}</b> scraped items.</div>`;
+            msg = `<div class="payload-truncation-notice">Displaying <b>${payload.length}</b> out of <b>${episodeCount}</b> scraped items.</div>`;
         }
 
         return `<div class="payload-table-wrapper"><table class="payload-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>${msg}`;
@@ -4719,6 +4703,21 @@ async function loadSettings() {
             document.getElementById('setting-log-preview-limit').value = logLimit;
         }
 
+        const logDir = settings.log_directory || './logs';
+        if (document.getElementById('setting-log-directory')) {
+            document.getElementById('setting-log-directory').value = logDir;
+        }
+
+        const logRetention = settings.log_retention_days || '30';
+        if (document.getElementById('setting-log-retention')) {
+            document.getElementById('setting-log-retention').value = logRetention;
+        }
+
+        const logMaxSize = settings.log_max_size_kb || '2048';
+        if (document.getElementById('setting-log-max-size')) {
+            document.getElementById('setting-log-max-size').value = logMaxSize;
+        }
+
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -4739,11 +4738,14 @@ async function saveAllAppSettings() {
     const bHeadless = document.getElementById('setting-browser-headless').value;
     const bCDP = document.getElementById('setting-browser-cdp').value.trim();
     const logLimit = document.getElementById('setting-log-preview-limit').value;
+    const logDir = document.getElementById('setting-log-directory').value.trim();
+    const logRetention = document.getElementById('setting-log-retention').value;
+    const logMaxSize = document.getElementById('setting-log-max-size').value;
 
     if (!tz) { toast('Please enter a timezone.', 'error'); return; }
 
     btn.disabled = true;
-    btn.textContent = '⏳ Saving...';
+    // Keep text as "Save" per user request
 
     try {
         // Save all in parallel
@@ -4751,7 +4753,10 @@ async function saveAllAppSettings() {
             apiFetch(`${API.settings}/timezone`, { method: 'PUT', body: JSON.stringify({ value: tz }) }),
             saveAppSetting('browser_headless', bHeadless),
             saveAppSetting('browser_cdp_url', bCDP),
-            saveAppSetting('log_preview_limit', logLimit)
+            saveAppSetting('log_preview_limit', logLimit),
+            saveAppSetting('log_directory', logDir),
+            saveAppSetting('log_retention_days', logRetention),
+            saveAppSetting('log_max_size_kb', logMaxSize)
         ]);
 
         // Post-timezone update logic
@@ -4759,12 +4764,12 @@ async function saveAllAppSettings() {
         Object.keys(responseCache).forEach(k => { responseCache[k] = null; });
         refreshAll();
 
-        toast('All settings saved successfully.', 'success');
+        toast('Settings saved successfully.', 'success');
     } catch (e) {
         toast(`Error saving settings: ${e.message}`, 'error');
     } finally {
         btn.disabled = false;
-        btn.textContent = 'Save All Changes';
+        btn.textContent = 'Save';
     }
 }
 
@@ -5485,7 +5490,7 @@ function renderVariablesList() {
                             </div>
                         ` : `
                             <div style="display:flex; align-items:center; gap:8px">
-                                <span style="color:var(--accent); font-family:var(--font-mono)">${namespace || 'Shared Registry'}</span>
+                                <span style="background:rgba(52,211,153,0.1); color:#34d399; padding:2px 8px; border-radius:4px; font-weight:800; font-size:10px; font-family:var(--font-mono); letter-spacing:0.02em">${(namespace || 'Shared Registry').toUpperCase()}</span>
                                 ${namespace ? `<button class="icon-btn" onclick="editNamespace('${namespace}')" title="Rename Namespace" style="font-size:10px; opacity:0.4">✏️</button>` : ''}
                             </div>
                         `}
@@ -5607,7 +5612,7 @@ function renderVariablesList() {
         <tr class="group-header" style="background:rgba(99,102,241,0.05); border-top:2px solid var(--accent)">
             <td colspan="7" style="padding:16px 14px; font-size:11px; font-weight:800; color:#aeb9e1; text-transform:uppercase">
                 <div style="display:flex; flex-direction:column; gap:8px">
-                    <span>🆕 Create New Namespace:</span>
+                    <span>Create New Namespace:</span>
                     <div style="display:flex; align-items:center; gap:10px">
                         <input type="text" id="rename-ns-input-@@NEW_NAMESPACE@@" placeholder="Enter namespace name (e.g. Selectors)..." value="${state.tempNamespaceName || ''}" oninput="state.tempNamespaceName = this.value" class="inline-input" style="height:32px; font-size:13px; flex-grow:1; font-family:var(--font-mono)">
                         <button class="btn btn-primary" style="height:32px; padding:0 12px; font-size:11px" onclick="saveNamespaceRename('@@NEW_NAMESPACE@@')">Confirm Name</button>
@@ -5825,7 +5830,8 @@ function cancelEditNamespace() {
 async function saveNamespaceRename(oldName) {
     const input = document.getElementById(`rename-ns-input-${oldName || '@@GLOBAL@@'}`);
     if (!input) return;
-    const newName = input.value.trim();
+    // Sanitize namespace at source: strip leading '@' if user provided it
+    const newName = input.value.trim().replace(/^@/, '');
 
     if (oldName === '@@NEW_NAMESPACE@@') {
         if (!newName) { state.editingNamespace = null; renderVariablesList(); return; }
@@ -5926,7 +5932,8 @@ async function saveInlineVariable(idx) {
         value = document.getElementById(`inline-var-value-${idx}`).value.trim();
     }
     const description = document.getElementById(`inline-var-desc-${idx}`).value.trim();
-    const namespace = v.namespace || '';
+    // Sanitize namespace at source: strip leading '@' if user provided it
+    const namespace = (v.namespace || '').replace(/^@/, '');
 
     if (!key) { toast('Key is required', 'error'); return; }
 
@@ -6222,29 +6229,121 @@ function closeContextDrawer() {
     document.getElementById('ctx-drawer-backdrop').classList.remove('active');
 }
 
-/* 🔬 Debug Inspector Drawer Logic */
-function openDebugInspector(logId) {
-    const log = state.lastRenderedLogs ? state.lastRenderedLogs.find(l => l.id === logId) : null;
-    if (!log || !log.debug_payload) {
-        toast('Log context not available.', 'error');
-        return;
-    }
+/* 📋 System Log Viewer Logic */
+let _liveLogInterval = null;
 
+async function openSystemLogViewer(logId, scraperName = '') {
+    const isRunning = String(logId).startsWith('run_');
+    const realId = isRunning ? parseInt(logId.replace('run_', '')) : logId;
+    
     const drawer = document.getElementById('debug-inspector-drawer');
     const body = document.getElementById('debug-inspector-body');
     const title = document.getElementById('debug-inspector-title');
 
-    title.innerHTML = `🔬 Debug Inspector — <span style="color:var(--text-muted); font-weight:400; font-size:13px;">#${log.id} ${log.scraper_name}</span>`;
-    body.innerHTML = renderDebugPayload(log.debug_payload);
+    // Clean up previous interval
+    if (_liveLogInterval) {
+        clearInterval(_liveLogInterval);
+        _liveLogInterval = null;
+    }
 
-    drawer.style.right = '0px';
-    drawer.classList.add('open');
+    const titleStr = scraperName ? `System Log — ${scraperName} (#${realId})` : `System Log #${realId}`;
+    title.innerHTML = `${titleStr} <span style="color:var(--text-muted); font-weight:400; font-size:13px; margin-left:8px;">${isRunning ? '(Live)' : ''}</span>`;
+    body.innerHTML = `
+        <div style="padding:20px; text-align:center; opacity:0.5;">
+            <div class="spinner" style="margin: 0 auto 12px;"></div>
+            Loading log trace...
+        </div>
+    `;
+
+    drawer.classList.add('active');
+
+    const updateUI = (data) => {
+        const content = data.content || "";
+        const path = data.path || "";
+        const basePath = data.base_path || "";
+        
+        // Abstract path for display
+        let displayPath = path;
+        if (path && basePath && path.toLowerCase().startsWith(basePath.toLowerCase())) {
+            displayPath = '{{STL_LOGS_PATH}}' + path.substring(basePath.length);
+        }
+
+        body.innerHTML = `
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 16px; background:rgba(0,0,0,0.2); border-bottom:1px solid var(--border-light); margin:-24px -24px 16px -24px;">
+                <span style="font-size:11px; font-family:monospace; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:12px; flex:1;" title="${path}">
+                    ${path ? `Path: ${displayPath}` : 'No file path'}
+                </span>
+                ${path ? `<button class="btn btn-ghost" style="padding:4px 8px; font-size:10px; flex-shrink:0;" onclick="copyToClipboard('${path.replace(/\\/g, '\\\\')}')">Copy Path</button>` : ''}
+            </div>
+            <pre id="log-pre-container" style="margin:0; font-family:'JetBrains Mono', 'Fira Code', monospace; font-size:11px; line-height:1.5; color:#e0e0e0; white-space:pre; word-break:normal; background:#0d1117; padding:16px; border-radius:8px; border:1px solid rgba(255,255,255,0.05); flex:1; overflow:auto;">${escapeHTML(content)}</pre>
+            ${isRunning ? `<div style="margin-top:12px; font-size:11px; color:var(--running); display:flex; align-items:center; gap:6px;">
+                <span class="pulse-dot"></span> Streaming live logs...
+            </div>` : ''}
+        `;
+        
+        // Auto-scroll to bottom
+        const pre = document.getElementById('log-pre-container');
+        if (pre) pre.scrollTop = pre.scrollHeight;
+    };
+
+    const fetchLogs = async () => {
+        try {
+            const url = isRunning ? `/api/run/${realId}/logs/live` : `/api/logs/${realId}/raw`;
+            const data = await apiFetch(url);
+            updateUI(data);
+            
+            // If it was running but is no longer "active", stop interval
+            if (isRunning && data.active === false) {
+                clearInterval(_liveLogInterval);
+                _liveLogInterval = null;
+                // Refresh title
+                const titleStr = scraperName ? `System Log — ${scraperName} (#${realId})` : `System Log #${realId}`;
+                title.innerHTML = `${titleStr} <span style="color:var(--text-muted); font-weight:400; font-size:13px; margin-left:8px;">(Finished)</span>`;
+            }
+        } catch (e) {
+            body.innerHTML = `<div class="log-error">Failed to load logs: ${e.message}</div>`;
+            if (_liveLogInterval) clearInterval(_liveLogInterval);
+        }
+    };
+
+    await fetchLogs();
+
+    if (isRunning) {
+        _liveLogInterval = setInterval(fetchLogs, 2000);
+    }
 }
 
 function closeDebugInspector() {
     const drawer = document.getElementById('debug-inspector-drawer');
-    drawer.style.right = '-600px';
-    drawer.classList.remove('open');
+    drawer.classList.remove('active');
+    if (_liveLogInterval) {
+        clearInterval(_liveLogInterval);
+        _liveLogInterval = null;
+    }
+}
+
+// Global Escape key listener for the log drawer
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const drawer = document.getElementById('debug-inspector-drawer');
+        if (drawer && drawer.classList.contains('active')) {
+            closeDebugInspector();
+        }
+    }
+});
+
+function escapeHTML(str) {
+    const p = document.createElement('p');
+    p.textContent = str;
+    return p.innerHTML;
+}
+
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        toast('Path copied to clipboard', 'success');
+    }).catch(err => {
+        toast('Failed to copy', 'error');
+    });
 }
 
 /**

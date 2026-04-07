@@ -224,9 +224,64 @@ def load_schedules_from_db():
         db.close()
 
 
+def purge_expired_logs():
+    """Daily cleanup task for old log files and DB entries."""
+    from app.database import SessionLocal
+    from app.models import ScrapeLog, AppSetting
+    import os
+
+    db = SessionLocal()
+    try:
+        # 1. Get retention setting
+        retention_days = 30
+        r = db.get(AppSetting, "log_retention_days")
+        if r and r.value:
+            retention_days = int(r.value)
+        
+        cutoff = datetime.utcnow() - timedelta(days=retention_days)
+        
+        # 2. Find expired logs
+        expired = db.query(ScrapeLog).filter(ScrapeLog.run_at < cutoff).all()
+        if not expired:
+            return
+
+        print(f"[Maintenance] Purging {len(expired)} expired logs (older than {retention_days} days)...")
+        
+        for log in expired:
+            # Delete physical file
+            if log.log_file_path and os.path.exists(log.log_file_path):
+                try:
+                    os.remove(log.log_file_path)
+                except Exception as e:
+                    print(f"[Maintenance] Failed to delete log file {log.log_file_path}: {e}")
+            
+            # Delete DB entry
+            db.delete(log)
+        
+        db.commit()
+        
+        # 3. Optional: Cleanup empty directories in logs folder
+        log_dir_setting = db.get(AppSetting, "log_directory")
+        base_dir = log_dir_setting.value if log_dir_setting else "./logs"
+        if os.path.exists(base_dir):
+            for root, dirs, files in os.walk(base_dir, topdown=False):
+                for name in dirs:
+                    dir_path = os.path.join(root, name)
+                    if not os.listdir(dir_path):
+                        try: os.rmdir(dir_path)
+                        except: pass
+
+    except Exception as e:
+        print(f"[Maintenance] Cleanup failed: {e}")
+    finally:
+        db.close()
+
+
 def start():
     if not _scheduler.running:
         _scheduler.start()
         _scheduler.add_job(process_catchup_queue, 'interval', seconds=20, id='catchup_queue_processor', replace_existing=True)
+        # Daily maintenance at 00:00
+        _scheduler.add_job(purge_expired_logs, 'cron', hour=0, minute=0, id='log_purger', replace_existing=True)
         tz = get_app_timezone()
         print(f"[Scheduler] Started. Timezone: {tz}")

@@ -73,6 +73,55 @@ def get_thumbnail(filename: str):
 @app.on_event("startup")
 def startup_event():
     init_db()
+    
+    from app.database import SessionLocal
+    db = SessionLocal()
+
+    # Column Migration: log_file_path
+    from sqlalchemy import text
+    try:
+        db.execute(text("ALTER TABLE scrape_logs ADD COLUMN log_file_path VARCHAR"))
+        db.commit()
+        print("[Migration] Added 'log_file_path' column to 'scrape_logs' table.")
+    except Exception:
+        # Expected to fail if column already exists
+        db.rollback()
+
+    # Initialise Log Settings
+    import os
+    from app.models import AppSetting
+    
+    # Prioritise environment variable for logs path
+    env_logs_path = os.environ.get("STL_LOGS_PATH", "./logs")
+    if "STL_LOGS_PATH" not in os.environ:
+        os.environ["STL_LOGS_PATH"] = env_logs_path
+
+    defaults = {
+        "log_retention_days": "30",
+        "log_max_size_kb": "2048",
+        "log_directory": env_logs_path
+    }
+    try:
+        updated = False
+        for key, val in defaults.items():
+            existing = db.query(AppSetting).filter(AppSetting.key == key).first()
+            if not existing:
+                db.add(AppSetting(key=key, value=val))
+                updated = True
+            elif key == "log_directory" and existing.value != env_logs_path:
+                # Always sync setting with environment variable if it changed
+                existing.value = env_logs_path
+                updated = True
+                
+        if updated:
+            db.commit()
+            print(f"[Settings] Synchronised log defaults (Directory: {env_logs_path}).")
+    except Exception as e:
+        print(f"[Settings] Error initializing log defaults: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
     from app import scheduler as sched
     sched.start()
     sched.load_schedules_from_db()

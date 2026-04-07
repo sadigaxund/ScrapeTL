@@ -434,6 +434,12 @@
             <div class="custom-dropdown-menu" id="log-menu-statuses" onclick="event.stopPropagation()"></div>
           </div>
 
+          <div style="flex:1"></div>
+
+          <button class="btn btn-primary" onclick="collapseAllLogs()"
+            style="height:32px; font-size:11px; padding:0 16px; border-radius:6px; font-weight:700; border:none; box-shadow:0 2px 8px rgba(99,102,241,0.25);">
+            Collapse All
+          </button>
         </div>
         <div id="logs-list" class="logs-list"></div>
         <div class="pagination" id="logs-pagination"></div>
@@ -867,14 +873,36 @@
         <div style="padding-bottom:20px; border-bottom:1px solid var(--border-light); margin-bottom:20px;">
           <h3
             style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin-bottom:12px;">
-            📊 Memory & History</h3>
+            🧹 Maintenance & Logging</h3>
+
+          <div class="form-row" style="margin-bottom:14px">
+            <div class="form-group" style="flex:1;">
+              <label>Log Storage Directory</label>
+              <input type="text" id="setting-log-directory" placeholder="./logs" style="height:42px;" />
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Root folder for per-run .log files.</p>
+            </div>
+          </div>
+
           <div class="form-row" style="align-items: flex-start;">
             <div class="form-group" style="flex: 1;">
-              <label>Log Preview Row Limit <span style="font-weight:400;color:var(--text-muted);text-transform:none">(0
-                  for unlimited)</span></label>
+              <label>Log Retention (Days)</label>
+              <input type="number" id="setting-log-retention" style="height:42px" placeholder="30" min="1" />
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Automatic purging of logs older than
+                this.</p>
+            </div>
+            <div class="form-group" style="flex: 1;">
+              <label>Max Log File Size (KB)</label>
+              <input type="number" id="setting-log-max-size" style="height:42px" placeholder="2048" min="100" />
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Limits the captured stdout per run.</p>
+            </div>
+          </div>
+
+          <div class="form-row" style="align-items: flex-start; margin-top:14px">
+            <div class="form-group" style="flex: 1;">
+              <label>Payload Preview Row Limit <span
+                  style="font-weight:400;color:var(--text-muted);text-transform:none">(0 for unlimited)</span></label>
               <input type="number" id="setting-log-preview-limit" style="height:42px" placeholder="10" min="0" />
-              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Number of rows saved and displayed in log
-                details.</p>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Number of data rows saved in DB.</p>
             </div>
             <div style="flex: 1;"></div>
           </div>
@@ -883,7 +911,7 @@
         <!-- Sticky Footer for Save All -->
         <div
           style="position: sticky; bottom: -20px; margin: 20px -20px -20px -20px; padding: 16px 24px; background: var(--bg-surface); border-top: 1px solid var(--border-strong); display: flex; justify-content: flex-end; border-bottom-left-radius: 12px; border-bottom-right-radius: 12px; z-index: 10; box-shadow: 0 -10px 25px rgba(0,0,0,0.2);">
-          <button class="btn btn-primary" onclick="saveAllAppSettings()" id="save-all-settings-btn"
+          <button class="btn btn-primary" onclick="saveAllAppSettings(this)" id="save-all-settings-btn"
             style="height: 42px; padding: 0 42px; font-weight: 700; box-shadow: 0 4px 15px rgba(var(--primary-rgb), 0.3); justify-content: center;">
             Save
           </button>
@@ -1548,7 +1576,7 @@
       <div
         style="display:flex;gap:12px;justify-content:flex-end; border-top:1px solid var(--border-light); padding-top:20px;">
         <button class="btn btn-ghost" onclick="closeOneTimeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="submitOneTimeTask()">✨ Add to Queue</button>
+        <button class="btn btn-primary" onclick="submitOneTimeTask()">Add to Queue</button>
       </div>
     </div>
   </div>
@@ -1701,12 +1729,13 @@
     </div>
   </div>
 
-  <div class="side-drawer" id="debug-inspector-drawer" style="width: 600px; right: -600px;">
+  <div class="side-drawer" id="debug-inspector-drawer">
     <div class="side-drawer__header">
-      <h3 id="debug-inspector-title">🔬 Debug Inspector</h3>
-      <button class="btn btn-ghost" onclick="closeDebugInspector()">✕</button>
+      <h3 id="debug-inspector-title">System Log Viewer</h3>
+      <button class="btn btn-ghost" onclick="closeDebugInspector()"
+        style="padding:4px 8px; font-size:14px; line-height:1;">✕</button>
     </div>
-    <div class="side-drawer__body" id="debug-inspector-body" style="padding: 24px; overflow-y: auto; flex: 1;">
+    <div class="side-drawer__body" id="debug-inspector-body">
       <!-- Content populated by JS -->
     </div>
   </div>

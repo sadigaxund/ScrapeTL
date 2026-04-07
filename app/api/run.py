@@ -106,3 +106,29 @@ def get_task_status(task_id: int, db: Session = Depends(get_db)):
         "status": task.status, # e.g. "running" | "pending"
         "id": task_id
     }
+
+
+@router.get("/{task_id}/logs/live")
+def get_live_logs(task_id: int):
+    """Retrieve the current content of a live log file for an active task."""
+    from app.logging_manager import ACTIVE_LOG_PATHS
+    import os
+
+    path = ACTIVE_LOG_PATHS.get(task_id)
+    if not path or not os.path.exists(path):
+        # Could be that it just finished and was removed from ACTIVE_LOG_PATHS
+        return {"content": "", "active": False}
+
+    try:
+        # Read the file. It's being written to simultaneously, 
+        # but standard 'r' mode usually works for tailing.
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {
+            "content": content,
+            "active": True,
+            "path": os.path.abspath(path),
+            "base_path": os.path.abspath(os.environ.get("STL_LOGS_PATH", "./logs"))
+        }
+    except Exception as e:
+        return {"content": f"Error reading live log: {e}", "active": False}

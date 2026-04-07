@@ -96,6 +96,7 @@ class ScrapeLog(Base):
     retry_count   = Column(Integer, default=0)       # how many retries were attempted
     integration_details = Column(Text, nullable=True) # JSON with integration results
     debug_payload       = Column(Text, nullable=True) # JSON with secondary debug artifacts
+    log_file_path       = Column(String, nullable=True) # New: Path to the .log file in ./logs/
 
     scraper = relationship("Scraper", back_populates="logs")
     schedule = relationship("Schedule")

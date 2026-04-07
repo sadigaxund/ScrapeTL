@@ -2,6 +2,7 @@ import csv
 import io
 import json
 import pytz
+import os
 from typing import Optional
 from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import Response
@@ -239,3 +240,28 @@ def remove_from_queue(task_id: int, db: Session = Depends(get_db)):
     db.delete(task)
     db.commit()
     return {"detail": "Removed."}
+
+
+@router.get("/api/logs/{log_id}/raw")
+def get_raw_log(log_id: int, db: Session = Depends(get_db)):
+    """Retrieve the raw stdout log file content for a given run."""
+    log = db.get(ScrapeLog, log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log entry not found.")
+    
+    if not log.log_file_path:
+        return {"content": "No system log file captured for this run.", "path": None}
+
+    if not os.path.exists(log.log_file_path):
+        return {"content": f"Log file not found on disk: {log.log_file_path}\n(It may have been purged or moved manually).", "path": log.log_file_path}
+
+    try:
+        with open(log.log_file_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        return {
+            "content": content,
+            "path": os.path.abspath(log.log_file_path),
+            "base_path": os.path.abspath(os.environ.get("STL_LOGS_PATH", "./logs"))
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read log file: {str(e)}")

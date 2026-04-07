@@ -9,7 +9,7 @@ We have pivoted the No-Code builder toward a "Component Collection" philosophy c
 ## Storage & Database Optimization
 To prevent long-term SQLite bloat from large HTML payloads, we implemented a strict truncation policy.
 - **Backend**: `runner.py` now slices `payload_list[:10]` strictly before stringifying and saving to the database.
-- **UI Grace**: The Logs menu now interprets `log.episode_count` vs `log.payload.length`. If data was truncated, it displays: *"✨ Displaying 10 out of X scraped items."*
+- **UI Grace**: The Logs menu now interprets `log.episode_count` vs `log.payload.length`. If data was truncated, it displays: *"Displaying 10 out of X scraped items."*
 
 ## UI Refinement & Aesthetics
 A significant pass on the "Premium Look" of the dashboard:

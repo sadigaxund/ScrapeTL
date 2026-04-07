@@ -136,35 +136,11 @@ def rename_namespace(payload: NamespaceRenameRequest, db: Session = Depends(get_
     return {"detail": f"Renamed {len(vars)} variables from '{payload.old_namespace}' to '{payload.new_namespace}'."}
 
 
-# Standard System Environment Keys to Filter Out (Noise)
-SYSTEM_ENV_BLACKLIST = {
-    # Windows
-    "ALLUSERSPROFILE", "APPDATA", "COMPUTERNAME", "COMSPEC", "COMMONPROGRAMFILES",
-    "COMMONPROGRAMFILES(X86)", "COMMONPROGRAMW6432", "DRIVERDATA", "HOMEDRIVE",
-    "HOMEPATH", "LOCALAPPDATA", "LOGONSERVER", "NUMBER_OF_PROCESSORS", "OS",
-    "PATH", "PATHEXT", "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER",
-    "PROCESSOR_LEVEL", "PROCESSOR_REVISION", "PROGRAMDATA", "PROGRAMFILES",
-    "PROGRAMFILES(X86)", "PROGRAMW6432", "PSMODULEPATH", "PUBLIC", "SYSTEMDRIVE",
-    "SYSTEMROOT", "TEMP", "TMP", "USERDOMAIN", "USERDOMAIN_ROAMINGPROFILE",
-    "USERNAME", "USERPROFILE", "WINDIR", "PROCESSOR_ARCHITEW6432", "ONDrive",
-    # Unix / Common
-    "PATH", "HOME", "USER", "SHELL", "PWD", "TERM", "LANG", "LC_ALL", "SHLVL", "_",
-    "LOGNAME", "MAIL", "OLDPWD", "SSH_AUTH_SOCK", "SSH_CLIENT", "SSH_CONNECTION", "SSH_TTY",
-    # Dev / App noise
-    "PY_AUTOLOAD_PATH", "PY_AUTO_RELOAD", "PYTHONPATH", "PYTHONIOENCODING", "PYTHONUNBUFFERED",
-}
-
 @router.get("/builtins/env")
 def list_env_variables():
     """List system environment variables (masked). Filtered for custom/docker variables."""
     envs = []
     for key, value in os.environ.items():
-        # Filter System Noise
-        if key.upper() in SYSTEM_ENV_BLACKLIST:
-            continue
-        if key.startswith("__"): # Internal python/system keys
-            continue
-        
         # Do not expose any part of the value in the UI API for security
         envs.append({
             "id": -1, # Virtual ID
