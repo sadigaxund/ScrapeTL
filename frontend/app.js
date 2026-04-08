@@ -3742,7 +3742,7 @@ async function loadLogs(page = null) {
         container.innerHTML = data.items.map((log, idx) => {
             const detailsId = `log-details-${log.id}`;
             const isRunning = log.status === 'running';
-            const hasDetails = log.payload || log.error_msg || isRunning;
+            const hasDetails = log.payload || (log.debug_payload && log.debug_payload.length > 0) || log.error_msg || isRunning || log.status !== 'pending';
             const isExpanded = state.expandedLogs.has(detailsId);
             const attempts = (log.retry_count || 0) + 1;
             const retryBadge = (attempts > 1)
@@ -3769,16 +3769,21 @@ async function loadLogs(page = null) {
                 </div>
                 ${hasDetails ? `
                 <div class="log-details" id="${detailsId}" style="display:${isExpanded ? 'block' : 'none'}">
+                    <div class="log-tabs" style="display:flex; gap:8px; margin-bottom:12px; border-bottom:1px solid var(--border-light); padding-bottom:8px; align-items:center;">
+                        <button class="log-tab-btn active" onclick="switchLogTab('${log.id}', 'results', this)">Results</button>
+                        ${log.debug_payload && log.debug_payload.length > 0 ? `
+                        <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'debug', this)">Debug Assets (${log.debug_payload.length})</button>
+                        ` : ''}
+                        <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'system', this); startLogTabStream('${log.task_id || log.id}', '${log.id}', '${(log.scraper_name || 'N/A').replace(/'/g, "\\'")}')">System Logs</button>
+                        
+                        <button class="btn btn-ghost btn-sm" style="margin-left:auto; color:var(--text-muted); font-size:10px; opacity:0.6; display:flex; align-items:center; gap:4px; padding:2px 8px;" onclick="openSystemLogViewer('${log.task_id || log.id}', '${(log.scraper_name || 'N/A').replace(/'/g, "\\'")}')">
+                            <span style="font-size:12px">↗</span> Pop-out Log
+                        </button>
+                    </div>
+
                     ${isRunning ? `<div class="log-running-msg">Execution in progress. Results will be available after completion.</div>` : ''}
                     ${log.error_msg && !isRunning ? (log.status === 'skipped' ? `<div class="log-skipped-msg">⏭ ${log.error_msg}</div>` : `<div class="log-error">❌ ${log.error_msg}</div>`) : ''}
-                    
-                    ${log.debug_payload && log.debug_payload.length > 0 ? `
-                    <div class="log-tabs" style="display:flex; gap:8px; margin-bottom:12px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">
-                        <button class="log-tab-btn active" onclick="switchLogTab('${log.id}', 'results', this)">Results</button>
-                        <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'debug', this)">Debug Assets (${log.debug_payload.length})</button>
-                        <button class="btn btn-ghost btn-sm" style="margin-left:auto; color:var(--accent); font-size:10px; display:flex; align-items:center; gap:4px; padding:2px 8px; border:1px solid var(--accent-glow);" onclick="openSystemLogViewer(${log.id}, '${(log.scraper_name || 'N/A').replace(/'/g, "\\'")}')">View System Logs</button>
-                    </div>
-                    ` : ''}
+
 
                     <div id="log-content-results-${log.id}">
                         ${log.payload ? `
@@ -3792,6 +3797,15 @@ async function loadLogs(page = null) {
 
                     <div id="log-content-debug-${log.id}" style="display:none">
                         ${renderDebugPayload(log.debug_payload)}
+                    </div>
+
+                    <div id="log-content-system-${log.id}" style="display:none">
+                        <div class="log-tab-system-content">
+                            <div class="spinner-container" style="padding:24px; text-align:center; opacity:0.5;">
+                                <div class="spinner" style="margin: 0 auto 12px;"></div>
+                                Loading system trace...
+                            </div>
+                        </div>
                     </div>
 
                     ${renderLogContext(log)}
@@ -3822,6 +3836,9 @@ function toggleLogDetails(id) {
     if (icon) icon.textContent = open ? '▶' : '▼';
     if (open) {
         state.expandedLogs.delete(id);
+        // Cleanup streaming if this log's system tab was active
+        const logId = id.replace('log-details-', '');
+        stopLogTabStream(logId);
     } else {
         state.expandedLogs.add(id);
     }
@@ -3836,13 +3853,17 @@ function collapseAllLogs() {
 function switchLogTab(logId, tab, btn) {
     const results = document.getElementById(`log-content-results-${logId}`);
     const debug = document.getElementById(`log-content-debug-${logId}`);
-    if (tab === 'results') {
-        results.style.display = 'block';
-        debug.style.display = 'none';
-    } else {
-        results.style.display = 'none';
-        debug.style.display = 'block';
+    const system = document.getElementById(`log-content-system-${logId}`);
+
+    if (results) results.style.display = tab === 'results' ? 'block' : 'none';
+    if (debug) debug.style.display = tab === 'debug' ? 'block' : 'none';
+    if (system) system.style.display = tab === 'system' ? 'block' : 'none';
+
+    // Cleanup streaming if moving AWAY from system tab
+    if (tab !== 'system') {
+        stopLogTabStream(logId);
     }
+
     const nav = btn.parentElement;
     nav.querySelectorAll('button').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -6259,10 +6280,55 @@ function closeContextDrawer() {
 
 /* 📋 System Log Viewer Logic */
 let _liveLogInterval = null;
+const activeLogTabStreams = {};
+
+async function startLogTabStream(logIdToFetch, uiLogId, scraperName = '') {
+    const isRunning = String(logIdToFetch).startsWith('run_');
+    const realId = isRunning ? parseInt(String(logIdToFetch).replace('run_', '')) : logIdToFetch;
+    const container = document.querySelector(`#log-content-system-${uiLogId} .log-tab-system-content`);
+    
+    if (!container) return;
+
+    const updateTabUI = (data) => {
+        const content = data.content || "No log content available.";
+        container.innerHTML = `<pre id="log-pre-tab-${uiLogId}">${escapeHTML(content)}</pre>`;
+        const pre = document.getElementById(`log-pre-tab-${uiLogId}`);
+        if (pre) pre.scrollTop = pre.scrollHeight;
+    };
+
+    const fetchLogs = async () => {
+        try {
+            const url = isRunning ? `/api/run/${realId}/logs/live` : `/api/logs/${realId}/raw`;
+            const data = await apiFetch(url);
+            updateTabUI(data);
+
+            if (isRunning && data.active === false) {
+                stopLogTabStream(uiLogId);
+            }
+        } catch (e) {
+            container.innerHTML = `<div class="log-error" style="margin:20px">Failed to load system logs: ${e.message}</div>`;
+            stopLogTabStream(uiLogId);
+        }
+    };
+
+    // Initial fetch
+    await fetchLogs();
+    
+    if (isRunning && !activeLogTabStreams[uiLogId]) {
+        activeLogTabStreams[uiLogId] = setInterval(fetchLogs, 2000);
+    }
+}
+
+function stopLogTabStream(uiLogId) {
+    if (activeLogTabStreams[uiLogId]) {
+        clearInterval(activeLogTabStreams[uiLogId]);
+        delete activeLogTabStreams[uiLogId];
+    }
+}
 
 async function openSystemLogViewer(logId, scraperName = '') {
     const isRunning = String(logId).startsWith('run_');
-    const realId = isRunning ? parseInt(logId.replace('run_', '')) : logId;
+    const realId = isRunning ? parseInt(String(logId).replace('run_', '')) : logId;
 
     const drawer = document.getElementById('debug-inspector-drawer');
     const body = document.getElementById('debug-inspector-body');

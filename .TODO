@@ -13,7 +13,7 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 37. add validation [NOTSURE] since you can just add comparator functions
 38. when running the app a cmd argument to set a location logs, maybe in the future, being able to push into kafka or whatever
 32. Quality of like change, ability to rearrange ports on added nodes [NOTSURE]
-
+41. feature to fuzzy search variable when lazy something like: instead of  URLs.SOME_URL we could have *.SOME_URL, which will find first match or whatever [NOTSURE]
 
 11. Implement USERS, PROJECTS, PERMISSIONS, SANDBOX/TEST/DEV MODE
 33. scraper connected dashboard
@@ -30,7 +30,14 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 
 34. implement a markdown wiki per scraper as means of documentation.
 33. implement import and export of a flow. which means it should also contain coordinates and parameters.
-35. grouping for scrapers, possibly general project
+35. if problems persist, maybe rework so that everything is a BATCH, but displayed as single variable like it was before, but in the backend [var]
+36 FIX: when there is no output but a debug, i cant extend the log
+37. implement playwright stealth
+38. ability to take value from port in "Text Transform" node
+39. a node that negates the bool
+40. a node that download image from URL, also has error port if cant
+41. a way to raise Skip error to skip from certain point in the flow, hard cut.
+
 
 
 12. [TEST]somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain 

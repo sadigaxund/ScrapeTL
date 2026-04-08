@@ -169,11 +169,11 @@ class BuilderEngine:
                 
                 elif has_trigger_connection:
                     # Connection exists but NO signal arrived -> Upstream was skipped
-                    print(f"[BuilderEngine] ⏩ Skipping node {current_id} ({node['type']}) - Source triggered nodes were skipped.")
+                    print(f"[BuilderEngine] Skipping node {current_id} ({node['type']}) - Source triggered nodes were skipped.")
                     skip_node = True
 
             if skip_node:
-                print(f"[BuilderEngine] ⏩ Skipping node {current_id} ({node['type']}) - Trigger Guard active.")
+                print(f"[BuilderEngine] Skipping node {current_id} ({node['type']}) - Trigger Guard active.")
                 # We record the skipped state and let it fall through to neighbor propagation
                 self.results_cache[current_id] = None
                 

@@ -1415,6 +1415,27 @@ select option {
   font-family: initial;
 }
 
+.log-tab-system-content {
+  background: #0d1117;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.log-tab-system-content pre {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: #e0e0e0;
+  white-space: pre;
+  overflow: auto;
+  max-height: 500px;
+}
+
 /* ── Payload Grid ────────────────────────────── */
 .payload-grid {
   display: flex;
