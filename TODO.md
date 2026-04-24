@@ -37,7 +37,31 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 39. a node that negates the bool
 40. a node that download image from URL, also has error port if cant
 41. a way to raise Skip error to skip from certain point in the flow, hard cut.
-
+42. String concat node
+43. the input paramater types are not updated, cant add batch type
+44. find all of the dropdown elements, and properly standardize and make single reusable element
+45. a possibilty to connect two scrapers, the output of the initial scraper should be passed to the next one, and either forced to create multiple input parameter nodes that match the schema of previous scrapers output schema, or using expression language to dynamically access.
+46. some of the nodes have very long name label, for example "external parameter", this makes the break line and have wider header, which also misaligns the ports that I hoped to align with other nodes ports so that there is a straight line. Either make those nodes wider so that header label fits, or whatever you think is a good solution.
+47. playwright install appeared but no error thrown in the UI, see logs:
+[TaskRegistry] Registering task 1
+INFO:     127.0.0.1:54742 - "POST /api/run/2 HTTP/1.1" 200 OK
+[BuilderEngine] Launching local browser (headless=True)
+[BuilderEngine] Playwright setup failed: BrowserType.launch: Executable doesn't exist at /home/sakhund/.cache/ms-playwright/chromium_headless_shell-1148/chrome-linux/headless_shell
+[BuilderEngine] Executing 1777057963954 (Resolved Type: 'input_external')
+[BuilderEngine] Ran node 1777057963954 (input) -> result type: str
+[BuilderEngine] Executing 1777058011398 (Resolved Type: 'source_fetch_playwright')
+[BuilderEngine] Active Namespaces: ['ABC']
+[BuilderEngine] ❌ Error in node 1777058011398 (source): BrowserType.launch: Executable doesn't exist at /home/sakhund/.cache/ms-playwright/chromium_headless_shell-1148/chrome-linux/headless_shell
+╔════════════════════════════════════════════════════════════╗
+║ Looks like Playwright was just installed or updated.       ║
+║ Please run the following command to download new browsers: ║
+║                                                            ║
+║     playwright install                                     ║
+║                                                            ║
+║ <3 Playwright Team                                         ║
+╚════════════════════════════════════════════════════════════╝
+[Runner] StackOverflow Listings - Success but no data. Skipping integrations.
+[TaskRegistry] Unregistering task 1
 
 
 12. [TEST]somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain 
