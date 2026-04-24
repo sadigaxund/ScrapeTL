@@ -1,6 +1,0 @@
-- NEVER modify the .TODO file under any circumstances.
-- Always respect the rule that .TODO is for human reference only.
-- record all the application breaking bugs into PATCHES/FIXED_BUGS.md
-- dont use powershell/terminal tools, just manually analyze and implement, I need you not prompt for anything until you are done
-- no need to verify the code with any kind of script or testing, user will manually test it.
-- no need to migrate the database, user will take care of it.

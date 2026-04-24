@@ -1,5 +1,6 @@
 # Custom ignores
-.cursorrules
+
+CLAUDE.md
 *.bak
 *.db
 data/
