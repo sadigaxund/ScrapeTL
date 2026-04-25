@@ -1,20 +1,48 @@
 /* ── Visual Builder (Canvas, Nodes, Connections, Save/Load) ─── */
 /* ── Semantic Function Helper ────────────────────── */
+// NOTE: parseFuncArgs is a JS-side fallback only.
+// The authoritative parameter list comes from f.parameters (backend AST parse).
+// This handles the case where a function object isn't in state.functions yet.
 function parseFuncArgs(code, funcName) {
-    if (!code || !funcName) return [];
-    // 1. Clean the code of comments
-    const lines = code.split('\n');
-    let args = [];
+    if (!code) return [];
+    // Find the def line for funcName (or first def if no name given)
+    const namePattern = funcName ? `${funcName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}` : '\\w+';
+    const defRegex = new RegExp(`def\\s+${namePattern}\\s*\\(`);
+    const defIdx = code.search(defRegex);
+    if (defIdx === -1) return [];
 
-    // 2. Find the def line
-    const defRegex = new RegExp(`def\\s+${funcName}\\s*\\(([^)]*)\\)`);
-    const match = code.match(defRegex);
-    if (match && match[1]) {
-        args = match[1].split(',')
-            .map(a => a.trim().split(/[:=]/)[0].trim()) // Strictly capture only the identifier
-            .filter(a => a && a !== 'self' && a !== 'cls');
+    // Walk forward from the opening paren, tracking bracket depth to find the matching ')'
+    const openParen = code.indexOf('(', defIdx);
+    if (openParen === -1) return [];
+
+    let depth = 0;
+    let closeParen = -1;
+    for (let i = openParen; i < code.length; i++) {
+        const ch = code[i];
+        if (ch === '(' || ch === '[' || ch === '{') depth++;
+        else if (ch === ')' || ch === ']' || ch === '}') {
+            depth--;
+            if (depth === 0) { closeParen = i; break; }
+        }
     }
-    return args;
+    if (closeParen === -1) return [];
+
+    const sig = code.slice(openParen + 1, closeParen);
+    // Split sig by top-level commas only (depth-aware)
+    const params = [];
+    let current = '';
+    let d = 0;
+    for (const ch of sig) {
+        if (ch === '(' || ch === '[' || ch === '{') { d++; current += ch; }
+        else if (ch === ')' || ch === ']' || ch === '}') { d--; current += ch; }
+        else if (ch === ',' && d === 0) { params.push(current.trim()); current = ''; }
+        else { current += ch; }
+    }
+    if (current.trim()) params.push(current.trim());
+
+    return params
+        .map(p => p.split(/[:=]/)[0].trim())
+        .filter(p => p && p !== 'self' && p !== 'cls' && /^\w+$/.test(p));
 }
 
 function discoverDynamicPorts(nodeId) {
@@ -35,10 +63,8 @@ function discoverDynamicPorts(nodeId) {
         const f = state.functions.find(x => x.name === funcName);
 
         if (f) {
-            let args = parseFuncArgs(f.code, f.name);
-
-            // Critical Sync: Always sanitize immediately to prevent 'dirty' state
-            args = args.map(a => a.split(/[:=]/)[0].trim());
+            // Use pre-parsed parameters from backend AST analysis
+            const args = Array.isArray(f.parameters) ? f.parameters : [];
 
             if (JSON.stringify(node.dynamic_ports) !== JSON.stringify(args)) {
                 node.dynamic_ports = args;
@@ -190,14 +216,7 @@ function getConditionalOps(modeOrPreset) {
  * Parse parameter names from a Python function's first line.
  * e.g. "def my_func(arg1, arg2=None):" → ['arg1', 'arg2']
  */
-function parseFuncArgs(code) {
-    if (!code) return [];
-    const match = code.match(/^\s*def\s+\w+\s*\(([^)]*)\)/m);
-    if (!match || !match[1].trim()) return [];
-    return match[1].split(',')
-        .map(p => p.trim().split('=')[0].trim())
-        .filter(p => p && p !== 'self');
-}
+// parseFuncArgs is defined once above (depth-aware bracket parser)
 
 /* ── Builder Logic ─────────────────────────────────── */
 function initBuilder() {
@@ -519,7 +538,7 @@ function renderBuilderNodes() {
             }
 
             const el = document.createElement('div');
-            el.className = `builder-node builder-node--${node.type}`;
+            el.className = `builder-node builder-node--${node.type} builder-node--${node.preset}`;
             if (node.type === 'utility') el.classList.add('builder-node--mini');
             el.id = `node-${node.id}`;
             el.style.left = `${node.x}px`;
@@ -561,28 +580,36 @@ function renderBuilderNodes() {
             // Ensure config exists
             node.config = node.config || {};
 
-            // 1. Title
-            const title = document.createElement('div');
-            title.className = `builder-node__title builder-node__title--${node.type}`;
-            title.textContent = preset.title;
+            // 1. Title — always-editable input styled as title text
+            const title = document.createElement('input');
+            title.className = `builder-node__title builder-node__title--${node.type} node-title-input`;
+            title.value = node.config.internalLabel || preset.title;
+            title.title = preset.title;
+            title.spellcheck = false;
+            title.autocomplete = 'off';
+
+            title.onmousedown = (e) => e.stopPropagation();
+            title.onfocus = () => {
+                if (title.value === preset.title) title.value = '';
+                title.select();
+            };
+            // Save on every keystroke so renderBuilderNodes() re-entrancy doesn't lose typed value
+            title.oninput = () => updateNodeConfig(node.id, 'internalLabel', title.value);
+            title.onblur = () => {
+                const val = title.value.trim();
+                updateNodeConfig(node.id, 'internalLabel', val);
+                title.value = val || preset.title;
+            };
+            title.onkeydown = (ke) => {
+                if (ke.key === 'Enter') ke.target.blur();
+                if (ke.key === 'Escape') { title.value = node.config.internalLabel || preset.title; updateNodeConfig(node.id, 'internalLabel', node.config.internalLabel || ''); title.blur(); }
+                ke.stopPropagation();
+            };
             el.appendChild(title);
 
-            // 2. Universal Node Label - Processors only (Type 'action')
-            if (node.type === 'action' && node.preset !== 'type_convert') {
-                const nameGroup = document.createElement('div');
-                nameGroup.className = 'node-label-container';
-                const nameInput = document.createElement('input');
-                nameInput.className = 'node-label-input';
-                nameInput.placeholder = 'Custom Label...';
-                nameInput.value = node.config.internalLabel || '';
-                nameInput.oninput = (e) => updateNodeConfig(node.id, 'internalLabel', e.target.value);
-                nameGroup.appendChild(nameInput);
-                el.appendChild(nameGroup);
-            }
-
             // Variadic Control Bar (Add/Remove Ports)
-            // EXCLUSION: Utility and Logic nodes use Auto-Port growth instead of manual buttons
-            if ((preset.logicalInputs || preset.logicalOutputs) && node.type !== 'utility' && node.type !== 'logic') {
+            // EXCLUSION: Utility, Logic, and string_format nodes use Auto-Port growth instead of manual buttons
+            if ((preset.logicalInputs || preset.logicalOutputs) && node.type !== 'utility' && node.type !== 'logic' && node.preset !== 'string_format') {
                 const type = preset.logicalInputs ? 'Inputs' : 'Outputs';
                 const configKey = preset.logicalInputs ? 'logicalInputs' : 'logicalOutputs';
                 const count = Number(node.config[configKey] || (preset.logicalInputs || preset.logicalOutputs));
@@ -1276,7 +1303,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
 
             const item = document.createElement('div');
             item.className = 'context-item';
-            const argNames = parseFuncArgs(f.code || '');
+            const argNames = Array.isArray(f.parameters) ? f.parameters : [];
             const displaySig = argNames.length > 0 ? `${f.name}(${argNames.join(', ')})` : `${f.name}()`;
             item.innerHTML = `
                 <div class="item-icon type-icon--func">ƒ</div>
@@ -1469,13 +1496,14 @@ function startConnection(e, fromId, portType, portIdx) {
 
                     // 💡 AUTO-INJECTION logic (existing) ...
 
-                    // ⚡ AUTO-PORT GROWTH: If wiring TO/FROM a Utility/Logic node's last port, expand it
+                    // ⚡ AUTO-PORT GROWTH: If wiring TO/FROM a Utility/Logic/string_format node's last port, expand it
                     const growNode = (id, key) => {
                         try {
                             const target = state.builder.nodes.find(n => n.id == id);
                             if (!target) return;
                             const p = NODE_PRESETS[target.type][target.preset];
-                            if ((target.type === 'utility' || target.type === 'logic') && (p.logicalInputs || p.logicalOutputs)) {
+                            const isAutoGrow = target.type === 'utility' || target.type === 'logic' || target.preset === 'string_format';
+                            if (isAutoGrow && (p.logicalInputs || p.logicalOutputs)) {
                                 const curCount = Number(target.config[key] || (p.logicalInputs || p.logicalOutputs));
                                 const portIdx = key === 'logicalInputs' ? finalInIdx : finalOutIdx;
 
@@ -1581,22 +1609,35 @@ function renderConnections() {
             const pruneNode = (id, key, isInput) => {
                 try {
                     const target = state.builder.nodes.find(n => n.id == id);
-                    if (!target || (target.type !== 'utility' && target.type !== 'logic')) return;
+                    if (!target || (target.type !== 'utility' && target.type !== 'logic' && target.preset !== 'string_format')) return;
                     const p = NODE_PRESETS[target.type][target.preset];
                     const min = p.logicalInputs || p.logicalOutputs || 2;
                     let curCount = Number(target.config[key] || min);
 
-                    // Check if the last port is now empty
-                    while (curCount > min) {
-                        const lastIdx = curCount - 1;
-                        const isLastBusy = state.builder.edges.some(eg =>
-                            isInput ? (eg.to == id && eg.toIdx === lastIdx) : (eg.from == id && eg.fromIdx === lastIdx)
-                        );
-                        if (!isLastBusy) {
-                            curCount--;
-                            target.config[key] = curCount;
-                        } else {
-                            break;
+                    if (target.preset === 'string_format' && isInput) {
+                        // Exact-removal: remove disconnected port and shift higher indices down
+                        const removedIdx = Number(edge.toIdx);
+                        if (curCount <= min) return; // keep minimum
+                        // Shift all edges targeting this node with index > removedIdx
+                        state.builder.edges.forEach(eg => {
+                            if (eg.to == id && typeof eg.toIdx === 'number' && eg.toIdx > removedIdx) {
+                                eg.toIdx--;
+                            }
+                        });
+                        target.config[key] = curCount - 1;
+                    } else {
+                        // Standard trailing-prune for utility/logic nodes
+                        while (curCount > min) {
+                            const lastIdx = curCount - 1;
+                            const isLastBusy = state.builder.edges.some(eg =>
+                                isInput ? (eg.to == id && eg.toIdx === lastIdx) : (eg.from == id && eg.fromIdx === lastIdx)
+                            );
+                            if (!isLastBusy) {
+                                curCount--;
+                                target.config[key] = curCount;
+                            } else {
+                                break;
+                            }
                         }
                     }
                     renderBuilderNodes();
@@ -1731,8 +1772,19 @@ function openSaveFlowModal() {
     // Ensure modal is synced with current builder state/toolbar for browser config
     const modalHeadless = document.getElementById('flow-browser-headless');
     const modalCDP = document.getElementById('flow-browser-cdp');
+    const modalStealth = document.getElementById('flow-browser-stealth');
     if (modalHeadless) modalHeadless.value = state.builder.browser_config.headless;
     if (modalCDP) modalCDP.value = state.builder.browser_config.cdp_url;
+    if (modalStealth) modalStealth.checked = !!state.builder.browser_config.stealth;
+    const modalThrottle = document.getElementById('flow-batch-throttle');
+    if (modalThrottle) {
+        const scraper = state.scrapers ? state.scrapers.find(s => s.id === scraperId) : null;
+        modalThrottle.value = scraper && scraper.batch_throttle_seconds != null ? scraper.batch_throttle_seconds : '';
+    }
+
+    // Always sync hidden ID field with current builder state to prevent stale-ID 404s
+    const scraperIdInput = document.getElementById('flow-scraper-id');
+    if (scraperIdInput) scraperIdInput.value = scraperId || '';
 
     document.getElementById('save-flow-modal').style.display = 'flex';
 }
@@ -1910,9 +1962,11 @@ function createNewFlow() {
     if (descInput) descInput.value = '';
 
     // Clear Browser Overrides
-    state.builder.browser_config = { headless: '', cdp_url: '' };
+    state.builder.browser_config = { headless: '', cdp_url: '', stealth: false };
     if (document.getElementById('flow-browser-headless')) document.getElementById('flow-browser-headless').value = '';
     if (document.getElementById('flow-browser-cdp')) document.getElementById('flow-browser-cdp').value = '';
+    if (document.getElementById('flow-browser-stealth')) document.getElementById('flow-browser-stealth').checked = false;
+    if (document.getElementById('flow-batch-throttle')) document.getElementById('flow-batch-throttle').value = '';
 
     const canvas = document.getElementById('builder-canvas');
     const nodesContainer = document.getElementById('nodes-container');
@@ -1988,10 +2042,15 @@ async function saveFlow() {
     // Browser Config Overrides
     const bmode = document.getElementById('flow-browser-headless').value;
     const bcdp = document.getElementById('flow-browser-cdp').value.trim();
+    const bstealth = document.getElementById('flow-browser-stealth').checked;
     const bConf = {};
     if (bmode !== '') bConf.browser_headless = bmode === 'true';
     if (bcdp !== '') bConf.browser_cdp_url = bcdp;
+    if (bstealth) bConf.browser_stealth = true;
     formData.append('browser_config', JSON.stringify(bConf));
+
+    const throttleEl = document.getElementById('flow-batch-throttle');
+    if (throttleEl) formData.append('batch_throttle_seconds', throttleEl.value.trim());
 
     try {
         const savedScraper = await apiFetch('/api/scrapers/builder', { method: 'POST', body: formData });
@@ -2069,17 +2128,21 @@ async function editInBuilder(id) {
         const bConf = s.browser_config ? (typeof s.browser_config === 'string' ? JSON.parse(s.browser_config) : s.browser_config) : {};
         const headlessStr = bConf.browser_headless !== undefined ? String(bConf.browser_headless) : '';
         const cdpVal = bConf.browser_cdp_url || '';
+        const stealthVal = !!bConf.browser_stealth;
 
         state.builder.browser_config = {
             headless: headlessStr,
-            cdp_url: cdpVal
+            cdp_url: cdpVal,
+            stealth: stealthVal
         };
 
         // Populate Modal
         const fHeadless = document.getElementById('flow-browser-headless');
         const fCDP = document.getElementById('flow-browser-cdp');
+        const fStealth = document.getElementById('flow-browser-stealth');
         if (fHeadless) fHeadless.value = headlessStr;
         if (fCDP) fCDP.value = cdpVal;
+        if (fStealth) fStealth.checked = stealthVal;
 
         updateBuilderContextUI();
 

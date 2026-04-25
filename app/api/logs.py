@@ -157,6 +157,20 @@ def download_log_payload(
     )
 
 
+@router.delete("/api/logs")
+def clear_all_logs(
+    scraper_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """Delete all log entries, optionally filtered to a specific scraper."""
+    q = db.query(ScrapeLog)
+    if scraper_id:
+        q = q.filter(ScrapeLog.scraper_id == scraper_id)
+    deleted = q.delete(synchronize_session=False)
+    db.commit()
+    return {"deleted": deleted}
+
+
 @router.get("/api/queue")
 def get_queue(db: Session = Depends(get_db)):
     # 1. Real tasks from DB (catchup / one-time)

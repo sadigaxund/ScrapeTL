@@ -2624,14 +2624,14 @@ input:checked+.slider {
 /* ─── Builder: Universal Ports ────────────────── */
 .node-port--trigger {
   background: #38bdf8 !important;
-  /* Sky Blue */
   border: 2px solid rgba(56, 189, 248, 0.4) !important;
+  box-shadow: 0 0 5px rgba(56, 189, 248, 0.5) !important;
 }
 
 .node-port--error {
   background: var(--failure) !important;
-  /* Red */
   border: 2px solid rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.5) !important;
 }
 
 .node-port-row--universal {
@@ -3172,9 +3172,9 @@ input:checked+.slider {
 
 /* Node Types */
 .builder-node--input {
-  width: 180px;
-  min-width: 180px;
-  max-width: 180px;
+  width: 270px;
+  min-width: 270px;
+  max-width: 270px;
   background: linear-gradient(135deg, rgba(34, 197, 94, 0.2), rgba(15, 15, 15, 0.98)) !important;
   border-color: rgba(34, 197, 94, 0.5) !important;
 }
@@ -3309,9 +3309,9 @@ input:checked+.slider {
 /* Sink/Output Nodes (Dark Amber Theme) */
 .builder-node--sink,
 .builder-node--output {
-  width: 180px;
-  min-width: 180px;
-  max-width: 180px;
+  width: 270px;
+  min-width: 270px;
+  max-width: 270px;
   background: linear-gradient(135deg, rgba(245, 158, 11, 0.08), rgba(13, 13, 13, 0.98)) !important;
   border-color: rgba(245, 158, 11, 0.45) !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6), inset 0 0 20px rgba(245, 158, 11, 0.02) !important;
@@ -3322,6 +3322,14 @@ input:checked+.slider {
   color: var(--warning) !important;
   border-bottom-color: rgba(245, 158, 11, 0.1) !important;
   opacity: 0.9;
+}
+
+/* Get Variable / Set Variable nodes need more room for variable names */
+.builder-node--action.builder-node--expression,
+.builder-node--sink.builder-node--context {
+  width: 210px;
+  min-width: 210px;
+  max-width: 210px;
 }
 
 /* Port columns — 2-column layout */
@@ -3375,10 +3383,11 @@ input:checked+.slider {
   border: 2px solid rgba(124, 106, 247, 0.4);
   border-radius: 50% !important;
   cursor: crosshair;
-  transition: transform 0.2s, background 0.2s, border-color 0.2s;
+  transition: transform 0.2s, filter 0.2s;
   z-index: 20;
   flex-shrink: 0;
   position: absolute;
+  box-shadow: 0 0 5px rgba(124, 106, 247, 0.5);
 }
 
 .node-port::after {
@@ -3393,8 +3402,7 @@ input:checked+.slider {
 
 .node-port:hover {
   transform: scale(1.4);
-  background: #fff;
-  border-color: var(--accent);
+  filter: brightness(1.6);
 }
 
 .node-port--input {
@@ -3405,17 +3413,6 @@ input:checked+.slider {
 .node-port--output {
   position: absolute;
   right: -7px;
-}
-
-/* Logic Specific Ports */
-.node-port--true {
-  background: #22c55e !important;
-  border: 2px solid rgba(34, 197, 94, 0.4) !important;
-}
-
-.node-port--false {
-  background: #ef4444 !important;
-  border: 2px solid rgba(239, 68, 68, 0.4) !important;
 }
 
 /* Toolbar Dropdowns */
@@ -3922,34 +3919,27 @@ path.connection-path.connection-path--false {
 }
 
 /* ── Node Label Styling ──────────────────────────── */
-.node-label-container {
-  padding: 4px 12px 10px 12px;
-}
-
-.node-label-input {
+/* Title input — looks like plain text until clicked */
+input.builder-node__title.node-title-input {
   width: 100%;
+  display: block;
+  box-sizing: border-box;
   background: transparent;
   border: none;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.05);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-  padding: 6px 0;
+  border-bottom: 1px solid transparent;
+  cursor: text;
   outline: none;
-  transition: all 0.2s;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.node-label-input:focus {
+input.builder-node__title.node-title-input:hover {
+  border-bottom-color: rgba(255,255,255,0.12);
+}
+
+input.builder-node__title.node-title-input:focus {
   border-bottom-color: var(--accent);
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.node-label-input::placeholder {
-  color: var(--text-muted);
-  font-weight: 400;
-  font-size: 11px;
-  opacity: 0.5;
+  background: rgba(255,255,255,0.03);
+  cursor: text;
 }
 
 /* ── Zoom HUD & Slider ───────────────────────────── */
@@ -4025,14 +4015,14 @@ path.connection-path.connection-path--false {
 /* ── Conditional Node - True/False Port Colors ──────── */
 .node-port--true {
   background: var(--success) !important;
-  border-color: var(--success) !important;
-  box-shadow: 0 0 6px rgba(34, 197, 94, 0.6);
+  border: 2px solid rgba(34, 197, 94, 0.4) !important;
+  box-shadow: 0 0 5px rgba(34, 197, 94, 0.5) !important;
 }
 
 .node-port--false {
   background: var(--failure) !important;
-  border-color: var(--failure) !important;
-  box-shadow: 0 0 6px rgba(239, 68, 68, 0.6);
+  border: 2px solid rgba(239, 68, 68, 0.4) !important;
+  box-shadow: 0 0 5px rgba(239, 68, 68, 0.5) !important;
 }
 
 .node-port-label--true {

@@ -90,6 +90,10 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE scrapers ADD COLUMN browser_config TEXT"))
             conn.commit()
             print("[DB] Added browser_config to scrapers")
+        if "batch_throttle_seconds" not in cols:
+            conn.execute(text("ALTER TABLE scrapers ADD COLUMN batch_throttle_seconds REAL"))
+            conn.commit()
+            print("[DB] Added batch_throttle_seconds to scrapers")
 
         # Check global_variables
         res = conn.execute(text("PRAGMA table_info(global_variables)"))

@@ -55,6 +55,11 @@ async function loadSettings() {
             document.getElementById('setting-log-max-size').value = logMaxSize;
         }
 
+        const batchThrottle = settings.batch_throttle_seconds !== undefined ? settings.batch_throttle_seconds : '0';
+        if (document.getElementById('setting-batch-throttle')) {
+            document.getElementById('setting-batch-throttle').value = batchThrottle;
+        }
+
     } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -78,6 +83,7 @@ async function saveAllAppSettings() {
     const logDir = document.getElementById('setting-log-directory').value.trim();
     const logRetention = document.getElementById('setting-log-retention').value;
     const logMaxSize = document.getElementById('setting-log-max-size').value;
+    const batchThrottle = document.getElementById('setting-batch-throttle').value;
 
     if (!tz) { toast('Please enter a timezone.', 'error'); return; }
 
@@ -93,7 +99,8 @@ async function saveAllAppSettings() {
             saveAppSetting('log_preview_limit', logLimit),
             saveAppSetting('log_directory', logDir),
             saveAppSetting('log_retention_days', logRetention),
-            saveAppSetting('log_max_size_kb', logMaxSize)
+            saveAppSetting('log_max_size_kb', logMaxSize),
+            saveAppSetting('batch_throttle_seconds', batchThrottle)
         ]);
 
         // Post-timezone update logic

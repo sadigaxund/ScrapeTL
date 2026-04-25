@@ -29,19 +29,21 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 
 
 34. implement a markdown wiki per scraper as means of documentation.
-33. implement import and export of a flow. which means it should also contain coordinates and parameters.
-35. if problems persist, maybe rework so that everything is a BATCH, but displayed as single variable like it was before, but in the backend [var]
+
+
 36 FIX: when there is no output but a debug, i cant extend the log
-37. implement playwright stealth
-38. ability to take value from port in "Text Transform" node
+
 39. a node that negates the bool
+
 40. a node that download image from URL, also has error port if cant
+
 41. a way to raise Skip error to skip from certain point in the flow, hard cut.
-42. String concat node
-43. the input paramater types are not updated, cant add batch type
+
 44. find all of the dropdown elements, and properly standardize and make single reusable element
+
 45. a possibilty to connect two scrapers, the output of the initial scraper should be passed to the next one, and either forced to create multiple input parameter nodes that match the schema of previous scrapers output schema, or using expression language to dynamically access.
-46. some of the nodes have very long name label, for example "external parameter", this makes the break line and have wider header, which also misaligns the ports that I hoped to align with other nodes ports so that there is a straight line. Either make those nodes wider so that header label fits, or whatever you think is a good solution.
+
+
 47. playwright install appeared but no error thrown in the UI, see logs:
 [TaskRegistry] Registering task 1
 INFO:     127.0.0.1:54742 - "POST /api/run/2 HTTP/1.1" 200 OK
@@ -62,6 +64,14 @@ INFO:     127.0.0.1:54742 - "POST /api/run/2 HTTP/1.1" 200 OK
 ╚════════════════════════════════════════════════════════════╝
 [Runner] StackOverflow Listings - Success but no data. Skipping integrations.
 [TaskRegistry] Unregistering task 1
+
+48. Making wireless dongle node, where I can click to add a source dongle that i stick into some port that I want to make wireless, then I click on that connected dongle to generate output dongles of that specific connection, and it should visually indicate that. So, that i can sometimes reduce the unnecessary connection duplications 
+
+49. automatic reference updates, that is if I have something like {{ABC.SCRAPEABLE_PAGES}} within a certain scraper, and then i rename ABC to whatever, it should automatically update all instances of ABC to whatever.
+50. Too much flattening
+
+52. display passed parameters within logs entries, similarly how the schedule menu display it, but must match the overall design of log entries. However, be careful of BATCH type, so that it wont fill whole screen, maybe abbreviate the BATCH type into {...} the same way it's done in context registry, make sure to reuse the same elements, so that later i dont have to keep track of it where i used them.
+53. implement import and export of a flow. which means it should also contain coordinates and parameters.
 
 
 12. [TEST]somehow integrate an ability to connect playwright server, and pass it down to the scrapers to utilize. Make sure to display within queue and logs. Also, it opens a path to group and add delay by URL/domain 

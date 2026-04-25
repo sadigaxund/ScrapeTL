@@ -550,6 +550,10 @@ function openEditModal(id) {
     document.getElementById('edit-browser-headless').value = bConf.browser_headless !== undefined ? String(bConf.browser_headless) : '';
     document.getElementById('edit-browser-cdp').value = bConf.browser_cdp_url || '';
 
+    // Batch throttle override
+    const throttleEl = document.getElementById('edit-batch-throttle');
+    if (throttleEl) throttleEl.value = s.batch_throttle_seconds != null ? s.batch_throttle_seconds : '';
+
     // Reset code zone
     document.getElementById('edit-code-text').textContent = 'Drag & Drop a new .py file here';
     document.getElementById('edit-code-zone').style.borderColor = '';
@@ -657,6 +661,10 @@ async function saveEdit() {
     if (bmode !== '') bConf.browser_headless = bmode === 'true';
     if (bcdp !== '') bConf.browser_cdp_url = bcdp;
     formData.append('browser_config', JSON.stringify(bConf));
+
+    // Per-scraper batch throttle
+    const throttleEl = document.getElementById('edit-batch-throttle');
+    if (throttleEl) formData.append('batch_throttle_seconds', throttleEl.value.trim());
 
     try {
         await apiFetch(`${API.scrapers}/${id}`, {

@@ -440,6 +440,10 @@
             style="height:32px; font-size:11px; padding:0 16px; border-radius:6px; font-weight:700; border:none; box-shadow:0 2px 8px rgba(99,102,241,0.25);">
             Collapse All
           </button>
+          <button class="btn btn-ghost" onclick="clearAllLogs()"
+            style="height:32px; font-size:11px; padding:0 14px; border-radius:6px; font-weight:700; color:var(--failure); border:1px solid rgba(239,68,68,0.3);">
+            Clear Logs
+          </button>
         </div>
         <div id="logs-list" class="logs-list"></div>
         <div class="pagination" id="logs-pagination"></div>
@@ -680,9 +684,7 @@
         <div id="builder-name-container" onclick="startRenameBuilderScraper()"
           style="display:flex; align-items:center; gap:6px; cursor:pointer; pointer-events:auto; padding:0 8px;"
           title="Click to rename scraper">
-          <span id="builder-current-name"
-            style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New
-            Scraper Flow</span>
+          <span id="builder-current-name" style="font-size:12px; font-weight:600; color:var(--text-primary); letter-spacing:0.01em; line-height:1; white-space:nowrap;">New Scraper Flow</span>
         </div>
 
         <div class="bar-divider"></div>
@@ -709,8 +711,8 @@
             Input <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">External Parameter</button>
-            <button class="menu-item" onclick="selectBuilderPreset('input', 'expression')">Context Registry</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">Parameter</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'expression')">Get Variable</button>
           </div>
         </div>
 
@@ -720,9 +722,8 @@
             Source <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_url')">Fetch HTML</button>
-            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">Playwright
-              Fetch</button>
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_url')">HTTP Fetch</button>
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">Browser Fetch</button>
           </div>
         </div>
 
@@ -732,12 +733,12 @@
             Action <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'bs4_select')">BeautifulSoup
-              Selector</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'bs4_select')">CSS Select</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'html_children')">HTML Children</button>
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'regex_extract')">Regex Extraction</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'regex_extract')">Regex Extract</button>
             <button class="menu-item" onclick="selectBuilderPreset('action', 'text_transform')">Text Transform</button>
-            <button class="menu-item" onclick="selectBuilderPreset('action', 'type_convert')">Type Converter</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'string_format')">String Format</button>
+            <button class="menu-item" onclick="selectBuilderPreset('action', 'type_convert')">Type Cast</button>
           </div>
         </div>
 
@@ -747,7 +748,7 @@
             Logic <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('logic', 'logic_gate')">Logical Gate</button>
+            <button class="menu-item" onclick="selectBuilderPreset('logic', 'logic_gate')">Logic Gate</button>
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'comparison')">Comparison</button>
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'string_match')">String Match</button>
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'status_check')">Status Check</button>
@@ -761,8 +762,8 @@
             Utility <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('utility', 'splitter')">Splitter</button>
-            <button class="menu-item" onclick="selectBuilderPreset('utility', 'combiner')">Combiner</button>
+            <button class="menu-item" onclick="selectBuilderPreset('utility', 'splitter')">Split</button>
+            <button class="menu-item" onclick="selectBuilderPreset('utility', 'combiner')">Merge</button>
           </div>
         </div>
 
@@ -772,9 +773,9 @@
             Sink <small style="margin-left:4px; opacity:0.5; font-size:9px">▼</small>
           </button>
           <div class="bt-menu">
-            <button class="menu-item" onclick="selectBuilderPreset('sink', 'system_output')">System Output</button>
-            <button class="menu-item" onclick="selectBuilderPreset('sink', 'context')">Context Registry</button>
-            <button class="menu-item" onclick="selectBuilderPreset('sink', 'debug')">Debug Sink</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'system_output')">Output</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'context')">Set Variable</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'debug')">Debug</button>
           </div>
         </div>
 
@@ -904,7 +905,11 @@
               <input type="number" id="setting-log-preview-limit" style="height:42px" placeholder="10" min="0" />
               <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Number of data rows saved in DB.</p>
             </div>
-            <div style="flex: 1;"></div>
+            <div class="form-group" style="flex: 1;">
+              <label>Batch Throttle (seconds)</label>
+              <input type="number" id="setting-batch-throttle" style="height:42px" placeholder="0" min="0" step="0.5" />
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Delay between iterations when running a Batch variable.</p>
+            </div>
           </div>
         </div>
 
@@ -1067,6 +1072,21 @@
               If set to <em>Inherit</em>, the global defaults defined in the app settings will be used.
             </p>
           </div>
+        </div>
+
+        <h3
+          style="font-size:12px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.05em; margin: 24px 0 16px 0;">
+          ⚙️ Batch Execution</h3>
+
+        <div class="form-row" style="align-items: flex-start;">
+          <div class="form-group" style="flex: 0 0 200px;">
+            <label>Batch Throttle (seconds)</label>
+            <input type="number" id="edit-batch-throttle" placeholder="Inherit global" min="0" step="0.5"
+              style="height:42px;" />
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Delay between Batch iterations. Leave blank
+              to use global setting.</p>
+          </div>
+          <div style="flex: 1;"></div>
         </div>
       </div>
 
@@ -1862,6 +1882,20 @@
           </div>
         </div>
 
+        <!-- Batch Execution Section -->
+        <h3
+          style="font-size:11px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.08em; margin-bottom:12px; padding-top:16px; border-top:1px solid var(--border-light)">
+          ⚙️ Batch Execution</h3>
+        <div class="form-row" style="margin-bottom:20px; align-items: flex-start;">
+          <div class="form-group" style="flex: 0 0 200px;">
+            <label>Batch Throttle (seconds)</label>
+            <input type="number" id="flow-batch-throttle" placeholder="Inherit global" min="0" step="0.5"
+              style="height:42px;" />
+            <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Delay between Batch iterations. Leave blank to use global setting.</p>
+          </div>
+          <div style="flex: 1;"></div>
+        </div>
+
         <!-- Browser Overrides Section -->
         <h3
           style="font-size:11px; text-transform:uppercase; color:var(--text-muted); letter-spacing:0.08em; margin-bottom:12px; padding-top:16px; border-top:1px solid var(--border-light)">
@@ -1880,6 +1914,16 @@
             <label>Custom CDP URL</label>
             <input type="text" id="flow-browser-cdp" placeholder="ws://localhost:3000" style="height:42px;" />
           </div>
+        </div>
+        <div class="toggle-row" style="margin-top: 8px; background: rgba(255,255,255,0.01); border: 1px solid var(--border-light); border-radius: 6px; padding: 10px 14px;">
+          <div style="display:flex; flex-direction:column; gap:2px;">
+            <strong style="font-size:12px; color:var(--text-primary);">Stealth Mode</strong>
+            <p style="font-size:10px; color:var(--text-muted); margin:0;">Injects stealth scripts to bypass anti-bot challenges.</p>
+          </div>
+          <label class="switch" style="width: 40px; height: 20px;">
+            <input type="checkbox" id="flow-browser-stealth">
+            <span class="slider" style="before: {width: 14px; height: 14px;}"></span>
+          </label>
         </div>
       </div>
       <div

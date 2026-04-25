@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM mcr.microsoft.com/playwright/python:v1.49.1-jammy
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -8,7 +8,7 @@ ENV APP_HOME=/app
 # Create and set working directory
 WORKDIR $APP_HOME
 
-# Install system dependencies
+# Install system dependencies (build-essential just in case)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
@@ -17,23 +17,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers and their system dependencies
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    libnss3 \
-    libatk-bridge2.0-0 \
-    libcups2 \
-    libxcomposite1 \
-    libxdamage1 \
-    libxrandr2 \
-    libgbm1 \
-    libpango-1.0-0 \
-    libasound2 \
-    libxfixes3 \
-    libxkbcommon0 \
-    libxshmfence1 \
-    fonts-liberation \
-    && playwright install chromium \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+# Ensure playwright browsers are installed (though the image has them, this ensures the right ones for our version)
+RUN playwright install chromium
 
 # Copy application code
 COPY . .
@@ -44,7 +29,7 @@ RUN mkdir -p /app/data
 # Volume for data
 VOLUME /app/data
 
-# Expose port (as seen in run.py)
+# Expose port
 EXPOSE 8000
 
 # Start application

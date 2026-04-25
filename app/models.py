@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, LargeBinary
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, ForeignKey, Table, LargeBinary, Float
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -46,6 +46,7 @@ class Scraper(Base):
     thumbnail_data = Column(LargeBinary, nullable=True)
     health = Column(String, default="untested")  # "untested" | "ok" | "failing"
     scraper_type = Column(String, default="python")  # "python" | "builder"
+    batch_throttle_seconds = Column(Float, nullable=True)  # per-scraper override; None = use global
     flow_data = Column(Text, nullable=True)         # JSON encoded graph (nodes, edges)
     browser_config = Column(Text, nullable=True)    # JSON encoded settings (remote, headless, etc)
     position = Column(Integer, default=0)

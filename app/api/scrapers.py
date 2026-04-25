@@ -85,6 +85,7 @@ def _scraper_dict(s: Scraper):
         "scraper_type": s.scraper_type,
         "flow_data": json.loads(s.flow_data) if s.flow_data else None,
         "browser_config": json.loads(s.browser_config) if s.browser_config else {},
+        "batch_throttle_seconds": s.batch_throttle_seconds,
         "last_run": s.logs[0].run_at.isoformat() + "Z" if s.logs else None,
     }
 
@@ -240,6 +241,7 @@ async def save_builder_flow(
     thumbnail_url: Optional[str] = Form(None),
     flow_data: str = Form(...),  # JSON string
     browser_config: Optional[str] = Form(None), # JSON string
+    batch_throttle_seconds: Optional[str] = Form(None),
     scraper_id: Optional[int] = Form(None),
     new_version: bool = Form(False),
     version_label: Optional[str] = Form(None),
@@ -275,6 +277,8 @@ async def save_builder_flow(
         if not scraper:
             raise HTTPException(status_code=404, detail="Scraper not found.")
     
+    _batch_throttle = float(batch_throttle_seconds.strip()) if batch_throttle_seconds and batch_throttle_seconds.strip() else None
+
     if scraper:
         scraper.name = name.strip()
         scraper.description = description.strip()
@@ -282,6 +286,8 @@ async def save_builder_flow(
         scraper.flow_data = flow_data
         scraper.browser_config = browser_config
         scraper.scraper_type = "builder"
+        if _batch_throttle is not None:
+            scraper.batch_throttle_seconds = _batch_throttle
     else:
         # Determine position
         max_pos = db.query(Scraper).order_by(Scraper.position.desc()).first()
@@ -295,6 +301,7 @@ async def save_builder_flow(
             browser_config=browser_config,
             scraper_type="builder",
             position=new_pos,
+            batch_throttle_seconds=_batch_throttle,
         )
         db.add(scraper)
     
@@ -362,6 +369,7 @@ async def update_scraper(
     version_label: str = Form(""),
     commit_message: str = Form(""),
     browser_config: Optional[str] = Form(None),
+    batch_throttle_seconds: Optional[str] = Form(None),
     scraper_file: Optional[UploadFile] = File(None),
     thumbnail_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
@@ -375,6 +383,9 @@ async def update_scraper(
     scraper.homepage_url = _normalize_url(homepage_url)
     if browser_config is not None:
         scraper.browser_config = browser_config
+    if batch_throttle_seconds is not None:
+        val = batch_throttle_seconds.strip()
+        scraper.batch_throttle_seconds = float(val) if val else None
 
     # Handle thumbnail file upload
     if thumbnail_file and thumbnail_file.filename:

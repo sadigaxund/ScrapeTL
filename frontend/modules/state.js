@@ -99,9 +99,9 @@ const TAB_META = {
 const NODE_PRESETS = {
     input: {
         external: {
-            title: 'External Parameter',
+            title: 'Parameter',
             inputs: [],
-            outputs: ['Val Out'],
+            outputs: ['Value'],
             configs: [
                 { key: 'label', type: 'text', label: 'Form Label', placeholder: 'Starting Chapter', rerender: true },
                 { key: 'name', type: 'hidden' },
@@ -119,9 +119,9 @@ const NODE_PRESETS = {
             ]
         },
         expression: {
-            title: 'Context Registry',
+            title: 'Get Variable',
             inputs: [],
-            outputs: ['Val Out'],
+            outputs: ['Value'],
             configs: [
                 { key: 'value', type: 'expression', label: 'Registry Key / Expression' }
             ]
@@ -129,18 +129,18 @@ const NODE_PRESETS = {
     },
     source: {
         fetch_url: {
-            title: 'Fetch HTML',
-            inputs: ['Source'],
-            outputs: ['Result'],
+            title: 'HTTP Fetch',
+            inputs: ['URL'],
+            outputs: ['HTML'],
             configs: [
                 { key: 'method', type: 'select', label: 'Method', options: ['GET', 'POST'] },
                 { key: 'headers', type: 'text', label: 'Extra Headers (JSON)', placeholder: '{"User-Agent": "..."}' }
             ]
         },
         fetch_playwright: {
-            title: 'Playwright Fetch',
-            inputs: ['Source'],
-            outputs: ['Result'],
+            title: 'Browser Fetch',
+            inputs: ['URL'],
+            outputs: ['HTML'],
             configs: [
                 { key: 'headless', type: 'checkbox', label: 'Headless Mode (Silent)', default: true },
                 { key: 'actions', type: 'action_list', label: 'Playwright Actions' },
@@ -150,7 +150,7 @@ const NODE_PRESETS = {
     },
     action: {
         bs4_select: {
-            title: 'BeautifulSoup Selector',
+            title: 'CSS Select',
             inputs: ['HTML'],
             outputs: ['Result'],
             configs: [
@@ -162,7 +162,7 @@ const NODE_PRESETS = {
             ]
         },
         regex_extract: {
-            title: 'Regex Extraction',
+            title: 'Regex Extract',
             inputs: ['Text'],
             outputs: ['Match'],
             configs: [
@@ -173,17 +173,25 @@ const NODE_PRESETS = {
         text_transform: {
             title: 'Text Transform',
             inputs: ['Text'],
-            outputs: ['Result'],
+            outputs: ['Text'],
             configs: [
                 { key: 'operation', type: 'select', label: 'Operation', options: ['prefix', 'suffix', 'replace', 'trim'] },
                 { key: 'value', type: 'text', label: 'Param Value', placeholder: 'URL or HTML Source' },
                 { key: 'replacement', type: 'text', label: 'Replacement', placeholder: '' }
             ]
         },
+        string_format: {
+            title: 'String Format',
+            logicalInputs: 2,
+            outputs: ['Text'],
+            configs: [
+                { key: 'template', type: 'text', label: 'Template', placeholder: '{0}_{1}' }
+            ]
+        },
         type_convert: {
-            title: 'Type Converter',
+            title: 'Type Cast',
             inputs: ['Data'],
-            outputs: ['Typed'],
+            outputs: ['Value'],
             configs: [
                 { key: 'to_type', type: 'select', label: 'Target Type', options: ['string', 'number', 'boolean', 'json'] }
             ]
@@ -199,15 +207,15 @@ const NODE_PRESETS = {
     },
     sink: {
         system_output: {
-            title: 'System Output',
-            inputs: ['Data Rows'],
+            title: 'Output',
+            inputs: ['Data'],
             outputs: [],
             configs: [
                 { key: 'label', type: 'text', label: 'Collection Name', placeholder: 'Results' }
             ]
         },
         context: {
-            title: 'Context Registry',
+            title: 'Set Variable',
             inputs: ['Data'],
             outputs: [],
             configs: [
@@ -215,8 +223,8 @@ const NODE_PRESETS = {
             ]
         },
         debug: {
-            title: 'Debug Sink',
-            inputs: ['Log Data'],
+            title: 'Debug',
+            inputs: ['Data'],
             outputs: [],
             configs: [
                 { key: 'label', type: 'text', label: 'Artifact Label', placeholder: 'Debug' }
@@ -225,7 +233,7 @@ const NODE_PRESETS = {
     },
     logic: {
         logic_gate: {
-            title: 'Logical Gate',
+            title: 'Logic Gate',
             inputs: ['In 1', 'In 2'],
             outputs: ['True', 'False'],
             logicalInputs: 2,

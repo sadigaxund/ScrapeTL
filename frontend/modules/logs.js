@@ -219,8 +219,17 @@ function toggleLogDetails(id) {
 
 function collapseAllLogs() {
     state.expandedLogs.clear();
-    responseCache['logs'] = null; // Clear cache to force re-render
+    responseCache['logs'] = null;
     loadLogs();
+}
+
+async function clearAllLogs() {
+    if (!confirm('Delete all log entries? This cannot be undone.')) return;
+    await apiFetch(API.logs, { method: 'DELETE' });
+    responseCache['logs'] = null;
+    state.expandedLogs.clear();
+    loadLogs();
+    toast('Logs cleared.', 'success');
 }
 
 function switchLogTab(logId, tab, btn) {

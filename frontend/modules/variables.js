@@ -644,8 +644,8 @@ function renderFunctionsList() {
         { name: 'yesterday', desc: 'Yesterday\'s date', example: '{{yesterday}}' },
         { name: 'env', desc: 'Access an environment variable', example: '{{env("VAR")}}' },
         { name: 'random', desc: 'Random number between min/max', example: '{{random(1, 100)}}' },
-        { name: 'random_stream', desc: '📡 Generator: n random numbers', example: '{{random_stream(10, 1, 100)}}' },
-        { name: 'range', desc: '📡 Generator: numerical sequence', example: '{{range(1, 10)}}' },
+        { name: 'random_stream', desc: 'Generator: n random numbers', example: '{{random_stream(10, 1, 100)}}' },
+        { name: 'range', desc: 'Generator: numerical sequence', example: '{{range(1, 10)}}' },
         { name: 'uuid', desc: 'Generate a unique UUID v4', example: '{{uuid()}}' },
         { name: 'json', desc: 'Serialize object to JSON string', example: '{{json({"id": 1})}}' },
         { name: 'upper', desc: 'Convert string to UPPERCASE', example: '{{upper("hello")}}' },
@@ -745,8 +745,8 @@ function openContextDrawer(type, id) {
             { name: 'yesterday', desc: "Returns yesterday's date in **YYYY-MM-DD** format.", example: '{{yesterday}}' },
             { name: 'env', desc: 'Accesses an environment variable from the host system.', example: '{{env("DB_PASS")}}' },
             { name: 'random', desc: 'Generates a random integer between the provided min and max values (inclusive).', example: '{{random(1, 50)}}' },
-            { name: 'random_stream', desc: '📡 **Generator**: Returns a stream of `n` random numbers. Useful for stress-testing or batch generation.', example: '{{random_stream(10, 1, 100)}}' },
-            { name: 'range', desc: '📡 **Generator**: Returns a numerical sequence (start to stop). This is the primary way to trigger iterative batch runs.', example: '{{range(1, 10)}}' },
+            { name: 'random_stream', desc: '**Generator**: Returns a stream of `n` random numbers. Useful for stress-testing or batch generation.', example: '{{random_stream(10, 1, 100)}}' },
+            { name: 'range', desc: '**Generator**: Returns a numerical sequence (start to stop). This is the primary way to trigger iterative batch runs.', example: '{{range(1, 10)}}' },
             { name: 'uuid', desc: 'Generates a unique version 4 UUID string.', example: '{{uuid()}}' },
             { name: 'json', desc: 'Converts a Python object into a JSON-formatted string.', example: '{{json({"key": "val"})}}' },
             { name: 'upper', desc: 'Transforms input text into all uppercase letters.', example: '{{upper("hi")}}' },
@@ -803,7 +803,7 @@ async function startLogTabStream(logIdToFetch, uiLogId, scraperName = '') {
     const isRunning = String(logIdToFetch).startsWith('run_');
     const realId = isRunning ? parseInt(String(logIdToFetch).replace('run_', '')) : logIdToFetch;
     const container = document.querySelector(`#log-content-system-${uiLogId} .log-tab-system-content`);
-    
+
     if (!container) return;
 
     const updateTabUI = (data) => {
@@ -830,7 +830,7 @@ async function startLogTabStream(logIdToFetch, uiLogId, scraperName = '') {
 
     // Initial fetch
     await fetchLogs();
-    
+
     if (isRunning && !activeLogTabStreams[uiLogId]) {
         activeLogTabStreams[uiLogId] = setInterval(fetchLogs, 2000);
     }

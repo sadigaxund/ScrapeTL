@@ -46,6 +46,17 @@ def _get_log_preview_limit(db: Session) -> int:
     return 10
 
 
+def _get_batch_throttle(db: Session) -> float:
+    """Read batch_throttle_seconds from AppSettings, defaulting to 0."""
+    try:
+        r = db.get(AppSetting, "batch_throttle_seconds")
+        if r and r.value:
+            return float(r.value)
+    except Exception:
+        pass
+    return 0.0
+
+
 from app import task_registry
 
 def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None, schedule_id: int = None):
@@ -70,6 +81,11 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
     try:
         max_retries, backoff_seconds = _get_retry_settings(db)
         log_preview_limit = _get_log_preview_limit(db)
+        # Per-scraper throttle takes precedence over global AppSetting
+        if scraper_record.batch_throttle_seconds is not None:
+            batch_throttle_seconds = float(scraper_record.batch_throttle_seconds)
+        else:
+            batch_throttle_seconds = _get_batch_throttle(db)
 
         status        = "success"
         payload_dict  = None
@@ -118,7 +134,30 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             
         # 3.5 Resolve Expressions in Input Values using current variables
         custom_funcs = {f.name: f.code for f in db.query(UserFunction).all()}
-        _input_values = resolve_expressions(_input_values, global_vars, custom_funcs)        # Detect Iterable Inputs (Batches/Generators)
+        _input_values = resolve_expressions(_input_values, global_vars, custom_funcs)
+
+        # 3.6 For builder flows: pre-resolve `input_external` node defaults that reference
+        # Batch registry variables. This lets a Parameter node with default={{my_urls}}
+        # drive the outer N-runs loop without needing the Run Inputs modal.
+        if scraper_record.scraper_type == "builder":
+            try:
+                raw_flow = scraper_record.flow_data or (scraper_record.versions[0].code if scraper_record.versions else None)
+                if raw_flow:
+                    flow_nodes = json.loads(raw_flow).get("nodes", [])
+                    for node in flow_nodes:
+                        if node.get("type") == "input" and node.get("preset") == "external":
+                            cfg = node.get("config", {})
+                            param_name = cfg.get("name")
+                            default_expr = cfg.get("default", "")
+                            if param_name and default_expr and param_name not in _input_values and "{{" in str(default_expr):
+                                resolved_val = resolve_expressions({"_v": default_expr}, global_vars, custom_funcs).get("_v")
+                                if isinstance(resolved_val, Batch):
+                                    _input_values[param_name] = resolved_val
+                                    print(f"[Runner] Auto-detected Batch default for param '{param_name}' ({len(resolved_val)} items). Will iterate.")
+            except Exception as _pre_err:
+                print(f"[Runner] Warning: batch default pre-resolve failed: {_pre_err}")
+
+        # Detect Iterable Inputs (Batches/Generators)
         batch_input_name = None
         iterable_source = [_input_values] # Default: single item list
 
@@ -229,6 +268,14 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
                     if iter_episodes:
                         all_episodes.extend(iter_episodes)
+
+                    # Throttle between batch iterations (skip for last item — checked via stop_event)
+                    if batch_input_name and attempt_status in ("success", "skipped") and batch_throttle_seconds > 0:
+                        print(f"[Runner] ⏸ Batch throttle: waiting {batch_throttle_seconds}s before next item…")
+                        if stop_event:
+                            stop_event.wait(timeout=batch_throttle_seconds)
+                        else:
+                            time.sleep(batch_throttle_seconds)
 
                     # STREAMING DISPATCH
                     if is_streaming and iter_episodes and attempt_status == "success":

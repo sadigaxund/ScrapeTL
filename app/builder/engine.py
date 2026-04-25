@@ -75,8 +75,20 @@ class BuilderEngine:
                 print(f"[BuilderEngine] Launching local browser (headless={headless})")
                 self._browser = self._p.chromium.launch(headless=headless)
             
-            self._context = self._browser.new_context()
+            if self.browser_config.get("browser_stealth"):
+                ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                self._context = self._browser.new_context(user_agent=ua)
+            else:
+                self._context = self._browser.new_context()
+
             self._page = self._context.new_page()
+
+            if self.browser_config.get("browser_stealth"):
+                try:
+                    from playwright_stealth import stealth_sync
+                    stealth_sync(self._page)
+                except ImportError:
+                    pass
             self._page.on('dialog', lambda dialog: dialog.accept())
         except Exception as e:
             print(f"[BuilderEngine] Playwright setup failed: {e}")
@@ -549,7 +561,20 @@ class BuilderEngine:
                     c = sc.get("browser_cdp_url") or gcdp
                     with sync_playwright() as p:
                         browser = p.chromium.connect_over_cdp(c) if c else p.chromium.launch(headless=h)
-                        pg = browser.new_page()
+                        if sc.get("browser_stealth"):
+                            ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                            ctx = browser.new_context(user_agent=ua)
+                        else:
+                            ctx = browser.new_context()
+                        
+                        pg = ctx.new_page()
+
+                        if sc.get("browser_stealth"):
+                            try:
+                                from playwright_stealth import stealth_sync
+                                stealth_sync(pg)
+                            except ImportError:
+                                pass
                         pg.on('dialog', lambda dialog: dialog.accept())
                         result = _run_playwright_logic(pg, u)
                         browser.close()
@@ -657,6 +682,28 @@ class BuilderEngine:
             if isinstance(text_input, list):
                 return Batch([_transform(t) for t in text_input])
             return _transform(text_input)
+
+        elif ntype == "action_string_format":
+            template = data.get("template", "")
+            sorted_keys = sorted(node_inputs.keys(), key=lambda k: int(k.split('_')[1]) if '_' in k and k.split('_')[1].isdigit() else 0)
+            inputs_list = [node_inputs[k] for k in sorted_keys]
+
+            def _format(*vals):
+                try:
+                    return template.format(*[str(v) for v in vals])
+                except (IndexError, KeyError):
+                    return template
+
+            # If any input is a Batch, expand element-wise
+            batch_inputs = [v for v in inputs_list if isinstance(v, list)]
+            if batch_inputs:
+                length = max(len(b) for b in batch_inputs)
+                expanded = [
+                    v if isinstance(v, list) else [v] * length
+                    for v in inputs_list
+                ]
+                return Batch([_format(*row) for row in zip(*expanded)])
+            return _format(*inputs_list)
 
         elif ntype == "action_type_convert":
             val_input = node_inputs.get("value") or node_inputs.get("data")
