@@ -32,6 +32,8 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 
 46. There are some numerical input fields with up and down arrows, where the context registry button {{}} on hover does not appear, replace with proper input field, no need for arrows, just standardize them into the same one.
 
+47. string format node: the parameters start from 0 like this '{0}_{1}', however the ports are starting from 1. This should be synced.
+48. mathemtical node that can manipulate the numerical data
 
 44. [PENDING] find all of the dropdown elements, and properly standardize and make single reusable element
 
