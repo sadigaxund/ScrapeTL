@@ -9,9 +9,9 @@ import builtins
 setattr(builtins, "true", True)
 setattr(builtins, "false", False)
 
-from app.database import init_db
-from app.api import scrapers, schedules, logs, run
-from app.api import settings, tags, integrations, variables, functions
+from scrapetl.database import init_db
+from scrapetl.api import scrapers, schedules, logs, run
+from scrapetl.api import settings, tags, integrations, variables, functions
 
 app = FastAPI(title="ScrapeTL", version="2.0.0")
 
@@ -39,8 +39,8 @@ def serve_index():
 
 @app.get("/thumbnails/{filename}", tags=["thumbnails"])
 def get_thumbnail(filename: str):
-    from app.database import SessionLocal
-    from app.models import Scraper, Integration
+    from scrapetl.database import SessionLocal
+    from scrapetl.models import Scraper, Integration
     import json
     
     db = SessionLocal()
@@ -74,7 +74,7 @@ def get_thumbnail(filename: str):
 def startup_event():
     init_db()
     
-    from app.database import SessionLocal
+    from scrapetl.database import SessionLocal
     db = SessionLocal()
 
     # Column Migration: log_file_path
@@ -89,7 +89,7 @@ def startup_event():
 
     # Initialise Log Settings
     import os
-    from app.models import AppSetting
+    from scrapetl.models import AppSetting
     
     # Prioritise environment variable for logs path
     env_logs_path = os.environ.get("STL_LOGS_PATH", "./logs")
@@ -122,7 +122,7 @@ def startup_event():
     finally:
         db.close()
 
-    from app import scheduler as sched
+    from scrapetl import scheduler as sched
     sched.start()
     sched.load_schedules_from_db()
 

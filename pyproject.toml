@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "setuptools-scm>=8"]
+build-backend = "setuptools.backends.legacy:build"
+
+[project]
+name = "scrapetl"
+version = "2.0.0"
+description = "Web scraper orchestration platform with a visual flow builder"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.6",
+    "apscheduler>=3.10.4",
+    "sqlalchemy>=2.0.35",
+    "requests>=2.32.3",
+    "python-dotenv>=1.0.1",
+    "croniter>=3.0.3",
+    "beautifulsoup4>=4.12.3",
+    "python-multipart>=0.0.9",
+    "pytz>=2024.1",
+    "tzlocal>=5.2",
+]
+
+[project.optional-dependencies]
+playwright = [
+    "playwright>=1.49.1",
+    "playwright-stealth>=1.0.6",
+]
+
+[project.scripts]
+scrapetl = "scrapetl.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["scrapetl*"]
+
+[tool.setuptools.package-data]
+scrapetl = ["../frontend/**/*"]

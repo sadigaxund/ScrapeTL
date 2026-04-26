@@ -5,7 +5,7 @@ Public exception classes intended to be raised from scraper code.
 ═══════════════════════════════════════════════════════════════════
 
 Usage inside a scraper:
-    from app.exceptions import ScrapeSkip
+    from scrapetl.exceptions import ScrapeSkip
 
     class MyScraper(BaseScraper):
         def scrape(self):

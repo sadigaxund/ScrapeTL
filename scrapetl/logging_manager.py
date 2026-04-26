@@ -4,7 +4,7 @@ import datetime
 import threading
 from typing import Optional
 from sqlalchemy.orm import Session
-from app.models import AppSetting
+from scrapetl.models import AppSetting
 
 class TeeStream:
     """A stream that writes to both an original stream and a file, with optional timestamping."""

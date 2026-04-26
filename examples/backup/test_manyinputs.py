@@ -19,8 +19,8 @@ Within each <li>:
 import re
 import requests
 from bs4 import BeautifulSoup, Tag
-from app.scrapers.base import BaseScraper
-from app.exceptions import ScrapeSkip
+from scrapetl import BaseScraper
+from scrapetl import ScrapeSkip
 
 HEADERS = {
     "User-Agent": (

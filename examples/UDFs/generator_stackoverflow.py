@@ -8,7 +8,7 @@ Yields one URL per tag. Plug into a Parameter node as a Batch source:
 Category: generator (auto-detected via @generator decorator AND yield)
 """
 
-from app.functions.base import generator
+from scrapetl import generator
 
 
 @generator

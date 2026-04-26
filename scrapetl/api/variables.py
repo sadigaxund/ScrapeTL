@@ -4,8 +4,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import GlobalVariable
+from scrapetl.database import get_db
+from scrapetl.models import GlobalVariable
 
 router = APIRouter(prefix="/api/variables", tags=["variables"])
 

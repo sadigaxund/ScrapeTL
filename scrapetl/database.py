@@ -19,7 +19,7 @@ def get_db():
 
 
 def init_db():
-    from app import models  # noqa: F401 - ensure all models are registered
+    from scrapetl import models  # noqa: F401 - ensure all models are registered
     Base.metadata.create_all(bind=engine)
     _ensure_schema_columns()
     _seed_defaults()
@@ -133,7 +133,7 @@ def _seed_defaults():
     """Seed default values into app_settings if they don't exist."""
     db = SessionLocal()
     try:
-        from app.models import AppSetting
+        from scrapetl.models import AppSetting
         if not db.get(AppSetting, "timezone"):
             # Detect local timezone
             initial_tz = "UTC"

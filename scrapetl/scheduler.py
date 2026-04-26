@@ -14,8 +14,8 @@ from croniter import croniter
 def get_app_timezone() -> pytz.BaseTzInfo:
     """Read the active timezone from DB, fall back to env / UTC."""
     try:
-        from app.database import SessionLocal
-        from app.models import AppSetting
+        from scrapetl.database import SessionLocal
+        from scrapetl.models import AppSetting
         db = SessionLocal()
         row = db.get(AppSetting, "timezone")
         db.close()
@@ -58,13 +58,13 @@ def _make_job_id(schedule_id: int) -> str:
 
 def _execute_scheduled_scraper(scraper_id: int, schedule_id: int, input_values: dict = None):
     """Called by APScheduler - runs inside a thread."""
-    from app.database import SessionLocal
-    from app.models import Schedule
-    from app.runner import run_scraper
+    from scrapetl.database import SessionLocal
+    from scrapetl.models import Schedule
+    from scrapetl.runner import run_scraper
 
     db = SessionLocal()
     try:
-        from app.models import TaskQueue
+        from scrapetl.models import TaskQueue
         import json as _json
 
         schedule = db.get(Schedule, schedule_id)
@@ -114,9 +114,9 @@ def remove_schedule_job(schedule_id: int):
 
 
 def process_catchup_queue():
-    from app.database import SessionLocal
-    from app.models import TaskQueue
-    from app.runner import run_scraper
+    from scrapetl.database import SessionLocal
+    from scrapetl.models import TaskQueue
+    from scrapetl.runner import run_scraper
 
     db = SessionLocal()
     try:
@@ -136,7 +136,7 @@ def process_catchup_queue():
             # If it has a schedule_id, it is a scheduled catch-up run.
             # If not, but has a note, it was likely manual or one-time.
             if task.schedule_id:
-                from app.models import Schedule
+                from scrapetl.models import Schedule
                 sched_obj = db.get(Schedule, task.schedule_id)
                 if sched_obj:
                     sched_obj.last_run = datetime.utcnow()
@@ -151,7 +151,7 @@ def process_catchup_queue():
 
 
 def enqueue_missed_runs(db, schedule, scraper_id: int):
-    from app.models import ScrapeLog, TaskQueue
+    from scrapetl.models import ScrapeLog, TaskQueue
 
     last_run = (
         db.query(ScrapeLog)
@@ -202,8 +202,8 @@ def enqueue_missed_runs(db, schedule, scraper_id: int):
 
 
 def load_schedules_from_db():
-    from app.database import SessionLocal
-    from app.models import Schedule
+    from scrapetl.database import SessionLocal
+    from scrapetl.models import Schedule
 
     db = SessionLocal()
     try:
@@ -226,8 +226,8 @@ def load_schedules_from_db():
 
 def purge_expired_logs():
     """Daily cleanup task for old log files and DB entries."""
-    from app.database import SessionLocal
-    from app.models import ScrapeLog, AppSetting
+    from scrapetl.database import SessionLocal
+    from scrapetl.models import ScrapeLog, AppSetting
     import os
 
     db = SessionLocal()

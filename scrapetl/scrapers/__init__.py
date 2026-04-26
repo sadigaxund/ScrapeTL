@@ -8,7 +8,7 @@ import importlib
 import inspect
 import os
 from typing import Dict, Type
-from app.scrapers.base import BaseScraper
+from scrapetl.scrapers.base import BaseScraper
 
 
 def load_scraper_class(module_path: str) -> Type[BaseScraper]:
@@ -17,9 +17,9 @@ def load_scraper_class(module_path: str) -> Type[BaseScraper]:
 
     The module_path can be:
       - A module containing a single BaseScraper subclass (auto-detected)
-        e.g.  "app.scrapers.example_scraper"
+        e.g.  "scrapetl.scrapers.example_scraper"
       - A fully qualified class path
-        e.g.  "app.scrapers.example_scraper.ExampleScraper"
+        e.g.  "scrapetl.scrapers.example_scraper.ExampleScraper"
     """
     # Try treating the last segment as a class name first
     parts = module_path.rsplit(".", 1)
@@ -47,7 +47,7 @@ def load_scraper_class_from_code(code: str) -> Type[BaseScraper]:
     then return the underlying BaseScraper subclass.
     """
     # Seed the namespace with the canonical BaseScraper so that
-    # `from app.scrapers.base import BaseScraper` inside the code
+    # `from scrapetl.scrapers.base import BaseScraper` inside the code
     # resolves to the same object used in the issubclass() check below.
     namespace = {
         "BaseScraper": BaseScraper,
@@ -83,10 +83,10 @@ def list_available_scraper_modules() -> Dict[str, str]:
             if fname.startswith("_") or not fname.endswith(".py") or fname == "base.py":
                 continue
             
-            # Calculate the dotted module path relative to app.scrapers
+            # Calculate the dotted module path relative to scrapetl.scrapers
             rel_path = os.path.relpath(os.path.join(root, fname), scrapers_dir)
             module_parts = rel_path[:-3].replace(os.sep, ".")
-            module_path = f"app.scrapers.{module_parts}"
+            module_path = f"scrapetl.scrapers.{module_parts}"
             
             try:
                 cls = load_scraper_class(module_path)

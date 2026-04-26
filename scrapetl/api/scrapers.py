@@ -8,11 +8,11 @@ import importlib
 import inspect
 from typing import Optional
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Scraper, ScraperVersion
-from app.scrapers import load_scraper_class, list_available_scraper_modules
-from app.scrapers.base import BaseScraper
-from app.builder.generator import Generator
+from scrapetl.database import get_db
+from scrapetl.models import Scraper, ScraperVersion
+from scrapetl.scrapers import load_scraper_class, list_available_scraper_modules
+from scrapetl.scrapers.base import BaseScraper
+from scrapetl.builder.generator import Generator
 
 router = APIRouter(prefix="/api/scrapers", tags=["scrapers"])
 
@@ -52,10 +52,10 @@ def _scraper_dict(s: Scraper):
     scraper_inputs = []
     try:
         if s.scraper_type == "builder" and s.flow_data:
-            from app.builder.generator import Generator
+            from scrapetl.builder.generator import Generator
             scraper_inputs = Generator.extract_inputs(s.flow_data)
         elif s.versions:
-            from app.scrapers import load_scraper_class_from_code
+            from scrapetl.scrapers import load_scraper_class_from_code
             cls = load_scraper_class_from_code(s.versions[0].code)
             raw = getattr(cls, 'inputs', [])
             if isinstance(raw, list):
@@ -174,12 +174,12 @@ async def register_scraper_wizard(
     if not slug:
         slug = "custom_scraper"
 
-    module_path = f"app.scrapers.{slug}"
+    module_path = f"scrapetl.scrapers.{slug}"
 
     # Handle duplicates by appending uuid
     if db.query(Scraper).filter(Scraper.module_path == module_path).first():
         short_id = uuid.uuid4().hex[:4]
-        module_path = f"app.scrapers.{slug}_{short_id}"
+        module_path = f"scrapetl.scrapers.{slug}_{short_id}"
 
     _validate_code_string(text)
 
@@ -457,7 +457,7 @@ def duplicate_scraper(scraper_id: int, db: Session = Depends(get_db)):
     # Generate unique module path
     slug = re.sub(r"[^a-z0-9]", "_", original.name.lower().strip())
     slug = re.sub(r"_+", "_", slug).strip("_")
-    module_path = f"app.scrapers.{slug}_copy_{uuid.uuid4().hex[:4]}"
+    module_path = f"scrapetl.scrapers.{slug}_copy_{uuid.uuid4().hex[:4]}"
 
     # Determine position
     max_pos = db.query(Scraper).order_by(Scraper.position.desc()).first()

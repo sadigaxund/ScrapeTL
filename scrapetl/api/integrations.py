@@ -10,8 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Integration, Scraper
+from scrapetl.database import get_db
+from scrapetl.models import Integration, Scraper
 
 router = APIRouter(tags=["integrations"])
 

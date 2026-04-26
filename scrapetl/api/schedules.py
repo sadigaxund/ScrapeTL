@@ -6,9 +6,9 @@ from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Schedule, Scraper
-from app import scheduler as sched
+from scrapetl.database import get_db
+from scrapetl.models import Schedule, Scraper
+from scrapetl import scheduler as sched
 import pytz
 
 router = APIRouter(prefix="/api/schedules", tags=["schedules"])

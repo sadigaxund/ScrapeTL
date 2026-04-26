@@ -5,7 +5,7 @@ These decorators override automatic category detection and are the
 recommended way to declare UDF types.
 
 Usage:
-    from app.functions.base import generator, comparator, transformer
+    from scrapetl import generator, comparator, transformer
 
     @generator
     def stackoverflow_url_generator(tags=["apache-spark", "pyspark"], tab="votes"):

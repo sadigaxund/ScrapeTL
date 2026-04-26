@@ -4,7 +4,7 @@ import json
 from datetime import datetime, timedelta
 
 import inspect
-from app.models import UserFunction
+from scrapetl.models import UserFunction
 
 def _detect_func_name(code):
     """Extracts the first 'def name(' identifier from a code block."""

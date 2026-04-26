@@ -6,8 +6,8 @@ from typing import Dict, Any, List, Optional
 import requests
 from playwright.sync_api import sync_playwright
 from bs4 import BeautifulSoup
-from app.expressions import resolve_expressions
-from app.models import GlobalVariable, Batch
+from scrapetl.expressions import resolve_expressions
+from scrapetl.models import GlobalVariable, Batch
 
 class BuilderEngine:
     """
@@ -551,7 +551,7 @@ class BuilderEngine:
                 if hasattr(self, '_page'):
                     return _run_playwright_logic(self._page, u)
                 else:
-                    from app.models import AppSetting
+                    from scrapetl.models import AppSetting
                     from playwright.sync_api import sync_playwright
                     db = self.db
                     gh = db.get(AppSetting, "browser_headless").value if db and db.get(AppSetting, "browser_headless") else "true"

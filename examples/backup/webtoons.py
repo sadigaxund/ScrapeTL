@@ -1,8 +1,8 @@
 import re
 import requests
 from bs4 import BeautifulSoup, Tag
-from app.scrapers.base import BaseScraper
-from app.exceptions import ScrapeSkip
+from scrapetl import BaseScraper
+from scrapetl import ScrapeSkip
 import os
 import sqlite3
 

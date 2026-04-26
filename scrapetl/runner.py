@@ -8,9 +8,9 @@ import json
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
-from app.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable, UserFunction, Batch
-from app.exceptions import ScrapeSkip
-from app.expressions import resolve_expressions
+from scrapetl.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable, UserFunction, Batch
+from scrapetl.exceptions import ScrapeSkip
+from scrapetl.expressions import resolve_expressions
 
 
 
@@ -57,7 +57,7 @@ def _get_batch_throttle(db: Session) -> float:
     return 0.0
 
 
-from app import task_registry
+from scrapetl import task_registry
 
 def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None, schedule_id: int = None):
     scraper_record: Scraper = db.get(Scraper, scraper_id)
@@ -178,14 +178,14 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         engine = None
         scraper_instance = None
         if scraper_record.scraper_type == "builder":
-            from app.builder.engine import BuilderEngine
+            from scrapetl.builder.engine import BuilderEngine
             # Parse flow data once for the execution
             flow_data = json.loads(scraper_record.flow_data) if scraper_record.flow_data else json.loads(scraper_record.versions[0].code)
             browser_config = json.loads(scraper_record.browser_config) if scraper_record.browser_config else {}
             engine = BuilderEngine(flow_data, global_vars, db_session=db, custom_funcs=custom_funcs, browser_config=browser_config)
             engine.setup()
         else:
-            from app.scrapers import load_scraper_class_from_code
+            from scrapetl.scrapers import load_scraper_class_from_code
             scraper_cls = load_scraper_class_from_code(scraper_record.versions[0].code)
             scraper_instance = scraper_cls(homepage_url=scraper_record.homepage_url)
             if hasattr(scraper_instance, 'setup'):
@@ -195,7 +195,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         is_streaming = isinstance(iterable_source, types.GeneratorType)
 
         # 4. Integrate Logger to capture stdout to file
-        from app.logging_manager import get_scraper_logger
+        from scrapetl.logging_manager import get_scraper_logger
         # Use queue_task_id or a dummy ID for the filename
         log_run_id = queue_task_id or int(time.time())
         
@@ -375,7 +375,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
 
 def _fire_integrations(scraper_record, status, episodes_list, error_msg, triggered_by):
     """Dispatch to all integrations assigned to this scraper."""
-    from app import discord as discord_notifier
+    from scrapetl import discord as discord_notifier
     results = []
 
     integrations = scraper_record.integrations
@@ -424,7 +424,7 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
                     results.append(res)
 
             elif integ.type == "http_request":
-                from app import http_sender
+                from scrapetl import http_sender
                 res = http_sender.send_http(
                     scraper_name=scraper_record.name,
                     status=status,

@@ -18,8 +18,8 @@ Within each <li>:
 """
 import re
 import requests
-from app.scrapers.base import BaseScraper
-from app.exceptions import ScrapeSkip
+from scrapetl import BaseScraper
+from scrapetl import ScrapeSkip
 import time
 
 class Scraper(BaseScraper):

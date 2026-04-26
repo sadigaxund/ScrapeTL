@@ -7,7 +7,7 @@ True/False output ports then route to different branches.
 Category: comparator (auto-detected via @comparator decorator AND -> bool return)
 """
 
-from app.functions.base import comparator
+from scrapetl import comparator
 
 
 @comparator

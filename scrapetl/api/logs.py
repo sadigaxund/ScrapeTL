@@ -8,8 +8,8 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import ScrapeLog, TaskQueue, Scraper, Schedule
+from scrapetl.database import get_db
+from scrapetl.models import ScrapeLog, TaskQueue, Scraper, Schedule
 from datetime import datetime, timedelta
 
 router = APIRouter(tags=["logs"])
@@ -224,7 +224,7 @@ class QueueCreate(BaseModel):
 @router.post("/api/queue")
 def add_to_queue(payload: QueueCreate, db: Session = Depends(get_db)):
     if payload.scheduled_for:
-        from app.scheduler import get_app_timezone
+        from scrapetl.scheduler import get_app_timezone
         import pytz
         tz = get_app_timezone()
         local_dt = tz.localize(payload.scheduled_for)

@@ -1,5 +1,5 @@
 from typing import List, Optional
-from app.exceptions import ScrapeSkip  # re-exported for scraper convenience
+from scrapetl.exceptions import ScrapeSkip  # re-exported for scraper convenience
 
 __all__ = ["BaseScraper", "ScrapeSkip"]
 
@@ -16,7 +16,7 @@ class BaseScraper:
     4. Optionally define `inputs` to declare runtime parameters
     5. Implement `scrape(**kwargs)` accepting the declared inputs
     6. Register the scraper via the UI or API using the module path
-       e.g. "app.scrapers.my_scraper"
+       e.g. "scrapetl.scrapers.my_scraper"
 
     --- Input Parameters ---
     Override `inputs` with a list of parameter descriptor dicts. Each dict:

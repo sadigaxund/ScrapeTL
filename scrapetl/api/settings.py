@@ -4,8 +4,8 @@ App Settings API - read/write key-value app configuration (e.g. timezone).
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import AppSetting
+from scrapetl.database import get_db
+from scrapetl.models import AppSetting
 import pytz
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -67,7 +67,7 @@ def update_setting(key: str, payload: SettingUpdate, db: Session = Depends(get_d
 
     # Hot-reload the scheduler timezone so new schedules pick it up immediately
     if key == "timezone":
-        from app import scheduler as sched
+        from scrapetl import scheduler as sched
         sched.reload_timezone(payload.value)
 
     return {"key": key, "value": payload.value}

@@ -4,8 +4,8 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import UserFunction
+from scrapetl.database import get_db
+from scrapetl.models import UserFunction
 
 router = APIRouter(prefix="/api/functions", tags=["functions"])
 
@@ -44,7 +44,7 @@ def _analyze_function_ast(code: str) -> dict:
     """Parse function code with AST. Returns {'category': str, 'parameters': list[str]}.
 
     Priority order for category:
-      1. Explicit decorator (@generator / @comparator / @transformer from app.functions.base)
+      1. Explicit decorator (@generator / @comparator / @transformer from scrapetl.functions.base)
       2. Return type annotation -> bool
       3. yield / yield from in function body
       4. return True / return False literal

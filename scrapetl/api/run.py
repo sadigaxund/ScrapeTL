@@ -3,11 +3,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
-from app.database import get_db
-from app.models import Scraper
-from app.runner import run_scraper
+from scrapetl.database import get_db
+from scrapetl.models import Scraper
+from scrapetl.runner import run_scraper
 
-from app import task_registry
+from scrapetl import task_registry
 
 router = APIRouter(prefix="/api/run", tags=["run"])
 
@@ -23,7 +23,7 @@ def manual_run(scraper_id: int, force: bool = False, payload: RunPayload = None,
     if not scraper:
         raise HTTPException(status_code=404, detail="Scraper not found.")
 
-    from app.models import TaskQueue
+    from scrapetl.models import TaskQueue
     from datetime import datetime
     import json
 
@@ -53,7 +53,7 @@ def manual_run(scraper_id: int, force: bool = False, payload: RunPayload = None,
     task_id = task.id
 
     def _run():
-        from app.database import SessionLocal
+        from scrapetl.database import SessionLocal
         session = SessionLocal()
         try:
             run_scraper(session, scraper_id, triggered_by="manual", input_values=input_values, queue_task_id=task_id)
@@ -77,8 +77,8 @@ def stop_run(task_id: int):
     if not success:
         # Check if it's in the DB but not in registry (maybe stalled?)
         # We can still mark it as 'cancelled' in DB if it's 'running'
-        from app.database import SessionLocal
-        from app.models import TaskQueue
+        from scrapetl.database import SessionLocal
+        from scrapetl.models import TaskQueue
         db = SessionLocal()
         task = db.get(TaskQueue, task_id)
         if task and task.status == "running":
@@ -96,7 +96,7 @@ def stop_run(task_id: int):
 @router.get("/status/{task_id}")
 def get_task_status(task_id: int, db: Session = Depends(get_db)):
     """Check the current status of a specific task."""
-    from app.models import TaskQueue
+    from scrapetl.models import TaskQueue
     task = db.get(TaskQueue, task_id)
     if not task:
         # If the task is gone from the queue, it's either done or failed (was deleted by runner.py)
@@ -111,7 +111,7 @@ def get_task_status(task_id: int, db: Session = Depends(get_db)):
 @router.get("/{task_id}/logs/live")
 def get_live_logs(task_id: int):
     """Retrieve the current content of a live log file for an active task."""
-    from app.logging_manager import ACTIVE_LOG_PATHS
+    from scrapetl.logging_manager import ACTIVE_LOG_PATHS
     import os
 
     path = ACTIVE_LOG_PATHS.get(task_id)
