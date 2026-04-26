@@ -293,7 +293,8 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                             schedule_id=schedule_id,
                             integration_details=json.dumps(results) if results else None,
                             debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", [])) if hasattr(scraper_instance, 'debug_payload') else None,
-                            log_file_path=captured_log_path
+                            log_file_path=captured_log_path,
+                            input_params=json.dumps(_input_values, default=str) if _input_values else None,
                         )
                         db.add(chunk_log)
                         db.commit()
@@ -343,7 +344,8 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 retry_count=retry_count,
                 schedule_id=schedule_id,
                 debug_payload=json.dumps(all_debug_data, default=_safe_json),
-                log_file_path=captured_log_path
+                log_file_path=captured_log_path,
+                input_params=json.dumps(_input_values, default=_safe_json) if _input_values else None,
             )
             db.add(log)
 

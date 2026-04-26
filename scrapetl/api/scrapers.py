@@ -86,6 +86,7 @@ def _scraper_dict(s: Scraper):
         "flow_data": json.loads(s.flow_data) if s.flow_data else None,
         "browser_config": json.loads(s.browser_config) if s.browser_config else {},
         "batch_throttle_seconds": s.batch_throttle_seconds,
+        "wiki_content": s.wiki_content,
         "last_run": s.logs[0].run_at.isoformat() + "Z" if s.logs else None,
     }
 
@@ -242,6 +243,7 @@ async def save_builder_flow(
     flow_data: str = Form(...),  # JSON string
     browser_config: Optional[str] = Form(None), # JSON string
     batch_throttle_seconds: Optional[str] = Form(None),
+    wiki_content: Optional[str] = Form(None),
     scraper_id: Optional[int] = Form(None),
     new_version: bool = Form(False),
     version_label: Optional[str] = Form(None),
@@ -288,6 +290,8 @@ async def save_builder_flow(
         scraper.scraper_type = "builder"
         if _batch_throttle is not None:
             scraper.batch_throttle_seconds = _batch_throttle
+        if wiki_content is not None:
+            scraper.wiki_content = wiki_content
     else:
         # Determine position
         max_pos = db.query(Scraper).order_by(Scraper.position.desc()).first()
@@ -370,6 +374,7 @@ async def update_scraper(
     commit_message: str = Form(""),
     browser_config: Optional[str] = Form(None),
     batch_throttle_seconds: Optional[str] = Form(None),
+    wiki_content: Optional[str] = Form(None),
     scraper_file: Optional[UploadFile] = File(None),
     thumbnail_file: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
@@ -386,6 +391,8 @@ async def update_scraper(
     if batch_throttle_seconds is not None:
         val = batch_throttle_seconds.strip()
         scraper.batch_throttle_seconds = float(val) if val else None
+    if wiki_content is not None:
+        scraper.wiki_content = wiki_content
 
     # Handle thumbnail file upload
     if thumbnail_file and thumbnail_file.filename:

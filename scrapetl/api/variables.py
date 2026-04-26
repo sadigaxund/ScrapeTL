@@ -1,3 +1,4 @@
+import json
 import os
 from typing import Optional, List
 from datetime import datetime
@@ -8,6 +9,46 @@ from scrapetl.database import get_db
 from scrapetl.models import GlobalVariable
 
 router = APIRouter(prefix="/api/variables", tags=["variables"])
+
+ALLOWED_TYPES = {"string", "integer", "float", "boolean", "json"}
+
+def _validate_value_for_type(value: str, value_type: str) -> None:
+    if value is None:
+        return
+    try:
+        if value_type == "integer":
+            int(value)
+        elif value_type == "float":
+            float(value)
+        elif value_type == "boolean":
+            if value.lower() not in ("true", "false", "1", "0", "yes", "no"):
+                raise ValueError
+        elif value_type == "json":
+            json.loads(value)
+    except (ValueError, json.JSONDecodeError):
+        raise HTTPException(status_code=422, detail=f"Value '{value}' is not valid for type '{value_type}'.")
+
+
+def _rename_flow_references(db: Session, old_key: str, new_key: str, old_ns: str, new_ns: str) -> None:
+    """Replace {{old_key}} / {{ns.old_key}} references in all builder flow_data."""
+    from scrapetl.models import Scraper
+    scrapers = db.query(Scraper).filter(Scraper.flow_data != None).all()
+    for s in scrapers:
+        if not s.flow_data:
+            continue
+        updated = s.flow_data
+        # Replace namespaced form first
+        if old_ns:
+            old_ns_ref = f"{{{{{old_ns}.{old_key}}}}}"
+            new_ns_ref = f"{{{{{new_ns or old_ns}.{new_key}}}}}"
+            updated = updated.replace(old_ns_ref, new_ns_ref)
+        # Replace bare form
+        old_bare = f"{{{{{old_key}}}}}"
+        new_bare = f"{{{{{new_key}}}}}"
+        updated = updated.replace(old_bare, new_bare)
+        if updated != s.flow_data:
+            s.flow_data = updated
+    db.commit()
 
 class VariableBase(BaseModel):
     key: str
@@ -52,6 +93,9 @@ def list_variables(db: Session = Depends(get_db)):
 @router.post("", response_model=VariableResponse)
 def create_variable(payload: VariableCreate, db: Session = Depends(get_db)):
     """Create a new global variable."""
+    if payload.value_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=422, detail=f"value_type must be one of: {', '.join(sorted(ALLOWED_TYPES))}.")
+    _validate_value_for_type(payload.value, payload.value_type)
     # Check if key already exists
     existing = db.query(GlobalVariable).filter(GlobalVariable.key == payload.key).first()
     if existing:
@@ -78,12 +122,20 @@ def update_variable(var_id: int, payload: VariableUpdate, db: Session = Depends(
     var = db.get(GlobalVariable, var_id)
     if not var:
         raise HTTPException(status_code=404, detail="Variable not found.")
+    old_key = var.key
+    old_namespace = var.namespace
     if payload.key is not None and payload.key != var.key:
         # Ensure new key is unique
         existing = db.query(GlobalVariable).filter(GlobalVariable.key == payload.key).first()
         if existing:
             raise HTTPException(status_code=400, detail=f"Variable with key '{payload.key}' already exists.")
         var.key = payload.key
+
+    effective_type = payload.value_type if payload.value_type is not None else var.value_type
+    effective_value = payload.value if payload.value is not None else var.value
+    if payload.value_type is not None and payload.value_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=422, detail=f"value_type must be one of: {', '.join(sorted(ALLOWED_TYPES))}.")
+    _validate_value_for_type(effective_value, effective_type)
 
     if payload.value is not None:
         var.value = payload.value
@@ -101,6 +153,11 @@ def update_variable(var_id: int, payload: VariableUpdate, db: Session = Depends(
         var.namespace = payload.namespace
     
     db.commit()
+
+    # Auto-rename references in builder flow_data if key changed
+    if payload.key is not None and payload.key != old_key:
+        _rename_flow_references(db, old_key, payload.key, old_namespace, var.namespace)
+
     db.refresh(var)
     return var
 

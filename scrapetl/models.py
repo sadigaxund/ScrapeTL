@@ -49,6 +49,7 @@ class Scraper(Base):
     batch_throttle_seconds = Column(Float, nullable=True)  # per-scraper override; None = use global
     flow_data = Column(Text, nullable=True)         # JSON encoded graph (nodes, edges)
     browser_config = Column(Text, nullable=True)    # JSON encoded settings (remote, headless, etc)
+    wiki_content = Column(Text, nullable=True)      # Markdown per-scraper documentation
     position = Column(Integer, default=0)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -97,7 +98,8 @@ class ScrapeLog(Base):
     retry_count   = Column(Integer, default=0)       # how many retries were attempted
     integration_details = Column(Text, nullable=True) # JSON with integration results
     debug_payload       = Column(Text, nullable=True) # JSON with secondary debug artifacts
-    log_file_path       = Column(String, nullable=True) # New: Path to the .log file in ./logs/
+    log_file_path       = Column(String, nullable=True) # Path to the .log file in ./logs/
+    input_params        = Column(Text, nullable=True)  # JSON snapshot of run inputs
 
     scraper = relationship("Scraper", back_populates="logs")
     schedule = relationship("Schedule")

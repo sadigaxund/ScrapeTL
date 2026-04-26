@@ -25,6 +25,8 @@ class BuilderEngine:
         self.browser_config = browser_config or {}
         # Internal cache for node results to prevent redundant execution
         self.results_cache: Dict[str, Any] = {}
+        # Named wire store: wire_relay nodes write here, wire (tap) nodes read from here
+        self.wire_store: Dict[str, Any] = {}
 
         # Adjacency list for DAG traversal
         self.adj = {}
@@ -773,7 +775,13 @@ class BuilderEngine:
                             row.append(v)  # Repeat scalar
                     zipped.append(row)
                 return Batch(zipped)
-            
+            elif mode == "concat":
+                result = []
+                for item in input_list:
+                    if isinstance(item, list): result.extend(item)
+                    else: result.append(item)
+                return Batch(result)
+
             return input_list # Default: list
 
         # ── Conditional Logic ─────────────────────────────────────────────
@@ -1059,6 +1067,48 @@ class BuilderEngine:
             if val is not None:
                 print(f"[BuilderEngine] DEBUG [{node['id']}]: {val}")
             return val
+
+        elif ntype == "sink_wire_relay":
+            wire_name = data.get("wire_name", "").strip()
+            val = node_inputs.get("data") or next(iter(node_inputs.values()), None)
+            if wire_name:
+                self.wire_store[wire_name] = val
+            return val
+
+        elif ntype == "input_wire":
+            wire_name = data.get("wire_name", "").strip()
+            return self.wire_store.get(wire_name)
+
+        elif ntype == "sink_raise_skip":
+            from scrapetl.exceptions import ScrapeSkip
+            msg = data.get("message", "").strip() or "Skipped by flow."
+            raise ScrapeSkip(msg)
+
+        elif ntype == "source_image_fetch":
+            url = node_inputs.get("url") or node_inputs.get("data")
+            if not url:
+                return None
+            output_type = data.get("output_type", "base64")
+            try:
+                resp = requests.get(str(url), timeout=30)
+                resp.raise_for_status()
+                img_bytes = resp.content
+                if output_type == "base64":
+                    import base64
+                    ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+                    b64 = base64.b64encode(img_bytes).decode()
+                    return f"data:{ct};base64,{b64}"
+                elif output_type == "bytes_hex":
+                    return img_bytes.hex()
+                return str(url)
+            except Exception as e:
+                return {"__error__": str(e)}
+
+        elif ntype == "logic_negate":
+            val = node_inputs.get("bool") or node_inputs.get("data") or next(iter(node_inputs.values()), None)
+            if isinstance(val, list):
+                return Batch([not bool(v) for v in val])
+            return not bool(val)
 
         return None
 

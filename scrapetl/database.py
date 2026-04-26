@@ -39,6 +39,10 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE scrape_logs ADD COLUMN debug_payload TEXT"))
             conn.commit()
             print("[DB] Added debug_payload to scrape_logs")
+        if "input_params" not in cols:
+            conn.execute(text("ALTER TABLE scrape_logs ADD COLUMN input_params TEXT"))
+            conn.commit()
+            print("[DB] Added input_params to scrape_logs")
 
         # Check task_queue
         res = conn.execute(text("PRAGMA table_info(task_queue)"))
@@ -94,6 +98,10 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE scrapers ADD COLUMN batch_throttle_seconds REAL"))
             conn.commit()
             print("[DB] Added batch_throttle_seconds to scrapers")
+        if "wiki_content" not in cols:
+            conn.execute(text("ALTER TABLE scrapers ADD COLUMN wiki_content TEXT"))
+            conn.commit()
+            print("[DB] Added wiki_content to scrapers")
 
         # Check global_variables
         res = conn.execute(text("PRAGMA table_info(global_variables)"))

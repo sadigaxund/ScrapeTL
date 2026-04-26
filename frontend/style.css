@@ -4297,3 +4297,85 @@ input.builder-node__title.node-title-input:focus {
   border-color: #ef4444;
   color: #ef4444;
 }
+
+/* ── Expression picker overlay ──────────────────── */
+.node-input-expr-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.node-input-expr-wrap .node-input {
+  flex: 1;
+  padding-right: 36px;
+}
+
+.btn-expr-picker {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.35);
+  border-radius: 4px;
+  color: var(--accent);
+  font-size: 9px;
+  font-family: monospace;
+  padding: 2px 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s;
+  line-height: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.node-input-expr-wrap:hover .btn-expr-picker,
+.node-input-expr-wrap:focus-within .btn-expr-picker {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.btn-expr-picker:hover {
+  background: rgba(99, 102, 241, 0.3);
+  border-color: var(--accent);
+}
+
+/* ── Log input params chips ─────────────────────── */
+.log-input-params {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.log-input-chip {
+  background: rgba(99, 102, 241, 0.12);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 4px;
+  font-size: 11px;
+  padding: 1px 7px;
+  color: var(--text-secondary);
+  font-family: monospace;
+}
+
+.log-input-chip b {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Browser Fetch node fixed width ─────────────── */
+.builder-node--fetch_playwright {
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+}
+
+/* ── Wiki textarea in edit modal ─────────────────── */
+#edit-tab-wiki .markdown-editor {
+  min-height: 320px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 13px;
+  resize: vertical;
+}

@@ -128,6 +128,10 @@ async function loadLogs(page = null) {
                     <div class="log-col-status">${statusBadge(log.status)}</div>
                     <div class="log-col-scraper">
                         <strong>${log.scraper_name || 'N/A'}</strong>
+                        ${log.input_params && Object.keys(log.input_params).length > 0 ? `<div class="log-input-params">${Object.entries(log.input_params).map(([k,v]) => {
+                            const display = Array.isArray(v) ? `[...${v.length}]` : (String(v).length > 40 ? String(v).substring(0, 40) + '...' : String(v));
+                            return `<span class="log-input-chip"><b>${k}:</b> ${display}</span>`;
+                        }).join('')}</div>` : ''}
                     </div>
                     <div class="log-col-eps">
                         <span class="log-epcount" style="display: ${log.episode_count ? 'inline-flex' : 'none'}">${log.episode_count} found</span>
@@ -148,10 +152,7 @@ async function loadLogs(page = null) {
                         <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'debug', this)">Debug Assets (${log.debug_payload.length})</button>
                         ` : ''}
                         <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'system', this); startLogTabStream('${log.task_id || log.id}', '${log.id}', '${(log.scraper_name || 'N/A').replace(/'/g, "\\'")}')">System Logs</button>
-                        
-                        <button class="btn btn-ghost btn-sm" style="margin-left:auto; color:var(--text-muted); font-size:10px; opacity:0.6; display:flex; align-items:center; gap:4px; padding:2px 8px;" onclick="openSystemLogViewer('${log.task_id || log.id}', '${(log.scraper_name || 'N/A').replace(/'/g, "\\'")}')">
-                            <span style="font-size:12px">↗</span> Pop-out Log
-                        </button>
+                        ${log.log_file_path ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto; font-size:10px; padding:2px 8px;" onclick="event.stopPropagation(); downloadSystemLog(${log.id})">Download Log</button>` : ''}
                     </div>
 
                     ${isRunning ? `<div class="log-running-msg">Execution in progress. Results will be available after completion.</div>` : ''}
@@ -515,3 +516,12 @@ function downloadLogPayload(logId, format) {
     document.body.removeChild(a);
 }
 
+
+function downloadSystemLog(logId) {
+    const a = document.createElement('a');
+    a.href = `/api/logs/${logId}/raw?download=1`;
+    a.download = `run_${logId}.log`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}

@@ -90,6 +90,8 @@ def get_logs(
                 "retry_count": log.retry_count,
                 "integration_details": log.integration_details,
                 "debug_payload": json.loads(log.debug_payload) if log.debug_payload else [],
+                "input_params": json.loads(log.input_params) if log.input_params else None,
+                "log_file_path": log.log_file_path,
             }
             for log in logs
         ]
@@ -103,7 +105,7 @@ def get_logs(
 @router.get("/api/logs/{log_id}/download")
 def download_log_payload(
     log_id: int,
-    format: str = Query("json", regex="^(json|csv)$"),
+    format: str = Query("json", pattern="^(json|csv)$"),
     db: Session = Depends(get_db),
 ):
     """Download the scrape payload for a specific log entry as JSON or CSV."""
@@ -257,17 +259,25 @@ def remove_from_queue(task_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/api/logs/{log_id}/raw")
-def get_raw_log(log_id: int, db: Session = Depends(get_db)):
+def get_raw_log(log_id: int, download: int = 0, db: Session = Depends(get_db)):
     """Retrieve the raw stdout log file content for a given run."""
+    from fastapi.responses import FileResponse
     log = db.get(ScrapeLog, log_id)
     if not log:
         raise HTTPException(status_code=404, detail="Log entry not found.")
-    
+
     if not log.log_file_path:
+        if download:
+            raise HTTPException(status_code=404, detail="No log file for this run.")
         return {"content": "No system log file captured for this run.", "path": None}
 
     if not os.path.exists(log.log_file_path):
+        if download:
+            raise HTTPException(status_code=404, detail="Log file not found on disk.")
         return {"content": f"Log file not found on disk: {log.log_file_path}\n(It may have been purged or moved manually).", "path": log.log_file_path}
+
+    if download:
+        return FileResponse(log.log_file_path, media_type="text/plain", filename=f"run_{log_id}.log")
 
     try:
         with open(log.log_file_path, "r", encoding="utf-8") as f:

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(python *)",
-      "Bash(.venv/bin/python *)"
+      "Bash(.venv/bin/python *)",
+      "Bash(pip install *)"
     ]
   },
   "enabledPlugins": {

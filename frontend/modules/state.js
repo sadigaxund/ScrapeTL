@@ -126,6 +126,14 @@ const NODE_PRESETS = {
                 { key: 'value', type: 'expression', label: 'Registry Key / Expression' }
             ]
         },
+        wire: {
+            title: 'Wire Tap',
+            inputs: [],
+            outputs: ['Value'],
+            configs: [
+                { key: 'wire_name', type: 'text', label: 'Wire Name', placeholder: 'my_wire' }
+            ]
+        },
     },
     source: {
         fetch_url: {
@@ -145,6 +153,14 @@ const NODE_PRESETS = {
                 { key: 'headless', type: 'checkbox', label: 'Headless Mode (Silent)', default: true },
                 { key: 'actions', type: 'action_list', label: 'Playwright Actions' },
                 { key: 'auto_dismiss', type: 'string_array', label: 'Auto-Dismiss Selectors (e.g. cookie banners)' }
+            ]
+        },
+        image_fetch: {
+            title: 'Image Fetch',
+            inputs: ['URL'],
+            outputs: ['Image'],
+            configs: [
+                { key: 'output_type', type: 'select', label: 'Output Format', options: ['base64', 'bytes_hex', 'url'] }
             ]
         }
     },
@@ -229,6 +245,22 @@ const NODE_PRESETS = {
             configs: [
                 { key: 'label', type: 'text', label: 'Artifact Label', placeholder: 'Debug' }
             ]
+        },
+        wire_relay: {
+            title: 'Wire Relay',
+            inputs: ['Data'],
+            outputs: [],
+            configs: [
+                { key: 'wire_name', type: 'text', label: 'Wire Name', placeholder: 'my_wire' }
+            ]
+        },
+        raise_skip: {
+            title: 'Raise Skip',
+            inputs: ['Data'],
+            outputs: [],
+            configs: [
+                { key: 'message', type: 'text', label: 'Skip Message', placeholder: 'Nothing new today.' }
+            ]
         }
     },
     logic: {
@@ -278,6 +310,12 @@ const NODE_PRESETS = {
                 { key: 'mode', type: 'hidden', value: 'custom' },
                 { key: 'custom_func', type: 'expression', label: 'Target Function', filter: 'comparator' }
             ]
+        },
+        negate: {
+            title: 'NOT Gate',
+            inputs: ['Bool'],
+            outputs: ['True', 'False'],
+            configs: []
         }
     },
     utility: {
@@ -293,7 +331,7 @@ const NODE_PRESETS = {
             outputs: ['Out'],
             logicalInputs: 2,
             configs: [
-                { key: 'mode', type: 'select', label: '', options: ['list', 'zip', 'flatten', 'merge_object'], default: 'list' }
+                { key: 'mode', type: 'merge_mode', label: 'Mode' }
             ]
         }
     }

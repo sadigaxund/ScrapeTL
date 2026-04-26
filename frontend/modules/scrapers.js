@@ -578,6 +578,10 @@ function openEditModal(id) {
     if (s.thumbnail_url) { img.src = s.thumbnail_url; img.style.display = 'block'; ph.style.display = 'none'; }
     else { img.style.display = 'none'; img.src = ''; ph.style.display = 'flex'; ph.textContent = '🎌'; }
 
+    // Wiki
+    const wikiEl = document.getElementById('edit-wiki-content');
+    if (wikiEl) wikiEl.value = s.wiki_content || '';
+
     document.getElementById('edit-modal').style.display = 'flex';
 }
 
@@ -665,6 +669,10 @@ async function saveEdit() {
     // Per-scraper batch throttle
     const throttleEl = document.getElementById('edit-batch-throttle');
     if (throttleEl) formData.append('batch_throttle_seconds', throttleEl.value.trim());
+
+    // Wiki content
+    const wikiEl = document.getElementById('edit-wiki-content');
+    if (wikiEl) formData.append('wiki_content', wikiEl.value);
 
     try {
         await apiFetch(`${API.scrapers}/${id}`, {

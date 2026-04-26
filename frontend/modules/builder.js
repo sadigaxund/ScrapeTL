@@ -674,8 +674,9 @@ function renderBuilderNodes() {
                 el.appendChild(controls);
             }
 
-            // 3 & 4. Ports — 2-column layout (inputs left, outputs right) for all non-utility nodes
-            const useColumns = node.type !== 'utility';
+            // 3 & 4. Ports — 2-column layout (inputs left, outputs right)
+            // Utility nodes are mini EXCEPT combiner/splitter which need column layout for port clarity
+            const useColumns = node.type !== 'utility' || ['combiner', 'splitter'].includes(node.preset);
             let inputCol, outputCol, portsBody;
             if (useColumns) {
                 portsBody = document.createElement('div');
@@ -837,7 +838,27 @@ function renderBuilderNodes() {
                         group.appendChild(label);
                     }
 
-                    if (cfg.type === 'text') {
+                    if (cfg.type === 'merge_mode') {
+                        const modes = [
+                            { value: 'list', label: 'Array of Arrays' },
+                            { value: 'concat', label: 'Concatenate' },
+                            { value: 'zip', label: 'Zip Pairs' },
+                            { value: 'flatten', label: 'Flatten' },
+                            { value: 'merge_object', label: 'Deep Merge (Objects)' },
+                        ];
+                        const sel = document.createElement('select');
+                        sel.className = 'node-select';
+                        const cur = node.config[cfg.key] || 'list';
+                        modes.forEach(m => {
+                            const o = document.createElement('option');
+                            o.value = m.value;
+                            o.textContent = m.label;
+                            if (cur === m.value) o.selected = true;
+                            sel.appendChild(o);
+                        });
+                        sel.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
+                        group.appendChild(sel);
+                    } else if (cfg.type === 'text') {
                         const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
 
                         if (isJson) {
@@ -854,6 +875,9 @@ function renderBuilderNodes() {
                             group.appendChild(textarea);
                             setTimeout(() => validateInlineJson(textarea), 0);
                         } else {
+                            const wrap = document.createElement('div');
+                            wrap.className = 'node-input-expr-wrap';
+
                             const input = document.createElement('input');
                             input.className = 'node-input';
                             input.value = node.config[cfg.key] || '';
@@ -882,7 +906,20 @@ function renderBuilderNodes() {
                                     }
                                 }
                             };
-                            group.appendChild(input);
+
+                            // Expression picker {{}} button — appears on hover
+                            const exprBtn = document.createElement('button');
+                            exprBtn.className = 'btn-expr-picker';
+                            exprBtn.textContent = '{{}}';
+                            exprBtn.title = 'Insert expression';
+                            exprBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                openContextRegistry(node.id, cfg.key, input);
+                            };
+
+                            wrap.appendChild(input);
+                            wrap.appendChild(exprBtn);
+                            group.appendChild(wrap);
                         }
                     } else if (cfg.type === 'select') {
                         const select = document.createElement('select');
@@ -1065,8 +1102,8 @@ function renderActionListUI(nodeId, configKey, container) {
                 'scroll_to': 'Scroll To Selector',
                 'goto': 'Go To URL',
                 'type': 'Type Text',
-                'fetch_image': '📷 Fetch Original Image',
-                'screenshot': '🖼 Take Screenshot'
+                'fetch_image': 'Capture Image',
+                'screenshot': 'Screenshot'
             };
             for (const [k, v] of Object.entries(types)) {
                 const opt = document.createElement('option');
@@ -2173,4 +2210,74 @@ async function editInBuilder(id) {
         console.error("[Builder] Load Error:", e);
         toast(`Failed to load flow data: ${e.message}`, 'error');
     }
+}
+
+// ── Flow Export / Import (.stlflow) ──────────────────
+function exportFlow() {
+    if (state.builder.nodes.length === 0) {
+        toast('Nothing to export — canvas is empty.', 'error');
+        return;
+    }
+    const payload = {
+        version: 1,
+        name: state.builder.currentScraperName || 'Untitled',
+        nodes: state.builder.nodes,
+        edges: state.builder.edges,
+        viewport: { x: state.builder.x, y: state.builder.y, zoom: state.builder.zoom }
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${(state.builder.currentScraperName || 'flow').replace(/[^a-z0-9_-]/gi, '_')}.stlflow`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Flow exported.', 'success');
+}
+
+function importFlow() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.stlflow,.json';
+    input.onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            try {
+                const data = JSON.parse(ev.target.result);
+                if (!Array.isArray(data.nodes) || !Array.isArray(data.edges)) {
+                    toast('Invalid .stlflow file.', 'error');
+                    return;
+                }
+                if (state.builder.nodes.length > 0 && !confirm('Replace current canvas with imported flow?')) return;
+
+                deselectAll();
+                state.builder.nodes = data.nodes;
+                state.builder.edges = data.edges;
+                if (data.viewport) {
+                    state.builder.x = data.viewport.x ?? -2000;
+                    state.builder.y = data.viewport.y ?? -2000;
+                    state.builder.zoom = data.viewport.zoom ?? 1;
+                }
+                if (data.name && !state.builder.currentScraperId) {
+                    state.builder.currentScraperName = data.name;
+                    updateBuilderContextUI();
+                }
+                renderBuilderNodes();
+                renderConnections();
+                const canvas = document.getElementById('builder-canvas');
+                if (canvas) canvas.style.transform = `translate(${state.builder.x}px, ${state.builder.y}px) scale(${state.builder.zoom})`;
+                toast(`Imported "${data.name || 'flow'}".`, 'success');
+            } catch (err) {
+                toast('Failed to parse file: ' + err.message, 'error');
+            }
+        };
+        reader.readAsText(file);
+    };
+    document.body.appendChild(input);
+    input.click();
+    document.body.removeChild(input);
 }

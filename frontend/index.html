@@ -692,6 +692,10 @@
         <!-- File Actions -->
         <button class="btn btn-ghost builder-tool-btn" onclick="createNewFlow()" title="New Flow (Clear Canvas)"
           style="padding:0 12px; height:28px; color:var(--text-primary) !important; font-weight:700; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);">New</button>
+        <button class="btn btn-ghost builder-tool-btn" onclick="exportFlow()" title="Export as .stlflow"
+          style="padding:0 10px; height:28px; font-size:11px;">Export</button>
+        <button class="btn btn-ghost builder-tool-btn" onclick="importFlow()" title="Import .stlflow file"
+          style="padding:0 10px; height:28px; font-size:11px;">Import</button>
         <button class="btn btn-primary builder-tool-btn" onclick="openSaveFlowModal()"
           style="padding:0 12px; height:28px; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 10px rgba(16,185,129,0.2); font-weight:700; margin-left:4px;">
           Save
@@ -713,6 +717,7 @@
           <div class="bt-menu">
             <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">Parameter</button>
             <button class="menu-item" onclick="selectBuilderPreset('input', 'expression')">Get Variable</button>
+            <button class="menu-item" onclick="selectBuilderPreset('input', 'wire')">Wire Tap</button>
           </div>
         </div>
 
@@ -724,6 +729,7 @@
           <div class="bt-menu">
             <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_url')">HTTP Fetch</button>
             <button class="menu-item" onclick="selectBuilderPreset('source', 'fetch_playwright')">Browser Fetch</button>
+            <button class="menu-item" onclick="selectBuilderPreset('source', 'image_fetch')">Image Fetch</button>
           </div>
         </div>
 
@@ -753,6 +759,7 @@
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'string_match')">String Match</button>
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'status_check')">Status Check</button>
             <button class="menu-item" onclick="selectBuilderPreset('logic', 'custom_logic')">Custom Logic</button>
+            <button class="menu-item" onclick="selectBuilderPreset('logic', 'negate')">NOT Gate</button>
           </div>
         </div>
 
@@ -776,6 +783,8 @@
             <button class="menu-item" onclick="selectBuilderPreset('sink', 'system_output')">Output</button>
             <button class="menu-item" onclick="selectBuilderPreset('sink', 'context')">Set Variable</button>
             <button class="menu-item" onclick="selectBuilderPreset('sink', 'debug')">Debug</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'wire_relay')">Wire Relay</button>
+            <button class="menu-item" onclick="selectBuilderPreset('sink', 'raise_skip')">Raise Skip</button>
           </div>
         </div>
 
@@ -938,10 +947,9 @@
       <input type="hidden" id="edit-id" />
 
       <div class="wizard-tab-switcher" style="margin: -10px -24px 20px -24px; padding: 0 24px;">
-        <button class="wizard-tab-btn active" data-edit-tab="general" onclick="switchEditTab('general', this)">📋
-          General</button>
-        <button class="wizard-tab-btn" data-edit-tab="config" onclick="switchEditTab('config', this)">⚙️
-          Configuration</button>
+        <button class="wizard-tab-btn active" data-edit-tab="general" onclick="switchEditTab('general', this)">General</button>
+        <button class="wizard-tab-btn" data-edit-tab="config" onclick="switchEditTab('config', this)">Configuration</button>
+        <button class="wizard-tab-btn" data-edit-tab="wiki" onclick="switchEditTab('wiki', this)">Wiki</button>
       </div>
 
       <!-- Tab 1: General -->
@@ -1088,6 +1096,13 @@
           </div>
           <div style="flex: 1;"></div>
         </div>
+      </div>
+
+      <!-- Tab 3: Wiki -->
+      <div id="edit-tab-wiki" class="wizard-pane">
+        <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Markdown documentation for this scraper. Visible in the scraper card.</p>
+        <textarea id="edit-wiki-content" class="markdown-editor" placeholder="## Overview&#10;&#10;Describe what this scraper does, expected inputs, output format, etc."
+          style="min-height:260px; font-family:var(--font-mono); font-size:12px; resize:vertical;"></textarea>
       </div>
 
       <div
