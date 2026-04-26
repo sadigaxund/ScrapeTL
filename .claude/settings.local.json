@@ -3,7 +3,16 @@
     "allow": [
       "Bash(python *)",
       "Bash(.venv/bin/python *)",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Bash(python3 *)",
+      "Bash(node --check /home/sakhund/Personal/Projects/ScrapeTL/frontend/modules/builder.js)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:8000/)",
+      "Bash(pkill -f \"python run.py\")",
+      "Bash(pkill -f \"uvicorn\")",
+      "Bash(git add *)",
+      "Bash(node --input-type=module)",
+      "Bash(node -e ' *)",
+      "Bash(node *)"
     ]
   },
   "enabledPlugins": {

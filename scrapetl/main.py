@@ -50,6 +50,13 @@ def get_thumbnail(filename: str):
         if scraper and scraper.thumbnail_data:
             ext = filename.split('.')[-1].lower()
             return Response(content=scraper.thumbnail_data, media_type=f"image/{ext}")
+
+        # Check Schedules
+        from scrapetl.models import Schedule
+        schedule = db.query(Schedule).filter(Schedule.local_thumbnail_path == filename).first()
+        if schedule and schedule.thumbnail_data:
+            ext = filename.split('.')[-1].lower()
+            return Response(content=schedule.thumbnail_data, media_type=f"image/{ext}")
         
         # Check Integrations
         # Integrations store filename in config["thumbnail_url"] which is "/thumbnails/filename"

@@ -125,7 +125,7 @@ function renderScrapersList(scrapers) {
             ondragend="handleDragEnd(event)">
             <td><div class="drag-handle">⠿</div></td>
             <td>${thumbHtml}</td>
-            <td>
+            <td onclick="openWikiModal(${s.id})" style="cursor:pointer;" title="Click to view Wiki">
                 <div style="font-weight:600; font-size:14px; color:var(--text-primary); display:flex; align-items:center; gap:8px">
                     ${s.name} ${s.latest_version ? `<span style="font-size:10px; color:var(--accent); background:var(--accent-glow); padding:1px 6px; border-radius:10px;">v${s.latest_version}</span>` : ''}
                 </div>
@@ -147,6 +147,7 @@ function renderScrapersList(scrapers) {
                         <button class="icon-btn" onclick="openAssignTagsModal(${s.id})" title="Manage Tags">🏷️</button>
                         <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
                         <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
+                        <button class="icon-btn" onclick="openWikiModal(${s.id})" title="Wiki">📖</button>
                         <button class="icon-btn" onclick="${s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})`}" title="Edit">✏️</button>
                         <button class="icon-btn" onclick="duplicateScraper(${s.id})" title="Duplicate Scraper">📄</button>
                         <button class="icon-btn" onclick="downloadScraper(${s.id})" title="Download Code">📥</button>
@@ -764,3 +765,92 @@ async function revertVersion(scraperId, versionId, versionLabel, btn) {
     finally { btn.disabled = false; btn.textContent = '\u21a9 Revert'; }
 }
 
+
+/* ════════════════════════════════════════════════
+   WIKI MODAL
+════════════════════════════════════════════════ */
+let _wikiScraperId = null;
+let _wikiEditMode = false;
+
+function openWikiModal(id) {
+    const s = state.scrapers.find(x => x.id === id);
+    if (!s) return;
+    _wikiScraperId = id;
+    _wikiEditMode = false;
+
+    document.getElementById('wiki-modal-title').textContent = s.name + ' — Wiki';
+    document.getElementById('wiki-editor').value = s.wiki_content || '';
+    _renderWikiView(s.wiki_content || '');
+
+    document.getElementById('wiki-view').style.display = '';
+    document.getElementById('wiki-editor').style.display = 'none';
+    document.getElementById('wiki-edit-btn').textContent = 'Edit';
+    document.getElementById('wiki-edit-footer').style.display = 'none';
+    document.getElementById('wiki-modal').style.display = 'flex';
+}
+
+function closeWikiModal(e) {
+    if (e && e.target !== document.getElementById('wiki-modal')) return;
+    document.getElementById('wiki-modal').style.display = 'none';
+    _wikiScraperId = null;
+}
+
+function toggleWikiEdit() {
+    _wikiEditMode = !_wikiEditMode;
+    document.getElementById('wiki-view').style.display = _wikiEditMode ? 'none' : '';
+    document.getElementById('wiki-editor').style.display = _wikiEditMode ? '' : 'none';
+    document.getElementById('wiki-edit-btn').textContent = _wikiEditMode ? 'Preview' : 'Edit';
+    document.getElementById('wiki-edit-footer').style.display = _wikiEditMode ? 'flex' : 'none';
+    if (!_wikiEditMode) {
+        _renderWikiView(document.getElementById('wiki-editor').value);
+    }
+}
+
+function cancelWikiEdit() {
+    const s = state.scrapers.find(x => x.id === _wikiScraperId);
+    if (s) document.getElementById('wiki-editor').value = s.wiki_content || '';
+    _wikiEditMode = false;
+    const s2 = state.scrapers.find(x => x.id === _wikiScraperId);
+    _renderWikiView(s2 ? s2.wiki_content || '' : '');
+    document.getElementById('wiki-view').style.display = '';
+    document.getElementById('wiki-editor').style.display = 'none';
+    document.getElementById('wiki-edit-btn').textContent = 'Edit';
+    document.getElementById('wiki-edit-footer').style.display = 'none';
+}
+
+async function saveWiki() {
+    if (!_wikiScraperId) return;
+    const s = state.scrapers.find(x => x.id === _wikiScraperId);
+    if (!s) return;
+    const content = document.getElementById('wiki-editor').value;
+    const fd = new FormData();
+    fd.append('name', s.name);
+    fd.append('wiki_content', content);
+    try {
+        await apiFetch(`${API.scrapers}/${_wikiScraperId}`, { method: 'PATCH', body: fd });
+        if (s) s.wiki_content = content;
+        toast('Wiki saved!', 'success');
+        toggleWikiEdit();
+    } catch (e) { toast(e.message, 'error'); }
+}
+
+function _renderWikiView(md) {
+    if (!md || !md.trim()) {
+        document.getElementById('wiki-view').innerHTML = '<span style="color:var(--text-muted); font-style:italic; font-size:13px">No wiki content yet. Click Edit to add documentation.</span>';
+        return;
+    }
+    // Basic markdown → HTML (no library dependency)
+    let html = md
+        .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+        .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+        .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+        .replace(/^# (.+)$/gm, '<h1>$1</h1>')
+        .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*(.+?)\*/g, '<em>$1</em>')
+        .replace(/`([^`]+)`/g, '<code style="background:var(--bg-input);padding:1px 5px;border-radius:3px;font-family:monospace;font-size:12px">$1</code>')
+        .replace(/^- (.+)$/gm, '<li>$1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+        .replace(/\n{2,}/g, '</p><p>')
+        .replace(/\n/g, '<br>');
+    document.getElementById('wiki-view').innerHTML = '<p>' + html + '</p>';
+}

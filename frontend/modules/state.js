@@ -126,14 +126,6 @@ const NODE_PRESETS = {
                 { key: 'value', type: 'expression', label: 'Registry Key / Expression' }
             ]
         },
-        wire: {
-            title: 'Wire Tap',
-            inputs: [],
-            outputs: ['Value'],
-            configs: [
-                { key: 'wire_name', type: 'text', label: 'Wire Name', placeholder: 'my_wire' }
-            ]
-        },
     },
     source: {
         fetch_url: {
@@ -246,14 +238,6 @@ const NODE_PRESETS = {
                 { key: 'label', type: 'text', label: 'Artifact Label', placeholder: 'Debug' }
             ]
         },
-        wire_relay: {
-            title: 'Wire Relay',
-            inputs: ['Data'],
-            outputs: [],
-            configs: [
-                { key: 'wire_name', type: 'text', label: 'Wire Name', placeholder: 'my_wire' }
-            ]
-        },
         raise_skip: {
             title: 'Raise Skip',
             inputs: ['Data'],
@@ -312,11 +296,11 @@ const NODE_PRESETS = {
             ]
         },
         negate: {
-            title: 'NOT Gate',
-            inputs: ['Bool'],
-            outputs: ['True', 'False'],
+            title: 'NOT',
+            inputs: ['In'],
+            outputs: ['Out'],
             configs: []
-        }
+        },
     },
     utility: {
         splitter: {
@@ -333,6 +317,20 @@ const NODE_PRESETS = {
             configs: [
                 { key: 'mode', type: 'merge_mode', label: 'Mode' }
             ]
+        },
+        relay: {
+            title: 'Relay',
+            inputs: ['Data'],
+            outputs: [],
+            compact: true,
+            configs: []
+        },
+        tap: {
+            title: 'Tap',
+            inputs: [],
+            outputs: ['Value'],
+            compact: true,
+            configs: []
         }
     }
 };

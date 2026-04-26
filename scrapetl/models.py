@@ -100,6 +100,7 @@ class ScrapeLog(Base):
     debug_payload       = Column(Text, nullable=True) # JSON with secondary debug artifacts
     log_file_path       = Column(String, nullable=True) # Path to the .log file in ./logs/
     input_params        = Column(Text, nullable=True)  # JSON snapshot of run inputs
+    input_labels        = Column(Text, nullable=True)  # JSON {name: label} for display
 
     scraper = relationship("Scraper", back_populates="logs")
     schedule = relationship("Schedule")

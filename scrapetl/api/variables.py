@@ -10,7 +10,7 @@ from scrapetl.models import GlobalVariable
 
 router = APIRouter(prefix="/api/variables", tags=["variables"])
 
-ALLOWED_TYPES = {"string", "integer", "float", "boolean", "json"}
+ALLOWED_TYPES = {"string", "integer", "float", "number", "boolean", "json", "batch"}
 
 def _validate_value_for_type(value: str, value_type: str) -> None:
     if value is None:
@@ -18,13 +18,14 @@ def _validate_value_for_type(value: str, value_type: str) -> None:
     try:
         if value_type == "integer":
             int(value)
-        elif value_type == "float":
+        elif value_type in ("float", "number"):
             float(value)
         elif value_type == "boolean":
             if value.lower() not in ("true", "false", "1", "0", "yes", "no"):
                 raise ValueError
         elif value_type == "json":
             json.loads(value)
+        # "string" and "batch" accept any value
     except (ValueError, json.JSONDecodeError):
         raise HTTPException(status_code=422, detail=f"Value '{value}' is not valid for type '{value_type}'.")
 

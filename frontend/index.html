@@ -242,7 +242,7 @@
     <section class="tab-panel" id="tab-schedules">
 
       <!-- Create Schedule Integrated Form (Dashboard Style) -->
-      <div class="card" id="new-schedule-card" style="margin-bottom:24px; position:relative; z-index:15">
+      <div class="card" id="new-schedule-card" style="margin-bottom:24px; position:relative; overflow:visible">
         <div class="card-header">
           <h2 class="card-title">New Schedule</h2>
         </div>
@@ -296,7 +296,7 @@
                     style="width:100%; justify-content:space-between; height:42px; border-radius:8px; border:1px solid var(--border-light); background:rgba(255,255,255,0.03); font-size:12px; padding: 0 16px;">
                     <span>Presets</span> <span style="font-size:10px; opacity:0.5">▼</span>
                   </button>
-                  <div class="custom-dropdown-menu" onclick="event.stopPropagation()" style="width:100%">
+                  <div class="custom-dropdown-menu" style="width:100%">
                     <button type="button" class="dropdown-item"
                       onclick="applyCronPreset('0 * * * *', 'Hourly'); toggleDropdown(event, 'dd-sched-preset')">Hourly</button>
                     <button type="button" class="dropdown-item"
@@ -692,19 +692,10 @@
         <!-- File Actions -->
         <button class="btn btn-ghost builder-tool-btn" onclick="createNewFlow()" title="New Flow (Clear Canvas)"
           style="padding:0 12px; height:28px; color:var(--text-primary) !important; font-weight:700; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.1);">New</button>
-        <button class="btn btn-ghost builder-tool-btn" onclick="exportFlow()" title="Export as .stlflow"
-          style="padding:0 10px; height:28px; font-size:11px;">Export</button>
-        <button class="btn btn-ghost builder-tool-btn" onclick="importFlow()" title="Import .stlflow file"
-          style="padding:0 10px; height:28px; font-size:11px;">Import</button>
-        <button class="btn btn-primary builder-tool-btn" onclick="openSaveFlowModal()"
-          style="padding:0 12px; height:28px; background:linear-gradient(135deg, var(--success), #10b981) !important; border:none; box-shadow:0 0 10px rgba(16,185,129,0.2); font-weight:700; margin-left:4px;">
-          Save
-        </button>
-        <button class="btn btn-primary builder-tool-btn" id="builder-run-btn" onclick="runScraperFromBuilder()"
-          title="Run Scraper"
-          style="padding:0 12px; height:28px; background:linear-gradient(135deg, #7c6af7, #6366f1) !important; border:none; box-shadow:0 0 10px rgba(124,106,247,0.2); font-weight:700; margin-left:4px;">
-          Run
-        </button>
+        <button class="btn btn-ghost builder-tool-btn" onclick="exportFlow()" title="Export as .stlflow">Export</button>
+        <button class="btn btn-ghost builder-tool-btn" onclick="importFlow()" title="Import .stlflow file">Import</button>
+        <button class="btn btn-ghost builder-tool-btn builder-tool-btn--save" onclick="openSaveFlowModal()">Save</button>
+        <button class="btn btn-ghost builder-tool-btn builder-tool-btn--run" id="builder-run-btn" onclick="runScraperFromBuilder()" title="Run Scraper">Run</button>
 
         <div class="bar-divider"></div>
 
@@ -717,7 +708,6 @@
           <div class="bt-menu">
             <button class="menu-item" onclick="selectBuilderPreset('input', 'external')">Parameter</button>
             <button class="menu-item" onclick="selectBuilderPreset('input', 'expression')">Get Variable</button>
-            <button class="menu-item" onclick="selectBuilderPreset('input', 'wire')">Wire Tap</button>
           </div>
         </div>
 
@@ -771,6 +761,7 @@
           <div class="bt-menu">
             <button class="menu-item" onclick="selectBuilderPreset('utility', 'splitter')">Split</button>
             <button class="menu-item" onclick="selectBuilderPreset('utility', 'combiner')">Merge</button>
+            <button class="menu-item" onclick="selectBuilderPreset('utility', 'relay')">Relay</button>
           </div>
         </div>
 
@@ -783,7 +774,6 @@
             <button class="menu-item" onclick="selectBuilderPreset('sink', 'system_output')">Output</button>
             <button class="menu-item" onclick="selectBuilderPreset('sink', 'context')">Set Variable</button>
             <button class="menu-item" onclick="selectBuilderPreset('sink', 'debug')">Debug</button>
-            <button class="menu-item" onclick="selectBuilderPreset('sink', 'wire_relay')">Wire Relay</button>
             <button class="menu-item" onclick="selectBuilderPreset('sink', 'raise_skip')">Raise Skip</button>
           </div>
         </div>
@@ -1935,9 +1925,9 @@
             <strong style="font-size:12px; color:var(--text-primary);">Stealth Mode</strong>
             <p style="font-size:10px; color:var(--text-muted); margin:0;">Injects stealth scripts to bypass anti-bot challenges.</p>
           </div>
-          <label class="switch" style="width: 40px; height: 20px;">
+          <label class="switch">
             <input type="checkbox" id="flow-browser-stealth">
-            <span class="slider" style="before: {width: 14px; height: 14px;}"></span>
+            <span class="slider"></span>
           </label>
         </div>
       </div>
@@ -1965,6 +1955,27 @@
         style="padding:16px; border-top:1px solid var(--border-light); display:flex; justify-content:flex-end;">
         <button class="btn btn-primary"
           onclick="document.getElementById('log-context-modal').style.display='none'">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Wiki Modal -->
+  <div class="modal-overlay" id="wiki-modal" style="display:none" onclick="closeWikiModal(event)">
+    <div class="modal-box" style="width:720px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column;">
+      <div class="modal-header" style="display:flex; align-items:center; gap:12px; flex-shrink:0;">
+        <h2 class="modal-title" id="wiki-modal-title">Wiki</h2>
+        <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+          <button class="btn btn-ghost" id="wiki-edit-btn" onclick="toggleWikiEdit()" style="font-size:12px; padding:4px 12px;">Edit</button>
+          <button class="btn btn-ghost" onclick="closeWikiModal()" style="padding:4px 10px; font-size:16px; line-height:1;">✕</button>
+        </div>
+      </div>
+      <div style="flex:1; overflow-y:auto; padding:0 20px 20px;">
+        <div id="wiki-view" style="line-height:1.7; font-size:14px; color:var(--text-primary);"></div>
+        <textarea id="wiki-editor" class="markdown-editor" style="display:none; min-height:400px; font-family:monospace; font-size:13px; resize:vertical; width:100%; box-sizing:border-box;"></textarea>
+      </div>
+      <div id="wiki-edit-footer" style="display:none; padding:12px 20px; border-top:1px solid var(--border-light); display:none; gap:8px; justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="cancelWikiEdit()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveWiki()">Save Wiki</button>
       </div>
     </div>
   </div>

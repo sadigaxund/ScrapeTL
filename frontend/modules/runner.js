@@ -18,7 +18,7 @@ async function runScraper(id, btn) {
 }
 
 
-async function _doRunScraper(id, inputValues, btn, force = false) {
+async function _doRunScraper(id, inputValues, btn, force = false, inputLabels = {}) {
     if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
     try {
         let url = API.run(id);
@@ -26,7 +26,7 @@ async function _doRunScraper(id, inputValues, btn, force = false) {
 
         const res = await apiFetch(url, {
             method: 'POST',
-            body: JSON.stringify({ input_values: inputValues }),
+            body: JSON.stringify({ input_values: inputValues, input_labels: inputLabels }),
         });
         toast(res.detail, 'success');
 
@@ -40,7 +40,7 @@ async function _doRunScraper(id, inputValues, btn, force = false) {
         // Handle concurrency conflict (already running)
         if (e.message.includes('already running')) {
             if (confirm(e.message)) {
-                return _doRunScraper(id, inputValues, btn, true);
+                return _doRunScraper(id, inputValues, btn, true, inputLabels);
             }
         } else {
             toast(e.message, 'error');
@@ -101,11 +101,13 @@ async function _pollTaskStatus(taskId, btn) {
    RUN INPUTS MODAL
 ════════════════════════════════════════════════ */
 let _runInputsCallback = null;
+let _runInputsLabels = {};
 
 function openRunInputsModal(id, inputs, btn, title = '▶ Run Scraper', scheduleCb = null) {
-    _runInputsCallback = (vals) => {
+    _runInputsLabels = Object.fromEntries((inputs || []).map(inp => [inp.name, inp.label || inp.name]));
+    _runInputsCallback = (vals, labels) => {
         if (scheduleCb) scheduleCb(vals);
-        else _doRunScraper(id, vals, btn);
+        else _doRunScraper(id, vals, btn, false, labels);
     };
 
     document.getElementById('run-inputs-title').textContent = title;
@@ -172,7 +174,11 @@ function openRunInputsModal(id, inputs, btn, title = '▶ Run Scraper', schedule
             `;
         } else {
             const t = (inp.type === 'number' || inp.dataType === 'number' || inp.dataType === 'float' || inp.dataType === 'int') ? 'number' : 'text';
-            field = `<input type="${t}" id="${rid}" class="inp" value="${def}" placeholder="${inp.label || inp.name}">`;
+            if (t === 'text') {
+                field = `<div class="node-input-expr-wrap"><input type="text" id="${rid}" class="inp node-input" value="${def}" placeholder="${inp.label || inp.name}"><button class="btn-expr-picker" onclick="event.stopPropagation(); openContextRegistry(null, null, this.previousElementSibling)" title="Insert expression">&#123;&#123;&#125;&#125;</button></div>`;
+            } else {
+                field = `<input type="number" id="${rid}" class="inp" value="${def}" placeholder="${inp.label || inp.name}">`;
+            }
         }
         const lbl = (inp.type !== 'boolean' && inp.dataType !== 'boolean')
             ? `<label class="form-label" for="${rid}">${inp.label || inp.name}</label>` : '';
@@ -214,9 +220,10 @@ async function submitRunInputs() {
     document.getElementById('run-inputs-modal').style.display = 'none';
 
     if (typeof cb === 'function') {
-        await cb(inputValues);
+        await cb(inputValues, _runInputsLabels);
     }
     _runInputsCallback = null;
+    _runInputsLabels = {};
 }
 
 

@@ -152,6 +152,59 @@ function injectVariableIntoExpression(expr, portName, portIdx) {
     return `${prefix}${args.join(', ')}${suffix}`;
 }
 
+/* ── Shared fixed-position picker for node config selects ── */
+// Used for all cfg.type === 'select' | 'merge_mode' | 'conditional_op' in builder nodes.
+// position:fixed avoids canvas transform issues; works at any zoom/pan level.
+function openBuilderPicker(triggerEl, options, currentVal, onSelect) {
+    document.querySelectorAll('.builder-picker-menu').forEach(m => m.remove());
+
+    const menu = document.createElement('div');
+    menu.className = 'builder-picker-menu';
+
+    const rect = triggerEl.getBoundingClientRect();
+    menu.style.cssText = `
+        position:fixed;
+        top:${rect.bottom + 4}px;
+        left:${rect.left}px;
+        min-width:${Math.max(rect.width, 160)}px;
+        z-index:99999;
+        background:var(--bg-surface);
+        border:1px solid var(--border-light);
+        border-radius:var(--radius-md);
+        box-shadow:0 16px 32px rgba(0,0,0,0.4);
+        padding:6px;
+        display:flex;
+        flex-direction:column;
+        gap:2px;
+        max-height:280px;
+        overflow-y:auto;
+    `;
+
+    options.forEach(opt => {
+        const item = document.createElement('button');
+        item.className = 'dropdown-item' + (opt.value === currentVal ? ' dropdown-item--active' : '');
+        item.style.cssText = 'width:100%; font-size:12px; padding:7px 10px; border-radius:6px;';
+        item.textContent = opt.label || opt.value;
+        item.onmousedown = (e) => e.stopPropagation();
+        item.onclick = (e) => {
+            e.stopPropagation();
+            menu.remove();
+            onSelect(opt.value);
+        };
+        menu.appendChild(item);
+    });
+
+    document.body.appendChild(menu);
+
+    const close = (e) => {
+        if (!menu.contains(e.target) && e.target !== triggerEl) {
+            menu.remove();
+            document.removeEventListener('click', close, true);
+        }
+    };
+    setTimeout(() => document.addEventListener('click', close, true), 0);
+}
+
 /* ── Conditional Node Helpers ───────────────────────── */
 function getConditionalOps(modeOrPreset) {
     // Mapping preset keys to engine modes for convenience
@@ -605,6 +658,19 @@ function renderBuilderNodes() {
                 if (ke.key === 'Escape') { title.value = node.config.internalLabel || preset.title; updateNodeConfig(node.id, 'internalLabel', node.config.internalLabel || ''); title.blur(); }
                 ke.stopPropagation();
             };
+
+            // Tap: show relay's label as read-only title
+            if (node.preset === 'tap') {
+                const relay = state.builder.nodes.find(n => n.id === node.config.relay_id);
+                title.value = relay ? (relay.config.internalLabel || relay.config.label || 'Relay') : 'Tap';
+                title.readOnly = true;
+                title.style.pointerEvents = 'none';
+                title.style.cursor = 'default';
+                title.oninput = null;
+                title.onblur = () => {};
+                title.onfocus = () => {};
+            }
+
             el.appendChild(title);
 
             // Variadic Control Bar (Add/Remove Ports)
@@ -675,8 +741,7 @@ function renderBuilderNodes() {
             }
 
             // 3 & 4. Ports — 2-column layout (inputs left, outputs right)
-            // Utility nodes are mini EXCEPT combiner/splitter which need column layout for port clarity
-            const useColumns = node.type !== 'utility' || ['combiner', 'splitter'].includes(node.preset);
+            const useColumns = node.type !== 'utility' || ['combiner', 'splitter', 'relay'].includes(node.preset);
             let inputCol, outputCol, portsBody;
             if (useColumns) {
                 portsBody = document.createElement('div');
@@ -738,8 +803,8 @@ function renderBuilderNodes() {
                 inputTarget.appendChild(row);
             });
 
-            // 3.1 Universal Trigger Port — skip for input and utility nodes
-            if (node.type !== 'input' && node.type !== 'utility') {
+            // 3.1 Universal Trigger Port — skip for input, utility, and negate nodes
+            if (node.type !== 'input' && node.type !== 'utility' && node.preset !== 'negate') {
                 const trigRow = document.createElement('div');
                 trigRow.className = 'node-port-row node-port-row--input node-port-row--universal';
 
@@ -794,8 +859,27 @@ function renderBuilderNodes() {
                 outputTarget.appendChild(row);
             });
 
-            // 4.1 Universal Error Port — skip for input, sink, and utility nodes
-            if (node.type !== 'input' && node.type !== 'sink' && node.type !== 'utility') {
+            // 4.2 Relay: inject a "Create Tap" port-like element in the output column
+            if (node.preset === 'relay') {
+                const tapRow = document.createElement('div');
+                tapRow.className = 'node-port-row node-port-row--output';
+
+                const tapLbl = document.createElement('span');
+                tapLbl.className = 'node-port-label';
+                tapLbl.textContent = 'Tap';
+
+                const tapPort = document.createElement('div');
+                tapPort.className = 'node-port node-port--output node-port--tap-create';
+                tapPort.title = 'Click to create a linked Tap node';
+                tapPort.onmousedown = (e) => { e.stopPropagation(); createRelayTap(node.id); };
+
+                tapRow.appendChild(tapLbl);
+                tapRow.appendChild(tapPort);
+                outputTarget.appendChild(tapRow);
+            }
+
+            // 4.1 Universal Error Port — skip for input, sink, utility, and negate nodes
+            if (node.type !== 'input' && node.type !== 'sink' && node.type !== 'utility' && node.preset !== 'negate') {
                 const errRow = document.createElement('div');
                 errRow.className = 'node-port-row node-port-row--output node-port-row--universal';
 
@@ -820,7 +904,7 @@ function renderBuilderNodes() {
             }
 
             // 5. Configuration UI (Moved to bottom for stability)
-            if (preset.configs) {
+            if (preset.configs && preset.configs.length > 0) {
                 const configContainer = document.createElement('div');
                 configContainer.className = 'node-config-container';
 
@@ -846,18 +930,20 @@ function renderBuilderNodes() {
                             { value: 'flatten', label: 'Flatten' },
                             { value: 'merge_object', label: 'Deep Merge (Objects)' },
                         ];
-                        const sel = document.createElement('select');
-                        sel.className = 'node-select';
                         const cur = node.config[cfg.key] || 'list';
-                        modes.forEach(m => {
-                            const o = document.createElement('option');
-                            o.value = m.value;
-                            o.textContent = m.label;
-                            if (cur === m.value) o.selected = true;
-                            sel.appendChild(o);
-                        });
-                        sel.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
-                        group.appendChild(sel);
+                        const curLabel = (modes.find(m => m.value === cur) || modes[0]).label;
+                        const btn = document.createElement('button');
+                        btn.className = 'node-picker-btn';
+                        btn.textContent = curLabel;
+                        btn.onmousedown = (e) => e.stopPropagation();
+                        btn.onclick = (e) => {
+                            e.stopPropagation();
+                            openBuilderPicker(btn, modes, cur, (val) => {
+                                updateNodeConfig(node.id, cfg.key, val);
+                                renderBuilderNodes(); renderConnections();
+                            });
+                        };
+                        group.appendChild(btn);
                     } else if (cfg.type === 'text') {
                         const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
 
@@ -922,35 +1008,37 @@ function renderBuilderNodes() {
                             group.appendChild(wrap);
                         }
                     } else if (cfg.type === 'select') {
-                        const select = document.createElement('select');
-                        select.className = 'node-select';
-                        (cfg.options || []).forEach(opt => {
-                            const o = document.createElement('option');
-                            o.value = opt;
-                            o.textContent = opt.charAt(0).toUpperCase() + opt.slice(1);
-                            if ((node.config[cfg.key] || cfg.options[0]) === opt) o.selected = true;
-                            select.appendChild(o);
-                        });
-                        select.onchange = (e) => {
-                            updateNodeConfig(node.id, cfg.key, e.target.value);
-                            if (cfg.rerender) { renderBuilderNodes(); renderConnections(); }
+                        const cur = node.config[cfg.key] || (cfg.options && cfg.options[0]) || '';
+                        const opts = (cfg.options || []).map(o => ({ value: o, label: o.charAt(0).toUpperCase() + o.slice(1) }));
+                        const btn = document.createElement('button');
+                        btn.className = 'node-picker-btn';
+                        btn.textContent = cur.charAt(0).toUpperCase() + cur.slice(1);
+                        btn.onmousedown = (e) => e.stopPropagation();
+                        btn.onclick = (e) => {
+                            e.stopPropagation();
+                            openBuilderPicker(btn, opts, cur, (val) => {
+                                updateNodeConfig(node.id, cfg.key, val);
+                                if (cfg.rerender) { renderBuilderNodes(); renderConnections(); }
+                                else btn.textContent = val.charAt(0).toUpperCase() + val.slice(1);
+                            });
                         };
-                        group.appendChild(select);
+                        group.appendChild(btn);
                     } else if (cfg.type === 'conditional_op') {
                         const currentMode = node.config.mode || 'logical';
                         const ops = getConditionalOps(currentMode);
                         const currentOp = node.config[cfg.key] || ops[0].value;
-                        const opSelect = document.createElement('select');
-                        opSelect.className = 'node-select';
-                        ops.forEach(op => {
-                            const o = document.createElement('option');
-                            o.value = op.value;
-                            o.textContent = op.label;
-                            if (currentOp === op.value) o.selected = true;
-                            opSelect.appendChild(o);
-                        });
-                        opSelect.onchange = (e) => updateNodeConfig(node.id, cfg.key, e.target.value);
-                        group.appendChild(opSelect);
+                        const curOpLabel = (ops.find(o => o.value === currentOp) || ops[0] || {}).label || currentOp;
+                        const opBtn = document.createElement('button');
+                        opBtn.className = 'node-picker-btn';
+                        opBtn.textContent = curOpLabel;
+                        opBtn.onmousedown = (e) => e.stopPropagation();
+                        opBtn.onclick = (e) => {
+                            e.stopPropagation();
+                            openBuilderPicker(opBtn, ops, currentOp, (val) => {
+                                updateNodeConfig(node.id, cfg.key, val);
+                            });
+                        };
+                        group.appendChild(opBtn);
                     } else if (cfg.type === 'expression') {
                         const row = document.createElement('div');
                         row.className = 'node-config-row';
@@ -1239,19 +1327,26 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
     const existing = document.querySelector('.context-registry-menu');
     if (existing) existing.remove();
 
-    const canvas = document.getElementById('builder-canvas');
-    if (!canvas) return;
-
     const menu = document.createElement('div');
     menu.className = 'context-registry-menu';
 
-    // Position near the button in canvas-space
-    const canvasRect = canvas.getBoundingClientRect();
     const inputRect = inputEl.getBoundingClientRect();
+    const inBuilder = nodeId !== null && nodeId !== undefined;
+    const canvas = inBuilder ? document.getElementById('builder-canvas') : null;
 
-    // Canvas-space coords = (Viewport-space Rect - Canvas Origin) / Zoom
-    const top = (inputRect.bottom - canvasRect.top) / state.builder.zoom;
-    const left = (inputRect.left - canvasRect.left) / state.builder.zoom;
+    let top, left;
+    if (inBuilder && canvas) {
+        // Position in canvas-space
+        const canvasRect = canvas.getBoundingClientRect();
+        top = (inputRect.bottom - canvasRect.top) / state.builder.zoom;
+        left = (inputRect.left - canvasRect.left) / state.builder.zoom;
+    } else {
+        // Position in page-space (fixed) for use outside builder
+        menu.style.position = 'fixed';
+        top = inputRect.bottom + 4;
+        left = inputRect.left;
+        menu.style.zIndex = '99999';
+    }
 
     menu.style.top = `${top + 5}px`;
     menu.style.left = `${left}px`;
@@ -1320,8 +1415,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             `;
             item.onclick = () => {
                 inputEl.value = `{{${displayKey}}}`;
-                updateNodeConfig(nodeId, configKey, inputEl.value);
-                renderBuilderNodes(); renderConnections();
+                if (inBuilder) { updateNodeConfig(nodeId, configKey, inputEl.value); renderBuilderNodes(); renderConnections(); }
                 menu.remove();
             };
             menu.appendChild(item);
@@ -1350,8 +1444,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             `;
             item.onclick = () => {
                 inputEl.value = `{{${f.name}(${argNames.join(', ')})}}`;
-                updateNodeConfig(nodeId, configKey, inputEl.value);
-                renderBuilderNodes(); renderConnections();
+                if (inBuilder) { updateNodeConfig(nodeId, configKey, inputEl.value); renderBuilderNodes(); renderConnections(); }
                 menu.remove();
             };
             menu.appendChild(item);
@@ -1381,8 +1474,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
             `;
             item.onclick = () => {
                 inputEl.value = `{{${b.val}}}`;
-                updateNodeConfig(nodeId, configKey, inputEl.value);
-                renderBuilderNodes(); renderConnections();
+                if (inBuilder) { updateNodeConfig(nodeId, configKey, inputEl.value); renderBuilderNodes(); renderConnections(); }
                 menu.remove();
             };
             menu.appendChild(item);
@@ -1420,7 +1512,11 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
         menu.appendChild(none);
     }
 
-    canvas.appendChild(menu);
+    if (inBuilder && canvas) {
+        canvas.appendChild(menu);
+    } else {
+        document.body.appendChild(menu);
+    }
 
     // Global click listener to close it
     const closer = (e) => {
@@ -2280,4 +2376,22 @@ function importFlow() {
     document.body.appendChild(input);
     input.click();
     document.body.removeChild(input);
+}
+
+function createRelayTap(relayNodeId) {
+    const relay = state.builder.nodes.find(n => n.id === relayNodeId);
+    if (!relay) return;
+
+    const tapId = 'node_' + Math.random().toString(36).substr(2, 9);
+    const tapNode = {
+        id: tapId,
+        type: 'utility',
+        preset: 'tap',
+        x: relay.x + 220,
+        y: relay.y,
+        config: { relay_id: relayNodeId }
+    };
+    state.builder.nodes.push(tapNode);
+    renderBuilderNodes();
+    renderConnections();
 }

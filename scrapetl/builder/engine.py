@@ -38,8 +38,30 @@ class BuilderEngine:
             if src not in self.adj: self.adj[src] = []
             self.adj[src].append(tgt)
             self.in_degree[tgt] += 1
-        
-        # 🧪 STATE RESET: We keep a copy of the original in-degree map 
+
+        # Synthetic ordering: tap nodes depend on their relay node.
+        # No canvas edge exists between them, so we inject a virtual dependency
+        # to ensure relay executes (and writes wire_store) before tap reads it.
+        # The synthetic edge must also be appended to self.edges because
+        # in_degree[neighbor] -= 1 lives inside the `for edge in matching_edges` loop
+        # and will never fire for a neighbor that has no real edge entry.
+        for nid, node in self.nodes.items():
+            if node.get("preset") == "tap":
+                relay_id = str(node.get("config", {}).get("relay_id") or "").strip()
+                if relay_id and relay_id in self.nodes:
+                    if relay_id not in self.adj: self.adj[relay_id] = []
+                    if nid not in self.adj[relay_id]:
+                        self.adj[relay_id].append(nid)
+                        self.edges.append({
+                            "source": relay_id,
+                            "target": nid,
+                            "sourceHandle": "data",
+                            "targetHandle": "data",
+                            "_synthetic": True
+                        })
+                    self.in_degree[nid] += 1
+
+        # 🧪 STATE RESET: We keep a copy of the original in-degree map
         # so we can reset it before every execute() call.
         self._orig_in_degree = self.in_degree.copy()
         self.initial_nodes = [nid for nid, deg in self.in_degree.items() if deg == 0]
@@ -244,6 +266,9 @@ class BuilderEngine:
                         })
 
                 except Exception as e:
+                    from scrapetl.exceptions import ScrapeSkip
+                    if isinstance(e, ScrapeSkip):
+                        raise  # propagate skip to the runner unchanged
                     print(f"[BuilderEngine] ❌ Error in node {current_id} ({node['type']}): {e}")
                     # EXCLUSION: Utility nodes do not propagate errors via dedicated ports
                     if node.get("type") in ["input", "sink", "utility"]:
@@ -385,8 +410,12 @@ class BuilderEngine:
             val = runtime_inputs.get(name, data.get("default"))
             dtype = data.get("dataType", "string")
 
+            # Batch passthrough: if val is already a list, preserve it
+            if isinstance(val, list):
+                return Batch(val)
+
             if dtype == "number":
-                try: 
+                try:
                     return float(str(val).replace(",", "")) if "." in str(val) else int(str(val).replace(",", ""))
                 except: return 0
             elif dtype == "bool":
@@ -1068,19 +1097,33 @@ class BuilderEngine:
                 print(f"[BuilderEngine] DEBUG [{node['id']}]: {val}")
             return val
 
-        elif ntype == "sink_wire_relay":
-            wire_name = data.get("wire_name", "").strip()
+        elif ntype in ("sink_wire_relay", "utility_relay"):
             val = node_inputs.get("data") or next(iter(node_inputs.values()), None)
+            self.wire_store[str(node['id'])] = val
+            wire_name = str(data.get("wire_name") or "").strip()
             if wire_name:
-                self.wire_store[wire_name] = val
+                self.wire_store[wire_name] = val  # backwards compat
             return val
 
-        elif ntype == "input_wire":
-            wire_name = data.get("wire_name", "").strip()
+        elif ntype in ("input_wire", "utility_tap"):
+            relay_id = str(data.get("relay_id") or "").strip()
+            if relay_id:
+                return self.wire_store.get(relay_id)
+            wire_name = str(data.get("wire_name") or "").strip()
             return self.wire_store.get(wire_name)
 
         elif ntype == "sink_raise_skip":
             from scrapetl.exceptions import ScrapeSkip
+            val = node_inputs.get("data") or next(iter(node_inputs.values()), None)
+            # Only raise if input is explicitly truthy (falsy = pass through silently)
+            def _is_truthy(v):
+                if v is None or v is False: return False
+                if isinstance(v, str): return v.strip().lower() not in ('', 'false', '0', 'none', 'null')
+                if isinstance(v, (int, float)): return v != 0
+                if isinstance(v, list): return len(v) > 0
+                return bool(v)
+            if not _is_truthy(val):
+                return None
             msg = data.get("message", "").strip() or "Skipped by flow."
             raise ScrapeSkip(msg)
 
@@ -1104,8 +1147,8 @@ class BuilderEngine:
             except Exception as e:
                 return {"__error__": str(e)}
 
-        elif ntype == "logic_negate":
-            val = node_inputs.get("bool") or node_inputs.get("data") or next(iter(node_inputs.values()), None)
+        elif ntype in ("logic_negate", "utility_negate"):
+            val = node_inputs.get("in") or node_inputs.get("bool") or node_inputs.get("data") or next(iter(node_inputs.values()), None)
             if isinstance(val, list):
                 return Batch([not bool(v) for v in val])
             return not bool(val)

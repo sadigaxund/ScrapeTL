@@ -14,6 +14,7 @@ router = APIRouter(prefix="/api/run", tags=["run"])
 
 class RunPayload(BaseModel):
     input_values: Optional[dict] = None
+    input_labels: Optional[dict] = None  # {name: label} for display in logs
 
 
 @router.post("/{scraper_id}")
@@ -40,6 +41,7 @@ def manual_run(scraper_id: int, force: bool = False, payload: RunPayload = None,
             )
 
     input_values = (payload.input_values or {}) if payload else {}
+    input_labels = (payload.input_labels or {}) if payload else {}
 
     task = TaskQueue(
         scraper_id=scraper_id,
@@ -56,7 +58,7 @@ def manual_run(scraper_id: int, force: bool = False, payload: RunPayload = None,
         from scrapetl.database import SessionLocal
         session = SessionLocal()
         try:
-            run_scraper(session, scraper_id, triggered_by="manual", input_values=input_values, queue_task_id=task_id)
+            run_scraper(session, scraper_id, triggered_by="manual", input_values=input_values, input_labels=input_labels, queue_task_id=task_id)
         finally:
             session.close()
 

@@ -128,10 +128,6 @@ async function loadLogs(page = null) {
                     <div class="log-col-status">${statusBadge(log.status)}</div>
                     <div class="log-col-scraper">
                         <strong>${log.scraper_name || 'N/A'}</strong>
-                        ${log.input_params && Object.keys(log.input_params).length > 0 ? `<div class="log-input-params">${Object.entries(log.input_params).map(([k,v]) => {
-                            const display = Array.isArray(v) ? `[...${v.length}]` : (String(v).length > 40 ? String(v).substring(0, 40) + '...' : String(v));
-                            return `<span class="log-input-chip"><b>${k}:</b> ${display}</span>`;
-                        }).join('')}</div>` : ''}
                     </div>
                     <div class="log-col-eps">
                         <span class="log-epcount" style="display: ${log.episode_count ? 'inline-flex' : 'none'}">${log.episode_count} found</span>
@@ -164,7 +160,9 @@ async function loadLogs(page = null) {
                         <div class="payload-download-bar">
                             <span class="payload-download-label">Download payload:</span>
                             <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'json')" title="Download JSON">⬇ JSON</button>
+                            <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'jsonl')" title="Download JSONL (one object per line)">⬇ JSONL</button>
                             <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'csv')" title="Download CSV">⬇ CSV</button>
+                            <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'xlsx')" title="Download Excel">⬇ Excel</button>
                         </div>
                         ${renderPayload(log.payload, log.episode_count)}` : ''}
                     </div>
@@ -468,6 +466,33 @@ function renderLogContext(log) {
         'one-time': { icon: '⏳', title: 'Task', color: 'var(--accent)', label: log.schedule_name || 'One-time Run' },
         'catchup': { icon: '🔄', title: 'Catch-up', color: 'var(--accent)', label: log.schedule_name || 'System Re-run' }
     };
+
+    // Input Parameters block
+    if (log.input_params && Object.keys(log.input_params).length > 0) {
+        const labelMap = log.input_labels || (() => {
+            const sc = (state.scrapers || []).find(s => s.id === log.scraper_id);
+            return Object.fromEntries(((sc && sc.inputs) || []).map(p => [p.name, p.label || p.name]));
+        })();
+
+        const paramChips = Object.entries(log.input_params).map(([k, v]) => {
+            const display = Array.isArray(v)
+                ? `[${v.join(', ')}]`
+                : (String(v).length > 80 ? String(v).substring(0, 80) + '…' : String(v));
+            const label = labelMap[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+            return `<div class="ctx-param-chip"><span class="ctx-param-key">${label}</span><span class="ctx-param-val">${display}</span></div>`;
+        }).join('');
+        html += `
+        <div class="log-context-item" style="border-left: 4px solid var(--accent); flex-direction:column; gap:8px; align-items:stretch;">
+            <div style="display:flex; align-items:center; gap:10px;">
+                <div class="ctx-icon">📥</div>
+                <div class="ctx-main">
+                    <div class="ctx-label">Input Parameters</div>
+                    <div class="ctx-subtext">Passed at run time</div>
+                </div>
+            </div>
+            <div class="ctx-param-chips">${paramChips}</div>
+        </div>`;
+    }
 
     const t = trigMap[log.triggered_by] || trigMap['manual'];
     html += `

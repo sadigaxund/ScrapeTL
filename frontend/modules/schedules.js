@@ -4,6 +4,13 @@
 ════════════════════════════════════════════════ */
 async function loadSchedules(skipFetch = false) {
     try {
+        // Ensure scraper dropdown is populated (in case scrapers loaded before schedule tab was opened)
+        if (!state.scrapers || !state.scrapers.length) {
+            const scrapers = await apiFetch(API.scrapers);
+            state.scrapers = scrapers;
+        }
+        populateScraperSelects(state.scrapers);
+
         let schedules = state.schedules;
         if (!skipFetch || !schedules || schedules.length === 0) {
             schedules = await apiFetch(API.schedules);
@@ -45,16 +52,20 @@ async function loadSchedules(skipFetch = false) {
                 ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')}</div>`
                 : '';
 
+            const _scraperDef = (state.scrapers || []).find(sc => sc.id === s.scraper_id);
+            const _labelMap = Object.fromEntries(((_scraperDef && _scraperDef.inputs) || []).map(p => [p.name, p.label || p.name]));
             const inputs = s.input_values && Object.keys(s.input_values).length
-                ? Object.entries(s.input_values).map(([k, v]) =>
-                    `<span class="sched-param"><b>${k}</b>: ${v}</span>`
-                ).join('')
+                ? Object.entries(s.input_values).map(([k, v]) => {
+                    const lbl = _labelMap[k] || k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+                    return `<span class="sched-param"><b>${lbl}</b>: ${v}</span>`;
+                }).join('')
                 : null;
 
             const freqBadge = `<span class="status-badge" style="background:rgba(124, 106, 247, 0.1); color:#c4b5fd; border:1px solid rgba(124, 106, 247, 0.2); font-size:11px; font-family:monospace; padding: 2px 8px; border-radius: 4px;">${s.cron_expression}</span>`;
 
             return `
-            <tr draggable="true" 
+            <tr draggable="true"
+                ${inputs ? `onclick="toggleSchedExpand(event, ${s.id})" style="cursor:pointer"` : ''}
                 ondragstart="handleDragStart(event, 'schedule', ${s.id})"
                 ondragover="handleDragOver(event)"
                 ondragleave="handleDragLeave(event)"
@@ -63,9 +74,8 @@ async function loadSchedules(skipFetch = false) {
                 <td><div class="drag-handle">⠿</div></td>
                 <td>${thumbHtml}</td>
                 <td>
-                    <div style="font-weight:600; font-size:14px; color:var(--text-primary); display:flex; align-items:center; gap:8px">
+                    <div style="font-weight:600; font-size:14px; color:var(--text-primary)">
                         ${displayName}
-                        ${inputs ? `<button class="icon-btn-inline" onclick="toggleSchedExpand(event, ${s.id})" title="View Parameters" style="font-size:12px; opacity:0.6; cursor:pointer; background:none; border:none; padding:0">🔍</button>` : ''}
                     </div>
                     ${subtitle ? `<div style="font-size:12px; color:#d1d5db; margin-top:2px;">${subtitle}</div>` : ''}
                     ${tagsHtml}
@@ -133,10 +143,13 @@ function previewSchedThumb(url) {
     const placeholder = document.getElementById('sched-thumb-placeholder');
     if (!img || !placeholder) return;
     if (url && url.trim().length > 0) {
+        img.onerror = () => { img.style.display = 'none'; placeholder.style.display = 'flex'; };
+        img.onload = () => { img.style.display = 'block'; placeholder.style.display = 'none'; };
         img.src = url;
         img.style.display = 'block';
         placeholder.style.display = 'none';
     } else {
+        img.src = '';
         img.style.display = 'none';
         placeholder.style.display = 'flex';
     }
@@ -224,11 +237,9 @@ async function createSchedule() {
 }
 
 function toggleSchedExpand(event, id) {
-    if (event.target.closest('.action-btn-group')) return;
+    if (event.target.closest('.action-cell') || event.target.closest('.drag-handle')) return;
     const el = document.getElementById(`sched-expand-${id}`);
     if (!el) return;
-
-    // Toggle using display style for table rows
     const isHidden = el.style.display === 'none';
     el.style.display = isHidden ? 'table-row' : 'none';
 }
@@ -286,7 +297,10 @@ function renderEditSchedParams(inputs, values) {
         return `
             <div class="form-group" style="min-width: 0; flex: 1;">
                 <label style="font-size: 11px;">${inp.label}${inp.required ? ' *' : ''}</label>
-                <input type="text" class="edit-sched-input-field" data-name="${inp.name}" value="${displayVal}" placeholder="${inp.description || ''}" />
+                <div class="node-input-expr-wrap">
+                    <input type="text" class="edit-sched-input-field node-input" data-name="${inp.name}" value="${displayVal}" placeholder="${inp.description || ''}" />
+                    <button class="btn-expr-picker" onclick="event.stopPropagation(); openContextRegistry(null, null, this.previousElementSibling)" title="Insert expression">&#123;&#123;&#125;&#125;</button>
+                </div>
             </div>
         `;
     }).join('');
@@ -355,5 +369,3 @@ async function saveEditSchedule() {
     } catch (e) { toast(e.message, 'error'); }
 }
 
-/* ════════════════════════════════════════════════
-   LOGS - collapsible card view

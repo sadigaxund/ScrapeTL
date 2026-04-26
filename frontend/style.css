@@ -406,6 +406,7 @@ select option {
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 6px;
   padding: 9px 16px;
   border-radius: var(--radius-sm);
@@ -1258,7 +1259,6 @@ select option {
 }
 
 .log-col-status,
-.log-col-scraper,
 .log-col-eps,
 .log-col-retry,
 .log-col-trigger,
@@ -1266,6 +1266,14 @@ select option {
 .log-col-icon {
   display: flex;
   align-items: center;
+  overflow: hidden;
+}
+
+.log-col-scraper {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
   overflow: hidden;
 }
 
@@ -1351,10 +1359,44 @@ select option {
   color: var(--failure);
   font-size: 11px;
   margin-left: 58px;
-  /* icon width + gap */
   margin-top: 4px;
   font-family: var(--font-mono);
   opacity: 0.9;
+}
+
+.ctx-param-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-left: 42px;
+}
+
+.ctx-param-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 3px 8px;
+  font-size: 12px;
+}
+
+.ctx-param-key {
+  font-weight: 600;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.ctx-param-val {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  word-break: break-all;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .log-error {
@@ -3205,7 +3247,6 @@ input:checked+.slider {
   min-width: 120px !important;
   max-width: 120px !important;
   min-height: 120px !important;
-  /* Allow growth */
   padding: 0 !important;
   border-radius: 12px;
   display: flex !important;
@@ -3216,7 +3257,15 @@ input:checked+.slider {
   background: rgba(23, 23, 23, 0.95) !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
   overflow: visible;
-  /* To see ports clearly */
+}
+
+/* Merge, Split, NOT gate — wider so option names don't wrap, all same width */
+.builder-node.builder-node--combiner,
+.builder-node.builder-node--splitter,
+.builder-node.builder-node--negate {
+  width: 300px !important;
+  min-width: 300px !important;
+  max-width: 300px !important;
 }
 
 .builder-node.builder-node--utility.builder-node--mini .builder-node__title {
@@ -3256,7 +3305,7 @@ input:checked+.slider {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 80px;
+  max-width: 120px;
 }
 
 /* Fix for config overflow in compact nodes */
@@ -3604,6 +3653,30 @@ path.connection-path.connection-path--false {
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.05em;
+}
+
+.node-picker-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 11.5px;
+  padding: 5px 8px;
+  outline: none;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font-family: inherit;
+  transition: border-color 0.2s, background 0.2s;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.4)' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+}
+
+.node-picker-btn:hover {
+  border-color: var(--accent);
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .node-input,
@@ -4342,28 +4415,6 @@ input.builder-node__title.node-title-input:focus {
   border-color: var(--accent);
 }
 
-/* ── Log input params chips ─────────────────────── */
-.log-input-params {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 4px;
-}
-
-.log-input-chip {
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(99, 102, 241, 0.25);
-  border-radius: 4px;
-  font-size: 11px;
-  padding: 1px 7px;
-  color: var(--text-secondary);
-  font-family: monospace;
-}
-
-.log-input-chip b {
-  color: var(--accent);
-  font-weight: 600;
-}
 
 /* ── Browser Fetch node fixed width ─────────────── */
 .builder-node--fetch_playwright {
@@ -4378,4 +4429,46 @@ input.builder-node__title.node-title-input:focus {
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 13px;
   resize: vertical;
+}
+
+/* ── Relay "Tap" port ────────────────────────────── */
+.node-port--tap-create {
+  background: rgba(99, 102, 241, 0.18) !important;
+  border: 2px dashed rgba(99, 102, 241, 0.6) !important;
+  cursor: pointer !important;
+}
+
+.node-port--tap-create:hover {
+  background: rgba(99, 102, 241, 0.4) !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 6px rgba(99, 102, 241, 0.5);
+}
+
+/* ── Builder toolbar uniform buttons ────────────────*/
+.builder-tool-btn {
+  height: 28px !important;
+  padding: 0 10px !important;
+  font-size: 11px !important;
+  line-height: 28px !important;
+  white-space: nowrap;
+}
+
+.builder-tool-btn--save {
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #10b981 !important;
+}
+
+.builder-tool-btn--save:hover {
+  border-color: #10b981 !important;
+  background: rgba(16, 185, 129, 0.1) !important;
+}
+
+.builder-tool-btn--run {
+  border-color: rgba(99, 102, 241, 0.4) !important;
+  color: var(--accent) !important;
+}
+
+.builder-tool-btn--run:hover {
+  border-color: var(--accent) !important;
+  background: rgba(99, 102, 241, 0.1) !important;
 }

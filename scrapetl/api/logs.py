@@ -91,6 +91,7 @@ def get_logs(
                 "integration_details": log.integration_details,
                 "debug_payload": json.loads(log.debug_payload) if log.debug_payload else [],
                 "input_params": json.loads(log.input_params) if log.input_params else None,
+                "input_labels": json.loads(log.input_labels) if log.input_labels else None,
                 "log_file_path": log.log_file_path,
             }
             for log in logs
@@ -105,7 +106,7 @@ def get_logs(
 @router.get("/api/logs/{log_id}/download")
 def download_log_payload(
     log_id: int,
-    format: str = Query("json", pattern="^(json|csv)$"),
+    format: str = Query("json", pattern="^(json|csv|jsonl|xlsx)$"),
     db: Session = Depends(get_db),
 ):
     """Download the scrape payload for a specific log entry as JSON or CSV."""
@@ -136,16 +137,51 @@ def download_log_payload(
             headers={"Content-Disposition": f'attachment; filename="{base_filename}.json"'},
         )
 
-    # CSV - flatten all keys across all rows
+    if format == "jsonl":
+        lines = "\n".join(json.dumps(row, ensure_ascii=False) for row in data)
+        return Response(
+            content=lines.encode("utf-8"),
+            media_type="application/x-ndjson",
+            headers={"Content-Disposition": f'attachment; filename="{base_filename}.jsonl"'},
+        )
+
     if not data:
         raise HTTPException(status_code=404, detail="Payload is empty.")
 
+    # Normalise rows to dicts (payload may be list of strings / primitives)
+    def _to_row(item):
+        if isinstance(item, dict):
+            return item
+        return {"value": item}
+
+    data = [_to_row(r) for r in data]
+
+    # Collect all keys across all rows (preserving insertion order)
     all_keys: list = []
     for row in data:
         for k in row.keys():
             if k not in all_keys:
                 all_keys.append(k)
 
+    if format == "xlsx":
+        try:
+            import openpyxl
+        except ImportError:
+            raise HTTPException(status_code=500, detail="openpyxl is not installed. Run: pip install openpyxl")
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(all_keys)
+        for row in data:
+            ws.append([str(row.get(k, "")) if row.get(k) is not None else "" for k in all_keys])
+        buf_bytes = io.BytesIO()
+        wb.save(buf_bytes)
+        return Response(
+            content=buf_bytes.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{base_filename}.xlsx"'},
+        )
+
+    # CSV
     buf = io.StringIO()
     writer = csv.DictWriter(buf, fieldnames=all_keys, extrasaction="ignore", lineterminator="\n")
     writer.writeheader()

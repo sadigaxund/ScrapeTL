@@ -59,7 +59,7 @@ def _get_batch_throttle(db: Session) -> float:
 
 from scrapetl import task_registry
 
-def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None, schedule_id: int = None):
+def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", queue_task_id: int = None, input_values: dict = None, schedule_id: int = None, input_labels: dict = None):
     scraper_record: Scraper = db.get(Scraper, scraper_id)
     if not scraper_record:
         print(f"[Runner] Scraper ID {scraper_id} not found.")
@@ -295,6 +295,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                             debug_payload=json.dumps(getattr(scraper_instance, "debug_payload", [])) if hasattr(scraper_instance, 'debug_payload') else None,
                             log_file_path=captured_log_path,
                             input_params=json.dumps(_input_values, default=str) if _input_values else None,
+                            input_labels=json.dumps(input_labels) if input_labels else None,
                         )
                         db.add(chunk_log)
                         db.commit()
@@ -346,6 +347,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 debug_payload=json.dumps(all_debug_data, default=_safe_json),
                 log_file_path=captured_log_path,
                 input_params=json.dumps(_input_values, default=_safe_json) if _input_values else None,
+                input_labels=json.dumps(input_labels) if input_labels else None,
             )
             db.add(log)
 
