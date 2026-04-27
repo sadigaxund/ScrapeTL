@@ -109,9 +109,10 @@ def _snapshot_version(db: Session, scraper: Scraper, version_label: Optional[str
 
 def _validate_code_string(text: str) -> None:
     """Validate scraper code dynamically. Raises HTTPException on failure."""
+    import re as _re
     if "BaseScraper" not in text:
         raise HTTPException(status_code=400, detail="File must inherit BaseScraper.")
-    if "def scrape(self" not in text:
+    if not _re.search(r"def\s+scrape\s*\(\s*self", text):
         raise HTTPException(status_code=400, detail="File must implement def scrape(self).")
 
     try:
@@ -260,7 +261,7 @@ async def save_builder_flow(
     if browser_config:
         try:
             config = json.loads(browser_config)
-            allowed_keys = {"timezone", "browser_headless", "browser_cdp_url"}
+            allowed_keys = {"timezone", "browser_headless", "browser_cdp_url", "browser_stealth"}
             for key in config.keys():
                 if key not in allowed_keys:
                     raise HTTPException(status_code=400, detail=f"Unknown setting key: {key}")

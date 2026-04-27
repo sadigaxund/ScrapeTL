@@ -182,6 +182,12 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             # Parse flow data once for the execution
             flow_data = json.loads(scraper_record.flow_data) if scraper_record.flow_data else json.loads(scraper_record.versions[0].code)
             browser_config = json.loads(scraper_record.browser_config) if scraper_record.browser_config else {}
+            # Merge global AppSettings for browser keys — per-scraper values take precedence
+            for _bkey in ("browser_headless", "browser_cdp_url", "browser_stealth"):
+                if _bkey not in browser_config:
+                    _row = db.get(AppSetting, _bkey)
+                    if _row and _row.value not in (None, ""):
+                        browser_config[_bkey] = _row.value
             engine = BuilderEngine(flow_data, global_vars, db_session=db, custom_funcs=custom_funcs, browser_config=browser_config)
             engine.setup()
         else:
@@ -270,12 +276,20 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                         all_episodes.extend(iter_episodes)
 
                     # Throttle between batch iterations (skip for last item — checked via stop_event)
-                    if batch_input_name and attempt_status in ("success", "skipped") and batch_throttle_seconds > 0:
-                        print(f"[Runner] ⏸ Batch throttle: waiting {batch_throttle_seconds}s before next item…")
-                        if stop_event:
-                            stop_event.wait(timeout=batch_throttle_seconds)
-                        else:
-                            time.sleep(batch_throttle_seconds)
+                    if batch_input_name and attempt_status in ("success", "skipped"):
+                        import random as _rand
+                        _stealth_active = scraper_record.scraper_type == "builder" and engine and \
+                            str(engine.browser_config.get("browser_stealth", "false")).lower() == "true"
+                        # Base throttle from setting; stealth adds mandatory jitter on top
+                        _wait = batch_throttle_seconds
+                        if _stealth_active:
+                            _wait += _rand.uniform(1.0, 3.0)
+                        if _wait > 0:
+                            print(f"[Runner] ⏸ Batch throttle: waiting {_wait:.1f}s before next item…")
+                            if stop_event:
+                                stop_event.wait(timeout=_wait)
+                            else:
+                                time.sleep(_wait)
 
                     # STREAMING DISPATCH
                     if is_streaming and iter_episodes and attempt_status == "success":
@@ -387,7 +401,7 @@ def _fire_integrations(scraper_record, status, episodes_list, error_msg, trigger
         # Fallback: use the legacy .env webhook if no integrations configured
         # Only attempt if the environment variable is actually set to avoid noisy logs
         import os
-        if os.getenv("DISCORD_WEBHOOK_URL"):
+        if os.getenv("STL_DISCORD_WEBHOOK_URL"):
             res = discord_notifier.send_notification(
                 scraper_name=scraper_record.name,
                 scraper_thumbnail=scraper_record.thumbnail_url,

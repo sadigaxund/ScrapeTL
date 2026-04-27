@@ -152,6 +152,7 @@ const NODE_PRESETS = {
             inputs: ['URL'],
             outputs: ['Image'],
             configs: [
+                { key: 'url', type: 'text', label: 'URL (or wire in)', placeholder: 'https://example.com/image.jpg' },
                 { key: 'output_type', type: 'select', label: 'Output Format', options: ['base64', 'bytes_hex', 'url'] }
             ]
         }
@@ -300,6 +301,14 @@ const NODE_PRESETS = {
             inputs: ['In'],
             outputs: ['Out'],
             configs: []
+        },
+        math_op: {
+            title: 'Math',
+            inputs: ['A', 'B'],
+            outputs: ['Result'],
+            configs: [
+                { key: 'operation', type: 'select', label: 'Operation', options: ['add', 'subtract', 'multiply', 'divide', 'modulo', 'power', 'min', 'max', 'abs', 'round', 'floor', 'ceil'] }
+            ]
         },
     },
     utility: {

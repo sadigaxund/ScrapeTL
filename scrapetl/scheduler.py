@@ -23,7 +23,7 @@ def get_app_timezone() -> pytz.BaseTzInfo:
             return pytz.timezone(row.value)
     except Exception:
         pass
-    return pytz.timezone(os.getenv("APP_TIMEZONE", "UTC"))
+    return pytz.timezone(os.getenv("STL_TIMEZONE", "UTC"))
 
 
 _scheduler = BackgroundScheduler(timezone=get_app_timezone())

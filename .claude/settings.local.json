@@ -12,7 +12,8 @@
       "Bash(git add *)",
       "Bash(node --input-type=module)",
       "Bash(node -e ' *)",
-      "Bash(node *)"
+      "Bash(node *)",
+      "Bash(git -C /home/sakhund/Personal/Projects/ScrapeTL status --short)"
     ]
   },
   "enabledPlugins": {

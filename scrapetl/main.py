@@ -27,7 +27,7 @@ app.include_router(variables.router)
 app.include_router(functions.router)
 
 # Serve frontend static files
-FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend")
+FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "frontend")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
 # Note: /thumbnails API is now dynamic, see router below. No static mount needed.
@@ -94,37 +94,54 @@ def startup_event():
         # Expected to fail if column already exists
         db.rollback()
 
-    # Initialise Log Settings
+    # Synchronise Settings with Environment Variables
     import os
     from scrapetl.models import AppSetting
     
-    # Prioritise environment variable for logs path
-    env_logs_path = os.environ.get("STL_LOGS_PATH", "./logs")
-    if "STL_LOGS_PATH" not in os.environ:
-        os.environ["STL_LOGS_PATH"] = env_logs_path
+    env_mapping = {
+        "timezone": os.environ.get("STL_TIMEZONE"),
+        "log_directory": os.environ.get("STL_LOGS_PATH"),
+        "log_retention_days": os.environ.get("STL_LOG_RETENTION_DAYS"),
+        "log_max_size_kb": os.environ.get("STL_LOG_MAX_SIZE_KB"),
+        "log_preview_limit": os.environ.get("STL_LOG_PREVIEW_LIMIT"),
+        "browser_headless": os.environ.get("STL_BROWSER_HEADLESS"),
+        "browser_cdp_url": os.environ.get("STL_BROWSER_CDP_URL"),
+    }
 
+    # Default values if neither DB nor ENV is set
     defaults = {
         "log_retention_days": "30",
         "log_max_size_kb": "2048",
-        "log_directory": env_logs_path
+        "log_directory": "./logs",
+        "log_preview_limit": "100",
+        "browser_headless": "true",
+        "browser_cdp_url": "",
+        "timezone": "UTC"
     }
+
     try:
         updated = False
-        for key, val in defaults.items():
+        for key, env_val in env_mapping.items():
             existing = db.query(AppSetting).filter(AppSetting.key == key).first()
-            if not existing:
-                db.add(AppSetting(key=key, value=val))
-                updated = True
-            elif key == "log_directory" and existing.value != env_logs_path:
-                # Always sync setting with environment variable if it changed
-                existing.value = env_logs_path
+            
+            # If env is set, it overrides everything
+            if env_val is not None:
+                if not existing:
+                    db.add(AppSetting(key=key, value=env_val))
+                    updated = True
+                elif existing.value != env_val:
+                    existing.value = env_val
+                    updated = True
+            # If neither env nor DB exists, use default
+            elif not existing:
+                db.add(AppSetting(key=key, value=defaults.get(key, "")))
                 updated = True
                 
         if updated:
             db.commit()
-            print(f"[Settings] Synchronised log defaults (Directory: {env_logs_path}).")
+            print("[Settings] Synchronised environment variables with database.")
     except Exception as e:
-        print(f"[Settings] Error initializing log defaults: {e}")
+        print(f"[Settings] Error synchronizing defaults: {e}")
         db.rollback()
     finally:
         db.close()

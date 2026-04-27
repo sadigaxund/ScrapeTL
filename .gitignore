@@ -3,7 +3,9 @@
 CLAUDE.md
 *.bak
 *.db
+.claude/
 data/
+archive/
 tmp/
 # Byte-compiled / optimized / DLL files
 __pycache__/

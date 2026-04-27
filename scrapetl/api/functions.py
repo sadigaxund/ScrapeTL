@@ -64,10 +64,11 @@ def _analyze_function_ast(code: str) -> dict:
             continue
 
         # 1. Parameters (positional args, excluding self/cls)
-        result["parameters"] = [
-            arg.arg for arg in node.args.args
-            if arg.arg not in ("self", "cls")
-        ]
+        all_args = [arg for arg in node.args.args if arg.arg not in ("self", "cls")]
+        n_defaults = len(node.args.defaults)
+        n_required = len(all_args) - n_defaults
+        result["parameters"] = [a.arg for a in all_args]
+        result["required_parameters"] = [a.arg for a in all_args[:n_required]]
 
         # 2. Explicit decorator (@generator / @comparator / @transformer)
         for dec in node.decorator_list:
@@ -118,6 +119,7 @@ def _func_to_dict(f: UserFunction) -> dict:
         "category": f.category,
         "doc_md": f.doc_md,
         "parameters": analysis["parameters"],
+        "required_parameters": analysis.get("required_parameters", analysis["parameters"]),
         "created_at": f.created_at,
         "updated_at": f.updated_at,
     }

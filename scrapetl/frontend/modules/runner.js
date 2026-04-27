@@ -173,12 +173,7 @@ function openRunInputsModal(id, inputs, btn, title = '▶ Run Scraper', schedule
             <datalist id="${listId}">${varOpts}</datalist>
             `;
         } else {
-            const t = (inp.type === 'number' || inp.dataType === 'number' || inp.dataType === 'float' || inp.dataType === 'int') ? 'number' : 'text';
-            if (t === 'text') {
-                field = `<div class="node-input-expr-wrap"><input type="text" id="${rid}" class="inp node-input" value="${def}" placeholder="${inp.label || inp.name}"><button class="btn-expr-picker" onclick="event.stopPropagation(); openContextRegistry(null, null, this.previousElementSibling)" title="Insert expression">&#123;&#123;&#125;&#125;</button></div>`;
-            } else {
-                field = `<input type="number" id="${rid}" class="inp" value="${def}" placeholder="${inp.label || inp.name}">`;
-            }
+            field = `<div class="node-input-expr-wrap"><input type="text" id="${rid}" class="inp node-input" value="${def}" placeholder="${inp.label || inp.name}"><button class="btn-expr-picker" onclick="event.stopPropagation(); openContextRegistry(null, null, this.previousElementSibling)" title="Insert expression">&#123;&#123;&#125;&#125;</button></div>`;
         }
         const lbl = (inp.type !== 'boolean' && inp.dataType !== 'boolean')
             ? `<label class="form-label" for="${rid}">${inp.label || inp.name}</label>` : '';

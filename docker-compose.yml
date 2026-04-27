@@ -9,9 +9,15 @@ services:
     volumes:
       - app-data:/app/data
     environment:
-      - APP_TIMEZONE=UTC
-      # Point DB to the persistent volume
-      - DATABASE_URL=sqlite:////app/data/scraper_registry.db
+      - STL_TIMEZONE=UTC
+      - STL_DATABASE_URL=sqlite:////app/data/scraper_registry.db
+      - STL_LOGS_PATH=/app/data/logs
+      - STL_LOG_RETENTION_DAYS=30
+      - STL_LOG_MAX_SIZE_KB=2048
+      - STL_LOG_PREVIEW_LIMIT=100
+      - STL_BROWSER_HEADLESS=true
+      - STL_BROWSER_CDP_URL=
+      - STL_DISCORD_WEBHOOK_URL=
     restart: unless-stopped
 
 volumes:

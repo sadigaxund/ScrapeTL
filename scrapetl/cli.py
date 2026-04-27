@@ -8,10 +8,26 @@ def main():
         sys.exit(1)
 
     import argparse
-    parser = argparse.ArgumentParser(prog="scrapetl run")
-    parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8000)
-    parser.add_argument("--reload", action="store_true", default=False)
+    parser = argparse.ArgumentParser(
+        prog="scrapetl run",
+        description="Start the ScrapeTL web application.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Environment Variables:
+  STL_DATABASE_URL         Database connection string (default: sqlite:///scraper_registry.db)
+  STL_LOGS_PATH            Directory for scraper logs (default: ./logs)
+  STL_TIMEZONE             Application timezone (default: UTC)
+  STL_LOG_RETENTION_DAYS   Days to keep logs before deletion (default: 30)
+  STL_LOG_MAX_SIZE_KB      Maximum size of a single log file (default: 2048)
+  STL_LOG_PREVIEW_LIMIT    Max lines shown in log preview (default: 100)
+  STL_BROWSER_HEADLESS     Run browsers in headless mode (default: true)
+  STL_BROWSER_CDP_URL      Remote Chrome DevTools Protocol URL
+  STL_DISCORD_WEBHOOK_URL  Optional webhook for global notifications
+        """
+    )
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind the server to")
+    parser.add_argument("--port", type=int, default=8000, help="Port to bind the server to")
+    parser.add_argument("--reload", action="store_true", default=False, help="Enable auto-reload for development")
     args = parser.parse_args(sys.argv[2:])
 
     from dotenv import load_dotenv

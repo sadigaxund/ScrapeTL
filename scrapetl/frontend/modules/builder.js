@@ -760,7 +760,11 @@ function renderBuilderNodes() {
                 nodeInputs = node.dynamic_ports;
             } else if (preset.logicalInputs) {
                 const count = Number(node.config.logicalInputs || preset.logicalInputs);
-                for (let i = 1; i <= count; i++) nodeInputs.push(`In ${i}`);
+                if (node.preset === 'string_format') {
+                    for (let i = 0; i < count; i++) nodeInputs.push(`{${i}}`);
+                } else {
+                    for (let i = 1; i <= count; i++) nodeInputs.push(`In ${i}`);
+                }
             } else if (node.preset === 'conditional') {
                 const mode = node.config.mode || 'logical';
                 if (mode === 'logical') {
@@ -924,13 +928,11 @@ function renderBuilderNodes() {
 
                     if (cfg.type === 'merge_mode') {
                         const modes = [
-                            { value: 'list', label: 'Array of Arrays' },
-                            { value: 'concat', label: 'Concatenate' },
-                            { value: 'zip', label: 'Zip Pairs' },
-                            { value: 'flatten', label: 'Flatten' },
-                            { value: 'merge_object', label: 'Deep Merge (Objects)' },
+                            { value: 'csv',         label: 'CSV  (a, b, c)' },
+                            { value: 'json_array',  label: 'JSON Array  [a, b, c]' },
+                            { value: 'json_object', label: 'JSON Object  {key: val}' },
                         ];
-                        const cur = node.config[cfg.key] || 'list';
+                        const cur = node.config[cfg.key] || 'csv';
                         const curLabel = (modes.find(m => m.value === cur) || modes[0]).label;
                         const btn = document.createElement('button');
                         btn.className = 'node-picker-btn';
@@ -944,6 +946,24 @@ function renderBuilderNodes() {
                             });
                         };
                         group.appendChild(btn);
+
+                        // Keys field — only shown for json_object mode
+                        if (cur === 'json_object') {
+                            const keysWrap = document.createElement('div');
+                            keysWrap.style.marginTop = '6px';
+                            const keysLabel = document.createElement('div');
+                            keysLabel.className = 'node-config-label';
+                            keysLabel.textContent = 'Key names (comma-separated)';
+                            const keysInput = document.createElement('input');
+                            keysInput.className = 'node-input';
+                            keysInput.placeholder = 'key1, key2, key3';
+                            keysInput.value = node.config.keys || '';
+                            keysInput.onmousedown = (e) => e.stopPropagation();
+                            keysInput.oninput = (e) => updateNodeConfig(node.id, 'keys', e.target.value);
+                            keysWrap.appendChild(keysLabel);
+                            keysWrap.appendChild(keysInput);
+                            group.appendChild(keysWrap);
+                        }
                     } else if (cfg.type === 'text') {
                         const isJson = cfg.label.toLowerCase().includes('json') || cfg.label.toLowerCase().includes('headers');
 
@@ -1434,8 +1454,12 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
 
             const item = document.createElement('div');
             item.className = 'context-item';
-            const argNames = Array.isArray(f.parameters) ? f.parameters : [];
-            const displaySig = argNames.length > 0 ? `${f.name}(${argNames.join(', ')})` : `${f.name}()`;
+            const allArgs = Array.isArray(f.parameters) ? f.parameters : [];
+            const requiredArgs = Array.isArray(f.required_parameters) ? f.required_parameters : allArgs;
+            const optionalArgs = allArgs.filter(a => !requiredArgs.includes(a));
+            const displaySig = allArgs.length > 0
+                ? `${f.name}(${requiredArgs.join(', ')}${optionalArgs.length ? ', [' + optionalArgs.join(', ') + ']' : ''})`
+                : `${f.name}()`;
             item.innerHTML = `
                 <div class="item-icon type-icon--func">ƒ</div>
                 <div class="item-content">
@@ -1443,7 +1467,7 @@ function openContextRegistry(nodeId, configKey, inputEl, filter) {
                 </div>
             `;
             item.onclick = () => {
-                inputEl.value = `{{${f.name}(${argNames.join(', ')})}}`;
+                inputEl.value = `{{${f.name}(${requiredArgs.join(', ')})}}`;
                 if (inBuilder) { updateNodeConfig(nodeId, configKey, inputEl.value); renderBuilderNodes(); renderConnections(); }
                 menu.remove();
             };

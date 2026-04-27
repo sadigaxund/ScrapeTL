@@ -25,7 +25,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_ENV_WEBHOOK = os.getenv("DISCORD_WEBHOOK_URL", "")
+_ENV_WEBHOOK = os.getenv("STL_DISCORD_WEBHOOK_URL", "")
 
 STATUS_COLOR = {
     "success": 0x57F287,

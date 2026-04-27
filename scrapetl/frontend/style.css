@@ -47,13 +47,19 @@
 }
 
 /* ── Global Selection Prevention ────────────── */
-.builder-viewport, .builder-canvas, .builder-top-bar {
+.builder-viewport,
+.builder-canvas,
+.builder-top-bar {
   user-select: none;
   -webkit-user-select: none;
 }
 
 /* Re-enable for inputs */
-.node-input, .node-label-input, .inline-json-editor, .markdown-editor, select {
+.node-input,
+.node-label-input,
+.inline-json-editor,
+.markdown-editor,
+select {
   user-select: text !important;
   -webkit-user-select: text !important;
 }
@@ -3259,9 +3265,15 @@ input:checked+.slider {
   overflow: visible;
 }
 
-/* Merge, Split, NOT gate — wider so option names don't wrap, all same width */
-.builder-node.builder-node--combiner,
-.builder-node.builder-node--splitter,
+/* Merge and Split keep mini decorations but get wider */
+.builder-node.builder-node--mini.builder-node--combiner,
+.builder-node.builder-node--mini.builder-node--splitter {
+  width: 220px !important;
+  min-width: 220px !important;
+  max-width: 220px !important;
+  min-height: unset !important;
+}
+
 .builder-node.builder-node--negate {
   width: 300px !important;
   min-width: 300px !important;
@@ -4006,12 +4018,12 @@ input.builder-node__title.node-title-input {
 }
 
 input.builder-node__title.node-title-input:hover {
-  border-bottom-color: rgba(255,255,255,0.12);
+  border-bottom-color: rgba(255, 255, 255, 0.12);
 }
 
 input.builder-node__title.node-title-input:focus {
   border-bottom-color: var(--accent);
-  background: rgba(255,255,255,0.03);
+  background: rgba(255, 255, 255, 0.03);
   cursor: text;
 }
 

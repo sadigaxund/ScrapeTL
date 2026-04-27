@@ -99,15 +99,22 @@ class BuilderEngine:
                 print(f"[BuilderEngine] Launching local browser (headless={headless})")
                 self._browser = self._p.chromium.launch(headless=headless)
             
-            if self.browser_config.get("browser_stealth"):
+            stealth_on = str(self.browser_config.get("browser_stealth", "false")).lower() == "true"
+            if stealth_on:
                 ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                self._context = self._browser.new_context(user_agent=ua)
+                self._context = self._browser.new_context(
+                    user_agent=ua,
+                    viewport={"width": 1920, "height": 1080},
+                    locale="en-US",
+                    timezone_id="America/New_York",
+                    java_script_enabled=True,
+                )
             else:
                 self._context = self._browser.new_context()
 
             self._page = self._context.new_page()
 
-            if self.browser_config.get("browser_stealth"):
+            if stealth_on:
                 try:
                     from playwright_stealth import stealth_sync
                     stealth_sync(self._page)
@@ -370,17 +377,31 @@ class BuilderEngine:
             return {"main": [], "debug": debug_artifacts}
 
         max_len = max(len(col) for col in columns.values())
+
+        # Expand columns whose length evenly divides max_len by repeating each
+        # value proportionally. This handles page_number (5 items) vs results
+        # (250 items = 5 pages × 50 rows): each page_number repeats 50 times.
+        expanded = {}
+        for k, col in columns.items():
+            n = len(col)
+            if n == max_len or n == 0:
+                expanded[k] = col
+            elif n == 1:
+                expanded[k] = col * max_len
+            elif max_len % n == 0:
+                factor = max_len // n
+                exp = []
+                for v in col:
+                    exp.extend([v] * factor)
+                expanded[k] = exp
+            else:
+                expanded[k] = col
+
         final_results = []
         for i in range(max_len):
             row = {}
-            for k, col in columns.items():
-                if i < len(col):
-                    row[k] = col[i]
-                elif len(col) == 1:
-                    # Broadcast the single value to all rows (like "tee")
-                    row[k] = col[0]
-                else:
-                    row[k] = None
+            for k, col in expanded.items():
+                row[k] = col[i] if i < len(col) else None
             final_results.append(row)
 
         print(f"[BuilderEngine] Flow Finished. Extracted {len(final_results)} items. Captured {len(debug_artifacts)} debug points.")
@@ -426,12 +447,18 @@ class BuilderEngine:
             return str(val) if val is not None else ""
 
         elif ntype == "input_expression":
+            import types as _types
             expr = (data.get("value") or data.get("expression", "")).strip()
             context = self._get_execution_context(node_inputs)
             print(f"[BuilderEngine] Resolving expression: '{expr}' | context keys: {list(context.keys())}")
             res = resolve_expressions(expr, context, custom_funcs=self.custom_funcs)
             if isinstance(res, str) and res.startswith("[Error: "):
                 raise ValueError(f"Expression evaluation failed: {res[8:-1]}")
+            # Convert generators, range, and other iterables to Batch for proper engine propagation
+            if isinstance(res, (_types.GeneratorType, range)) or (
+                hasattr(res, '__iter__') and not isinstance(res, (str, bytes, list, dict, Batch))
+            ):
+                res = Batch(list(res))
             return res
 
         # ── Sources & Actions ────────────────────────────────────────────
@@ -489,10 +516,36 @@ class BuilderEngine:
                     """
                     page.add_init_script(script)
 
+                def _is_bot_challenge(html):
+                    markers = [
+                        "Enable JavaScript and cookies to continue",
+                        "cf-browser-verification",
+                        "Just a moment",
+                        "Checking your browser",
+                        "Please Wait... | Cloudflare",
+                        "DDoS protection by Cloudflare",
+                        "_cf_chl_opt",
+                    ]
+                    return any(m in html for m in markers)
+
                 if url.strip().startswith("<"):
                     page.set_content(url)
                 else:
                     page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                    # If Cloudflare JS challenge detected, wait for it to resolve
+                    if _is_bot_challenge(page.content()):
+                        import time as _t, random as _r
+                        print(f"[BuilderEngine] Bot challenge detected for {url}, waiting for JS resolution…")
+                        try:
+                            page.wait_for_load_state("networkidle", timeout=12000)
+                        except Exception:
+                            pass
+                        if _is_bot_challenge(page.content()):
+                            _t.sleep(_r.uniform(3.0, 6.0))
+                            try:
+                                page.reload(wait_until="networkidle", timeout=20000)
+                            except Exception:
+                                pass
 
                 for action in actions:
                     atype = action.get("type", "")
@@ -576,10 +629,34 @@ class BuilderEngine:
 
                 return page.content()
 
+            _pw_map_call_count = [0]
+
             def _pw_map(u):
+                import time as _time, random as _random
                 u = self._ensure_single_str(resolve_expressions(u, self._get_execution_context(node_inputs)))
                 if not u: return ""
-                if hasattr(self, '_page'):
+                _stealth_on = str(self.browser_config.get("browser_stealth", "false")).lower() == "true"
+                # Human-like delay between sequential fetches (skip first call)
+                if _stealth_on and _pw_map_call_count[0] > 0:
+                    _time.sleep(_random.uniform(1.5, 4.0))
+                _pw_map_call_count[0] += 1
+                if hasattr(self, '_context'):
+                    # Fresh page per URL — stealth applied cleanly each time.
+                    # Pages share context cookies (cf_clearance carries over between URLs).
+                    pg = self._context.new_page()
+                    if _stealth_on:
+                        try:
+                            from playwright_stealth import stealth_sync
+                            stealth_sync(pg)
+                        except ImportError:
+                            pass
+                    pg.on('dialog', lambda dialog: dialog.accept())
+                    try:
+                        return _run_playwright_logic(pg, u)
+                    finally:
+                        try: pg.close()
+                        except: pass
+                elif hasattr(self, '_page'):
                     return _run_playwright_logic(self._page, u)
                 else:
                     from scrapetl.models import AppSetting
@@ -592,15 +669,22 @@ class BuilderEngine:
                     c = sc.get("browser_cdp_url") or gcdp
                     with sync_playwright() as p:
                         browser = p.chromium.connect_over_cdp(c) if c else p.chromium.launch(headless=h)
-                        if sc.get("browser_stealth"):
+                        _stealth = str(sc.get("browser_stealth", "false")).lower() == "true"
+                        if _stealth:
                             ua = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-                            ctx = browser.new_context(user_agent=ua)
+                            ctx = browser.new_context(
+                                user_agent=ua,
+                                viewport={"width": 1920, "height": 1080},
+                                locale="en-US",
+                                timezone_id="America/New_York",
+                                java_script_enabled=True,
+                            )
                         else:
                             ctx = browser.new_context()
-                        
+
                         pg = ctx.new_page()
 
-                        if sc.get("browser_stealth"):
+                        if _stealth:
                             try:
                                 from playwright_stealth import stealth_sync
                                 stealth_sync(pg)
@@ -653,8 +737,9 @@ class BuilderEngine:
 
             if isinstance(html_input, list):
                 mapped = [_process_html(h) for h in html_input]
-                if mode == "all":
-                    return Batch([item for sublist in mapped if sublist for item in sublist])
+                # Always group mode=all: return Batch([Batch([...]), ...]) so Merge can
+                # zip per-row sub-elements. _get_node_inputs flattens this for all other
+                # node types so they always receive flat Level-1 input.
                 return Batch(mapped)
             else:
                 return _process_html(html_input)
@@ -716,12 +801,24 @@ class BuilderEngine:
 
         elif ntype == "action_string_format":
             template = data.get("template", "")
-            sorted_keys = sorted(node_inputs.keys(), key=lambda k: int(k.split('_')[1]) if '_' in k and k.split('_')[1].isdigit() else 0)
-            inputs_list = [node_inputs[k] for k in sorted_keys]
+
+            # Build index→value dict from input handles (input_0, input_1, ...)
+            indexed_inputs = {}
+            for k, v in node_inputs.items():
+                if k.startswith('input_') and k[6:].isdigit():
+                    indexed_inputs[int(k[6:])] = v
+
+            # Determine expected slot count from template placeholders {0}, {1}, ...
+            import re as _re_sf
+            indices = [int(m) for m in _re_sf.findall(r'\{(\d+)[^}]*\}', template)]
+            expected_count = (max(indices) + 1) if indices else len(indexed_inputs)
+
+            # Fill list with "" for any missing/failed upstream inputs
+            inputs_list = [indexed_inputs.get(i, "") for i in range(expected_count)]
 
             def _format(*vals):
                 try:
-                    return template.format(*[str(v) for v in vals])
+                    return template.format(*[str(v) if v is not None else "" for v in vals])
                 except (IndexError, KeyError):
                     return template
 
@@ -775,43 +872,45 @@ class BuilderEngine:
             return node_inputs.get("data") or node_inputs.get("input_0") or next(iter(node_inputs.values()), None)
 
         elif ntype in ["logic_combiner", "utility_combiner"]:
-            mode = data.get("mode", "list")
-            # Sort inputs by their numeric handle index (input_0, input_1, etc.)
+            import json as _json_c
+            mode = data.get("mode", "csv")
             sorted_keys = sorted(node_inputs.keys(), key=lambda k: int(k.split('_')[1]) if '_' in k and k.split('_')[1].isdigit() else 0)
             input_list = [node_inputs[k] for k in sorted_keys]
 
-            if mode == "flatten":
-                result = []
-                for item in input_list:
-                    if isinstance(item, list): result.extend(item)
-                    else: result.append(item)
-                return Batch(result)
-            elif mode == "merge_object":
-                result = {}
-                for item in input_list:
-                    if isinstance(item, dict): result.update(item)
-                return result
-            elif mode == "zip":
-                # Aligns array elements row-by-row, repeating scalars.
-                max_len = max((len(v) if isinstance(v, list) else 1) for v in input_list) if input_list else 0
-                zipped = []
-                for i in range(max_len):
-                    row = []
-                    for v in input_list:
-                        if isinstance(v, list):
-                            row.append(v[i] if i < len(v) else None)
-                        else:
-                            row.append(v)  # Repeat scalar
-                    zipped.append(row)
-                return Batch(zipped)
-            elif mode == "concat":
-                result = []
-                for item in input_list:
-                    if isinstance(item, list): result.extend(item)
-                    else: result.append(item)
-                return Batch(result)
+            raw_keys = [k.strip() for k in data.get("keys", "").split(",") if k.strip()]
 
-            return input_list # Default: list
+            def _apply_mode(vals):
+                if mode == "csv":
+                    return ", ".join(str(v) for v in vals)
+                elif mode == "json_array":
+                    return _json_c.dumps(vals, default=str)
+                elif mode == "json_object":
+                    pairs = {(raw_keys[j] if j < len(raw_keys) else f"value_{j}"): v for j, v in enumerate(vals)}
+                    return _json_c.dumps(pairs, default=str)
+                return ", ".join(str(v) for v in vals)
+
+            has_batch = any(isinstance(v, (Batch, list)) for v in input_list)
+            if not has_batch:
+                return _apply_mode(input_list)
+
+            # ZIP: align batch ports row-by-row; scalars repeat for every row.
+            # Each row's sub-list elements expand inline. Output is Batch of strings
+            # so row count matches other batch columns and broadcast doesn't occur.
+            row_count = max(len(v) if isinstance(v, (Batch, list)) else 1 for v in input_list)
+            rows = []
+            for i in range(row_count):
+                row_vals = []
+                for v in input_list:
+                    if isinstance(v, (Batch, list)):
+                        elem = v[i] if i < len(v) else (v[-1] if v else None)
+                    else:
+                        elem = v
+                    if isinstance(elem, (list, Batch)):
+                        row_vals.extend(elem)
+                    else:
+                        row_vals.append(elem)
+                rows.append(_apply_mode(row_vals))
+            return Batch(rows)
 
         # ── Conditional Logic ─────────────────────────────────────────────
         elif ntype in ["logic_conditional", "logic_logic_gate", "logic_comparison", "logic_string_match", "logic_status_check", "logic_custom_logic"]:
@@ -1068,7 +1167,9 @@ class BuilderEngine:
                 return []
 
             import types
-            if isinstance(sink_data, types.GeneratorType):
+            if isinstance(sink_data, (types.GeneratorType, range)) or (
+                hasattr(sink_data, '__iter__') and not isinstance(sink_data, (str, bytes, list, dict, Batch))
+            ):
                 sink_data = list(sink_data)
                 
             # (Note: Universal batch filtering handles the Trigger array slicing off-node)
@@ -1128,30 +1229,78 @@ class BuilderEngine:
             raise ScrapeSkip(msg)
 
         elif ntype == "source_image_fetch":
-            url = node_inputs.get("url") or node_inputs.get("data")
+            url = node_inputs.get("url") or node_inputs.get("data") or data.get("url")
             if not url:
                 return None
             output_type = data.get("output_type", "base64")
-            try:
-                resp = requests.get(str(url), timeout=30)
-                resp.raise_for_status()
-                img_bytes = resp.content
-                if output_type == "base64":
-                    import base64
-                    ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
-                    b64 = base64.b64encode(img_bytes).decode()
-                    return f"data:{ct};base64,{b64}"
-                elif output_type == "bytes_hex":
-                    return img_bytes.hex()
-                return str(url)
-            except Exception as e:
-                return {"__error__": str(e)}
+
+            def _fetch_one_image(u):
+                if u is None:
+                    return None
+                u = str(u).strip()
+                if not u or u.lower() == "none":
+                    return None
+                try:
+                    resp = requests.get(u, timeout=30)
+                    resp.raise_for_status()
+                    img_bytes = resp.content
+                    if output_type == "base64":
+                        import base64
+                        ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+                        b64 = base64.b64encode(img_bytes).decode()
+                        return f"data:{ct};base64,{b64}"
+                    elif output_type == "bytes_hex":
+                        return img_bytes.hex()
+                    return u
+                except Exception as e:
+                    return {"__error__": str(e)}
+
+            if isinstance(url, (list, Batch)):
+                return Batch([_fetch_one_image(u) for u in url])
+            return _fetch_one_image(url)
 
         elif ntype in ("logic_negate", "utility_negate"):
             val = node_inputs.get("in") or node_inputs.get("bool") or node_inputs.get("data") or next(iter(node_inputs.values()), None)
             if isinstance(val, list):
                 return Batch([not bool(v) for v in val])
             return not bool(val)
+
+        elif ntype == "logic_math_op":
+            import math as _math_mod
+            sorted_handles = sorted(
+                [k for k in node_inputs if k not in ('trigger', 'error')],
+                key=lambda x: int(x.split('_')[1]) if '_' in x and x.split('_')[1].isdigit() else 0
+            )
+            vals = [node_inputs[h] for h in sorted_handles]
+            a = vals[0] if len(vals) > 0 else 0
+            b = vals[1] if len(vals) > 1 else 0
+            op = data.get("operation", "add")
+
+            def _to_num(v):
+                try: return float(v)
+                except: return 0.0
+
+            def _math(av, bv):
+                an, bn = _to_num(av), _to_num(bv)
+                if op == "add":      return an + bn
+                if op == "subtract": return an - bn
+                if op == "multiply": return an * bn
+                if op == "divide":   return an / bn if bn != 0 else 0.0
+                if op == "modulo":   return an % bn if bn != 0 else 0.0
+                if op == "power":    return an ** bn
+                if op == "min":      return min(an, bn)
+                if op == "max":      return max(an, bn)
+                if op == "abs":      return abs(an)
+                if op == "round":    return round(an, int(bn))
+                if op == "floor":    return float(_math_mod.floor(an))
+                if op == "ceil":     return float(_math_mod.ceil(an))
+                return an
+
+            if isinstance(a, list) or isinstance(b, list):
+                a_l = a if isinstance(a, list) else [a] * len(b if isinstance(b, list) else [])
+                b_l = b if isinstance(b, list) else [b] * len(a if isinstance(a, list) else [])
+                return Batch([_math(av, bv) for av, bv in zip(a_l, b_l)])
+            return _math(a, b)
 
         return None
 
@@ -1192,6 +1341,18 @@ class BuilderEngine:
 
                 if not handle:
                     handle = "data"
+
+                # Level-2 auto-flatten: CSS selector mode=all on a Batch input returns
+                # Batch([Batch([...]), ...]) to preserve per-row grouping for Merge.
+                # All other nodes (text_transform, image_fetch, regex, etc.) need flat
+                # Level-1 input, so flatten here before delivery.
+                target_node = self.nodes.get(node_id)
+                target_type = self._get_full_type(target_node) if target_node else ""
+                _merge_types = {"logic_combiner", "utility_combiner"}
+                if target_type not in _merge_types:
+                    if (isinstance(src_output, (list, Batch)) and src_output
+                            and all(isinstance(x, (list, Batch)) for x in src_output)):
+                        src_output = Batch([item for inner in src_output for item in inner])
 
                 # Multi-edge support: Collect results into a list if multiple nodes connect to the same port
                 if handle in inputs:
@@ -1251,7 +1412,7 @@ class BuilderEngine:
         if preset:
             ntype = f"{ntype}_{preset}"
 
-        if ntype in ["action_fetch_url", "source_fetch_url", "action_fetch_playwright", "source_fetch_playwright", "source_fetch_html"]:
+        if ntype in ["action_fetch_url", "source_fetch_url", "action_fetch_playwright", "source_fetch_playwright", "source_fetch_html", "source_image_fetch"]:
             return "url" if port_idx == 0 else "data"
 
         if ntype in ["action_bs4_select", "action_html_children"]:
