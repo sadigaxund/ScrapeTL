@@ -66,6 +66,8 @@ def _scraper_dict(s: Scraper):
     # Filter out Builder Sync versions for UI consistency
     manual_versions = [v for v in s.versions if v.version_label != "Builder Sync"]
     latest_v = manual_versions[0] if manual_versions else None
+    # Builder scrapers implicitly start at v1.0.0 even without a manual snapshot
+    latest_version_label = latest_v.version_label if latest_v else ("1.0.0" if s.scraper_type == "builder" else None)
 
     return {
         "id": s.id,
@@ -80,7 +82,7 @@ def _scraper_dict(s: Scraper):
         "tags": [{"id": t.id, "name": t.name, "color": t.color} for t in s.tags],
         "integrations": [{"id": i.id, "name": i.name, "type": i.type} for i in s.integrations],
         "version_count": len(manual_versions),
-        "latest_version": latest_v.version_label if latest_v else None,
+        "latest_version": latest_version_label,
         "inputs": scraper_inputs,
         "scraper_type": s.scraper_type,
         "flow_data": json.loads(s.flow_data) if s.flow_data else None,
@@ -103,6 +105,7 @@ def _snapshot_version(db: Session, scraper: Scraper, version_label: Optional[str
         version_label=version_label,
         commit_message=commit_message,
         code=code,
+        flow_data=scraper.flow_data if scraper.scraper_type == "builder" else None,
     ))
     db.commit()
 
@@ -544,7 +547,18 @@ def get_version_code(scraper_id: int, version_id: int, db: Session = Depends(get
     version = db.get(ScraperVersion, version_id)
     if not version or version.scraper_id != scraper_id:
         raise HTTPException(status_code=404, detail="Version not found.")
-    return {"version_label": version.version_label, "code": version.code, "created_at": version.created_at.isoformat() + "Z"}
+    # For builder scrapers without stored flow_data (pre-migration versions), fall back to current flow
+    flow_data = version.flow_data
+    if not flow_data:
+        scraper = db.get(Scraper, scraper_id)
+        if scraper and scraper.scraper_type == "builder":
+            flow_data = scraper.flow_data
+    return {
+        "version_label": version.version_label,
+        "code": version.code,
+        "flow_data": json.loads(flow_data) if flow_data else None,
+        "created_at": version.created_at.isoformat() + "Z",
+    }
 
 
 @router.post("/{scraper_id}/revert/{version_id}")

@@ -9,7 +9,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from scrapetl.database import get_db
-from scrapetl.models import ScrapeLog, TaskQueue, Scraper, Schedule
+from scrapetl.models import ScrapeLog, TaskQueue, Scraper, Schedule, ScraperVersion
 from datetime import datetime, timedelta
 
 router = APIRouter(tags=["logs"])
@@ -21,6 +21,7 @@ def get_logs(
     scraper_id: int = Query(None),
     tag_id: int = Query(None),
     status: str = Query(None),
+    q: str = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0),
 ):
@@ -30,8 +31,12 @@ def get_logs(
         rq = db.query(TaskQueue).filter(TaskQueue.status == "running")
         if scraper_id:
             rq = rq.filter(TaskQueue.scraper_id == scraper_id)
-        if tag_id:
-            rq = rq.join(Scraper).filter(Scraper.tags.any(id=tag_id))
+        if tag_id or q:
+            rq = rq.join(Scraper, TaskQueue.scraper_id == Scraper.id)
+            if tag_id:
+                rq = rq.filter(Scraper.tags.any(id=tag_id))
+            if q:
+                rq = rq.filter(Scraper.name.ilike(f"%{q}%"))
         
         # We don't filter running items by 'status' if status filter is something other than 'running'
         # but if status search is "success" or "failure", we shouldn't show running items.
@@ -58,21 +63,25 @@ def get_logs(
             })
 
     # 2. Fetch completed logs
-    q = db.query(ScrapeLog).order_by(ScrapeLog.run_at.desc())
+    lq = db.query(ScrapeLog).order_by(ScrapeLog.run_at.desc())
     if scraper_id:
-        q = q.filter(ScrapeLog.scraper_id == scraper_id)
-    if tag_id:
-        q = q.join(Scraper).filter(Scraper.tags.any(id=tag_id))
+        lq = lq.filter(ScrapeLog.scraper_id == scraper_id)
+    if tag_id and q:
+        lq = lq.join(Scraper, ScrapeLog.scraper_id == Scraper.id).filter(Scraper.tags.any(id=tag_id)).filter(Scraper.name.ilike(f"%{q}%"))
+    elif tag_id:
+        lq = lq.join(Scraper, ScrapeLog.scraper_id == Scraper.id).filter(Scraper.tags.any(id=tag_id))
+    elif q:
+        lq = lq.join(Scraper, ScrapeLog.scraper_id == Scraper.id).filter(Scraper.name.ilike(f"%{q}%"))
     if status:
         if status == "running":
             # If specifically looking for running, only return running_items
             return {"total": len(running_items), "items": running_items}
-        q = q.filter(ScrapeLog.status == status)
+        lq = lq.filter(ScrapeLog.status == status)
 
-    total = q.count()
+    total = lq.count()
     # Correct limit to account for running items
     fetch_limit = limit - len(running_items) if offset == 0 else limit
-    logs = q.offset(offset).limit(max(0, fetch_limit)).all()
+    logs = lq.offset(offset).limit(max(0, fetch_limit)).all()
 
     items = running_items + [
             {
@@ -93,6 +102,7 @@ def get_logs(
                 "input_params": json.loads(log.input_params) if log.input_params else None,
                 "input_labels": json.loads(log.input_labels) if log.input_labels else None,
                 "log_file_path": log.log_file_path,
+                "scraper_version_id": log.scraper_version_id,
             }
             for log in logs
         ]
@@ -193,6 +203,33 @@ def download_log_payload(
         media_type="text/csv",
         headers={"Content-Disposition": f'attachment; filename="{base_filename}.csv"'},
     )
+
+
+@router.get("/api/logs/{log_id}/version")
+def get_log_version(log_id: int, db: Session = Depends(get_db)):
+    """Return the scraper version code that was active when this log was created."""
+    log = db.get(ScrapeLog, log_id)
+    if not log:
+        raise HTTPException(status_code=404, detail="Log not found.")
+    if not log.scraper_version_id:
+        raise HTTPException(status_code=404, detail="No version snapshot linked to this log entry.")
+    version = db.get(ScraperVersion, log.scraper_version_id)
+    if not version:
+        raise HTTPException(status_code=404, detail="Linked version record was deleted.")
+    # For builder scrapers without stored flow_data (pre-migration versions), fall back to current flow
+    flow_data = version.flow_data
+    if not flow_data:
+        scraper = db.get(Scraper, version.scraper_id)
+        if scraper and scraper.scraper_type == "builder":
+            flow_data = scraper.flow_data
+    return {
+        "id": version.id,
+        "version_label": version.version_label,
+        "commit_message": version.commit_message,
+        "created_at": version.created_at.isoformat() + "Z" if version.created_at else None,
+        "code": version.code,
+        "flow_data": json.loads(flow_data) if flow_data else None,
+    }
 
 
 @router.delete("/api/logs")

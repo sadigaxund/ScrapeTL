@@ -1135,7 +1135,6 @@ class BuilderEngine:
                         if candidates: final_value = candidates[0][1]
                 
                 # 📝 WRITE & SYNC
-                import json
                 if final_value is None:
                     save_str = None
                 elif isinstance(final_value, (list, dict)):

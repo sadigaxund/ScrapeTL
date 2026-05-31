@@ -76,6 +76,16 @@ function renderLogFilters() {
     document.getElementById('log-menu-statuses').innerHTML = stHtml;
 }
 
+let _logSearchTimer = null;
+function onLogSearchInput(val) {
+    clearTimeout(_logSearchTimer);
+    _logSearchTimer = setTimeout(() => {
+        state.logFilters.q = val.trim();
+        state.currentLogsPage = 0;
+        loadLogs();
+    }, 350);
+}
+
 function setLogFilter(type, val) {
     state.logFilters[type] = val;
     state.currentLogsPage = 0;
@@ -89,13 +99,14 @@ function setLogFilter(type, val) {
 
 async function loadLogs(page = null) {
     if (page !== null) state.currentLogsPage = page;
-    const { scraperId, tagId, status } = state.logFilters;
+    const { scraperId, tagId, status, q } = state.logFilters;
     const offset = state.currentLogsPage * state.logsPageSize;
 
     let url = `${API.logs}?limit=${state.logsPageSize}&offset=${offset}`;
     if (scraperId) url += `&scraper_id=${scraperId}`;
     if (tagId) url += `&tag_id=${tagId}`;
     if (status) url += `&status=${status}`;
+    if (q) url += `&q=${encodeURIComponent(q)}`;
 
     try {
         const data = await apiFetch(url);
@@ -148,6 +159,7 @@ async function loadLogs(page = null) {
                         <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'debug', this)">Debug Assets (${log.debug_payload.length})</button>
                         ` : ''}
                         <button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'system', this); startLogTabStream('${log.task_id || log.id}', '${log.id}', '${(log.scraper_name || 'N/A').replace(/'/g, "\\'")}')">System Logs</button>
+                        ${log.scraper_version_id ? `<button class="log-tab-btn" onclick="switchLogTab('${log.id}', 'version', this); loadLogVersion(${log.id})">Source</button>` : ''}
                         ${log.log_file_path ? `<button class="btn btn-ghost btn-sm" style="margin-left:auto; font-size:10px; padding:2px 8px;" onclick="event.stopPropagation(); downloadSystemLog(${log.id})">Download Log</button>` : ''}
                     </div>
 
@@ -158,13 +170,15 @@ async function loadLogs(page = null) {
                     <div id="log-content-results-${log.id}">
                         ${log.payload ? `
                         <div class="payload-download-bar">
-                            <span class="payload-download-label">Download payload:</span>
+                            <span class="payload-download-label">Download:</span>
                             <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'json')" title="Download JSON">⬇ JSON</button>
                             <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'jsonl')" title="Download JSONL (one object per line)">⬇ JSONL</button>
                             <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'csv')" title="Download CSV">⬇ CSV</button>
                             <button class="btn-dl" onclick="downloadLogPayload(${log.id}, 'xlsx')" title="Download Excel">⬇ Excel</button>
+                            ${Array.isArray(log.payload) ? `<button class="btn-dl" onclick="togglePayloadRaw(this,'ptbl-${log.id}')" style="margin-left:4px">Raw</button>` : ''}
+                            ${Array.isArray(log.payload) ? `<button class="btn-dl" onclick="openExplorer(${log.id})" style="margin-left:4px" title="Open full explorer with sort/filter">🔍 Explore</button>` : ''}
                         </div>
-                        ${renderPayload(log.payload, log.episode_count)}` : ''}
+                        ${renderPayload(log.payload, log.episode_count, log.id)}` : ''}
                     </div>
 
                     <div id="log-content-debug-${log.id}" style="display:none">
@@ -178,6 +192,10 @@ async function loadLogs(page = null) {
                                 Loading system trace...
                             </div>
                         </div>
+                    </div>
+
+                    <div id="log-content-version-${log.id}" style="display:none">
+                        <div style="color:var(--text-muted);font-size:13px;padding:12px 0">Loading source code...</div>
                     </div>
 
                     ${renderLogContext(log)}
@@ -235,10 +253,12 @@ function switchLogTab(logId, tab, btn) {
     const results = document.getElementById(`log-content-results-${logId}`);
     const debug = document.getElementById(`log-content-debug-${logId}`);
     const system = document.getElementById(`log-content-system-${logId}`);
+    const version = document.getElementById(`log-content-version-${logId}`);
 
     if (results) results.style.display = tab === 'results' ? 'block' : 'none';
     if (debug) debug.style.display = tab === 'debug' ? 'block' : 'none';
     if (system) system.style.display = tab === 'system' ? 'block' : 'none';
+    if (version) version.style.display = tab === 'version' ? 'block' : 'none';
 
     // Cleanup streaming if moving AWAY from system tab
     if (tab !== 'system') {
@@ -304,57 +324,78 @@ function toggleDebugPreview(btn) {
     btn.classList.add('active');
 }
 
-function renderPayload(payload, episodeCount = 0) {
+function _renderPayloadCell(rawVal, raw) {
+    if (raw) {
+        const isObj = typeof rawVal === 'object' && rawVal !== null;
+        const strVal = isObj ? JSON.stringify(rawVal, null, 2) : String(rawVal);
+        return strVal.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+    const isObj = typeof rawVal === 'object' && rawVal !== null;
+    const strVal = isObj ? JSON.stringify(rawVal) : String(rawVal);
+    const isHtml = typeof rawVal === 'string' && strVal.length > 10 && (strVal.trim().startsWith('<') || strVal.includes('</'));
+    const isDataImg = typeof rawVal === 'string' && strVal.startsWith('data:image/');
+    if (isHtml) {
+        const encoded = b64EncodeUnicode(strVal);
+        return `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px;padding:4px 8px;">Preview HTML</button>`;
+    }
+    if (isDataImg) {
+        return `<div class="payload-img-wrapper" onclick="showImageModal('${strVal}')"><img src="${strVal}" class="payload-img-preview" alt="Captured Image"><div class="payload-img-overlay">🔍 View</div></div>`;
+    }
+    if (isObj) {
+        const prettyJson = JSON.stringify(rawVal, null, 2);
+        const encoded = b64EncodeUnicode(prettyJson);
+        if (prettyJson.length > 100 || prettyJson.includes('\n')) {
+            return `<button class="btn btn-ghost btn-sm" onclick="showJsonModal('${encoded}')" style="font-size:10px;padding:4px 8px;">View JSON</button>`;
+        }
+        return `<code style="font-size:11px;color:var(--accent);background:rgba(124,106,247,0.05);padding:2px 4px;border-radius:4px">${strVal}</code>`;
+    }
+    if (strVal.startsWith('http')) {
+        return `<a href="${strVal}" target="_blank" rel="noopener">Link ↗</a>`;
+    }
+    if (strVal.length > 120) {
+        const enc = b64EncodeUnicode(strVal);
+        return `<span style="color:var(--text-secondary);font-size:12px">${strVal.substring(0, 120).replace(/</g,'&lt;').replace(/>/g,'&gt;')}</span><button class="btn btn-ghost btn-sm" onclick="showTextModal('${enc}')" style="font-size:10px;padding:2px 6px;margin-left:4px;vertical-align:middle">… more</button>`;
+    }
+    return strVal.replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function _buildPayloadTbody(payload, keys, raw) {
+    return payload.map(obj => '<tr>' + keys.map(k => {
+        const val = (obj[k] !== null && obj[k] !== undefined) ? obj[k] : '-';
+        return `<td>${_renderPayloadCell(val, raw)}</td>`;
+    }).join('') + '</tr>').join('');
+}
+
+function togglePayloadRaw(btn, wrapperId) {
+    const wrapper = document.getElementById(wrapperId);
+    if (!wrapper) return;
+    const isRaw = wrapper.dataset.rawMode === '1';
+    const payload = JSON.parse(b64DecodeUnicode(wrapper.dataset.payload));
+    const keys = JSON.parse(b64DecodeUnicode(wrapper.dataset.keys));
+    wrapper.querySelector('tbody').innerHTML = _buildPayloadTbody(payload, keys, !isRaw);
+    wrapper.dataset.rawMode = isRaw ? '0' : '1';
+    btn.textContent = isRaw ? 'Raw' : 'Display';
+}
+
+function renderPayload(payload, episodeCount = 0, logId = null) {
     if (!payload || typeof payload !== 'object') return '';
 
     // Tabular View (Array of Objects)
     if (Array.isArray(payload) && payload.length > 0) {
         const keys = Array.from(new Set(payload.map(p => Object.keys(p)).flat())).filter(k => k !== null && k !== undefined);
+        const wrapperId = logId ? `ptbl-${logId}` : `ptbl-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;
         let thead = '<tr>' + keys.map(k => `<th>${k.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</th>`).join('') + '</tr>';
-
-        let tbody = payload.map(obj => {
-            return '<tr>' + keys.map(k => {
-                const rawVal = (obj[k] !== null && obj[k] !== undefined) ? obj[k] : '-';
-                const isObj = typeof rawVal === 'object' && rawVal !== null;
-                const strVal = isObj ? JSON.stringify(rawVal) : String(rawVal);
-
-                const isHtml = typeof rawVal === 'string' && strVal.length > 10 && (strVal.trim().startsWith('<') || strVal.includes('</'));
-                const isDataImg = typeof rawVal === 'string' && strVal.startsWith('data:image/');
-                let cellContent = '';
-
-                if (isHtml) {
-                    const encoded = b64EncodeUnicode(strVal);
-                    cellContent = `<button class="btn btn-ghost btn-sm" onclick="showHtmlModal('${encoded}')" style="font-size:10px; padding:4px 8px;">Preview HTML</button>`;
-                } else if (isDataImg) {
-                    cellContent = `
-                        <div class="payload-img-wrapper" onclick="showImageModal('${strVal}')">
-                            <img src="${strVal}" class="payload-img-preview" alt="Captured Image">
-                            <div class="payload-img-overlay">🔍 View</div>
-                        </div>`;
-                } else if (isObj) {
-                    const prettyJson = JSON.stringify(rawVal, null, 2);
-                    const encoded = b64EncodeUnicode(prettyJson);
-                    if (prettyJson.length > 100 || prettyJson.includes('\n')) {
-                        cellContent = `<button class="btn btn-ghost btn-sm" onclick="showJsonModal('${encoded}')" style="font-size:10px; padding:4px 8px;">View JSON</button>`;
-                    } else {
-                        cellContent = `<code style="font-size:11px; color:var(--accent); background:rgba(124,106,247,0.05); padding:2px 4px; border-radius:4px">${strVal}</code>`;
-                    }
-                } else {
-                    let v = strVal;
-                    if (v.length > 200) v = v.substring(0, 200) + '...';
-                    if (v.startsWith('http')) v = `<a href="${v}" target="_blank" rel="noopener">Link</a>`;
-                    cellContent = v;
-                }
-                return `<td>${cellContent}</td>`;
-            }).join('') + '</tr>';
-        }).join('');
+        let tbody = _buildPayloadTbody(payload, keys, false);
 
         let msg = '';
         if (episodeCount && episodeCount > payload.length) {
             msg = `<div class="payload-truncation-notice">Displaying <b>${payload.length}</b> out of <b>${episodeCount}</b> scraped items.</div>`;
         }
 
-        return `<div class="payload-table-wrapper"><table class="payload-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>${msg}`;
+        const payloadEnc = b64EncodeUnicode(JSON.stringify(payload));
+        const keysEnc = b64EncodeUnicode(JSON.stringify(keys));
+
+        return `<div class="payload-table-wrapper" id="${wrapperId}" data-raw-mode="0" data-payload="${payloadEnc}" data-keys="${keysEnc}"><table class="payload-table"><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>${msg}`;
     }
 
     // Grid View (Single Object)
@@ -368,6 +409,19 @@ function renderPayload(payload, episodeCount = 0) {
             return `<div class="payload-row"><span class="payload-key">${label}</span><span class="payload-val">${val}</span></div>`;
         });
     return `<div class="payload-grid">${rows.join('')}</div>`;
+}
+
+function showTextModal(encoded) {
+    const text = b64DecodeUnicode(encoded);
+    const modal = document.getElementById('log-context-modal');
+    const body = document.getElementById('log-context-body');
+    document.getElementById('log-context-title').textContent = 'Full Cell Value';
+    modal.style.display = 'flex';
+    body.innerHTML = `
+        <div style="padding:24px; background:var(--bg-card); border-radius:12px; border:1px solid var(--border);">
+            <pre style="background:rgba(0,0,0,0.2); padding:20px; border-radius:8px; font-family:var(--font-mono); font-size:12px; line-height:1.6; color:var(--text-primary); overflow:auto; max-height:70vh; white-space:pre-wrap; word-break:break-all; border:1px solid rgba(255,255,255,0.05);">${text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>
+        </div>
+    `;
 }
 
 function showJsonModal(encoded) {
@@ -549,4 +603,121 @@ function downloadSystemLog(logId) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+}
+
+function _escHtml(s) {
+    return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+const _logVersionCache = {};
+async function loadLogVersion(logId) {
+    const container = document.getElementById(`log-content-version-${logId}`);
+    if (!container) return;
+    if (_logVersionCache[logId]) {
+        if (_logVersionCache[logId] !== '__dom__') container.innerHTML = _logVersionCache[logId];
+        return;
+    }
+    container.innerHTML = '<div style="color:var(--text-muted);font-size:13px;padding:12px 0">Loading source...</div>';
+    try {
+        const data = await apiFetch(API.logVersion(logId));
+        const label = data.version_label ? `v${data.version_label}` : 'Unknown Version';
+        const msg = data.commit_message ? ` — ${data.commit_message}` : '';
+        let html;
+        if (data.flow_data) {
+            // Render inline flow preview (DOM-based, pan+zoom)
+            const headerHtml = `<div style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-bottom:8px">${label}${msg} <span style="font-weight:400;opacity:0.6">(read-only snapshot)</span></div>`;
+            container.innerHTML = headerHtml;
+            const canvasWrap = document.createElement('div');
+            canvasWrap.style.cssText = 'height:420px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;display:flex;flex-direction:column';
+            const previewEl = buildFlowPreviewEl(data.flow_data);
+            if (previewEl) canvasWrap.appendChild(previewEl);
+            container.appendChild(canvasWrap);
+            _logVersionCache[logId] = '__dom__'; // sentinel — already injected
+            return;
+        } else {
+            html = `
+                <div style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-bottom:8px">
+                    ${label}${msg} <span style="font-weight:400;opacity:0.6">(read-only snapshot)</span>
+                </div>
+                <pre style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;line-height:1.6;overflow:auto;max-height:400px;white-space:pre-wrap;word-break:break-all">${_escHtml(data.code)}</pre>`;
+        }
+        _logVersionCache[logId] = html;
+        container.innerHTML = html;
+    } catch (e) {
+        container.innerHTML = `<div style="color:var(--failure);font-size:13px;padding:12px 0">${e.message}</div>`;
+    }
+}
+
+/* ── Results Explorer ─────────────────────────────────────────── */
+let _explorerState = { logId: null, allRows: [], filteredRows: [], keys: [], sortKey: null, sortDir: 1 };
+
+function openExplorer(logId) {
+    const log = (state.lastRenderedLogs || []).find(l => l.id === logId);
+    if (!log || !log.payload) { toast('No payload data for this log.', 'error'); return; }
+
+    const rawPayload = Array.isArray(log.payload) ? log.payload : [log.payload];
+    const rows = rawPayload.map(r => (typeof r === 'object' && r !== null) ? r : { value: r });
+    const keys = Array.from(new Set(rows.flatMap(r => Object.keys(r))));
+
+    _explorerState = { logId, allRows: rows, filteredRows: rows, keys, sortKey: null, sortDir: 1 };
+
+    document.getElementById('explorer-title').textContent = `Results Explorer — ${log.scraper_name || 'Log #' + logId}`;
+    document.getElementById('explorer-search').value = '';
+    document.getElementById('explorer-total').textContent = `${rows.length} rows cached`;
+    _explorerRender();
+    document.getElementById('explorer-modal').style.display = 'flex';
+}
+
+function explorerFilter(q) {
+    const lower = q.toLowerCase().trim();
+    _explorerState.filteredRows = lower
+        ? _explorerState.allRows.filter(row => Object.values(row).some(v => String(v).toLowerCase().includes(lower)))
+        : _explorerState.allRows;
+    _explorerRender();
+}
+
+function explorerSort(key) {
+    _explorerState.sortDir = (_explorerState.sortKey === key) ? _explorerState.sortDir * -1 : 1;
+    _explorerState.sortKey = key;
+    _explorerRender();
+}
+
+function _explorerRender() {
+    const { filteredRows, allRows, keys, sortKey, sortDir } = _explorerState;
+    let rows = [...filteredRows];
+    if (sortKey) {
+        rows.sort((a, b) => String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? ''), undefined, { numeric: true }) * sortDir);
+    }
+
+    document.getElementById('explorer-count').textContent = `${rows.length} of ${allRows.length}`;
+
+    const thead = document.getElementById('explorer-thead');
+    thead.innerHTML = '<tr>' + keys.map(k => {
+        const isSorted = sortKey === k;
+        const arrow = isSorted ? (sortDir === 1 ? ' ↑' : ' ↓') : '';
+        return `<th style="cursor:pointer;user-select:none;white-space:nowrap" onclick="explorerSort('${k}')">${k.replace(/_/g,' ').replace(/\b\w/g,c=>c.toUpperCase())}${arrow}</th>`;
+    }).join('') + '</tr>';
+
+    const tbody = document.getElementById('explorer-tbody');
+    tbody.innerHTML = rows.map(row => '<tr>' + keys.map(k => {
+        const v = (row[k] !== null && row[k] !== undefined) ? row[k] : '';
+        return `<td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${_escHtml(String(v)).substring(0, 200).replace(/"/g, '&quot;')}">${_explorerCellHtml(v)}</td>`;
+    }).join('') + '</tr>').join('');
+}
+
+function _explorerCellHtml(v) {
+    if (typeof v === 'object' && v !== null) {
+        return `<code style="font-size:11px">${_escHtml(JSON.stringify(v))}</code>`;
+    }
+    const s = String(v);
+    if (s.startsWith('http')) return `<a href="${_escHtml(s)}" target="_blank" rel="noopener">Link ↗</a>`;
+    return _escHtml(s);
+}
+
+function explorerDownload(fmt) {
+    if (_explorerState.logId) downloadLogPayload(_explorerState.logId, fmt);
+}
+
+function closeExplorer() {
+    document.getElementById('explorer-modal').style.display = 'none';
 }

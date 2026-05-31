@@ -101,6 +101,7 @@ class ScrapeLog(Base):
     log_file_path       = Column(String, nullable=True) # Path to the .log file in ./logs/
     input_params        = Column(Text, nullable=True)  # JSON snapshot of run inputs
     input_labels        = Column(Text, nullable=True)  # JSON {name: label} for display
+    scraper_version_id  = Column(Integer, ForeignKey("scraper_versions.id", ondelete="SET NULL"), nullable=True)
 
     scraper = relationship("Scraper", back_populates="logs")
     schedule = relationship("Schedule")
@@ -133,6 +134,7 @@ class ScraperVersion(Base):
     version_label  = Column(String, nullable=True)    # e.g. "1.0.0"
     commit_message = Column(Text,   nullable=True)    # short description of change
     code           = Column(Text,   nullable=False)   # full .py source
+    flow_data      = Column(Text,   nullable=True)    # JSON builder flow (builder scrapers only)
     created_at     = Column(DateTime, default=datetime.utcnow)
 
     scraper = relationship("Scraper", back_populates="versions")

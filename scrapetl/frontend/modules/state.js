@@ -24,6 +24,7 @@ const API = {
     versionCode: (sid, vid) => `/api/scrapers/${sid}/versions/${vid}`,
     revert: (sid, vid) => `/api/scrapers/${sid}/revert/${vid}`,
     logDownload: (lid, fmt) => `/api/logs/${lid}/download?format=${fmt}`,
+    logVersion: (lid) => `/api/logs/${lid}/version`,
     reorderScrapers: '/api/scrapers/reorder',
     reorderSchedules: '/api/schedules/reorder',
     reorderIntegrations: '/api/integrations/reorder',
@@ -49,7 +50,8 @@ let state = {
     logFilters: {
         scraperId: '',
         tagId: '',
-        status: ''
+        status: '',
+        q: ''
     },
     expandedLogs: new Set(),
     timezone: 'UTC',       // kept in sync with /api/settings

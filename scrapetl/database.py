@@ -47,6 +47,10 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE scrape_logs ADD COLUMN input_labels TEXT"))
             conn.commit()
             print("[DB] Added input_labels to scrape_logs")
+        if "scraper_version_id" not in cols:
+            conn.execute(text("ALTER TABLE scrape_logs ADD COLUMN scraper_version_id INTEGER"))
+            conn.commit()
+            print("[DB] Added scraper_version_id to scrape_logs")
 
         # Check task_queue
         res = conn.execute(text("PRAGMA table_info(task_queue)"))
@@ -139,6 +143,14 @@ def _ensure_schema_columns():
             conn.execute(text("ALTER TABLE user_functions ADD COLUMN is_generator BOOLEAN DEFAULT 0"))
             conn.commit()
             print("[DB] Added is_generator to user_functions")
+
+        # Check scraper_versions
+        res = conn.execute(text("PRAGMA table_info(scraper_versions)"))
+        cols = [r[1] for r in res]
+        if "flow_data" not in cols:
+            conn.execute(text("ALTER TABLE scraper_versions ADD COLUMN flow_data TEXT"))
+            conn.commit()
+            print("[DB] Added flow_data to scraper_versions")
 
 
 def _seed_defaults():

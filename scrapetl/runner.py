@@ -99,6 +99,9 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
         skip_message  = None
         _input_values  = input_values or {}
 
+        # Capture which version is running for log linkage
+        active_version_id = scraper_record.versions[0].id if scraper_record.versions else None
+
         # 3. Load Global Variables for injection
         import os
         global_vars = {}
@@ -310,6 +313,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                             log_file_path=captured_log_path,
                             input_params=json.dumps(_input_values, default=str) if _input_values else None,
                             input_labels=json.dumps(input_labels) if input_labels else None,
+                            scraper_version_id=active_version_id,
                         )
                         db.add(chunk_log)
                         db.commit()
@@ -362,6 +366,7 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
                 log_file_path=captured_log_path,
                 input_params=json.dumps(_input_values, default=_safe_json) if _input_values else None,
                 input_labels=json.dumps(input_labels) if input_labels else None,
+                scraper_version_id=active_version_id,
             )
             db.add(log)
 

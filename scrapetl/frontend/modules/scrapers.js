@@ -709,6 +709,17 @@ function bumpVersion(type) {
 /* ════════════════════════════════════════════════
    VERSION HISTORY MODAL
 ════════════════════════════════════════════════ */
+function closeVersionsModal(e) {
+    if (e && e.target !== document.getElementById('versions-modal')) return;
+    document.getElementById('versions-modal').style.display = 'none';
+    const area = document.getElementById('ver-code-area');
+    area.style.display = 'none';
+    document.getElementById('ver-code-view').textContent = '';
+    document.getElementById('ver-code-view').style.display = '';
+    const flowDiv = area.querySelector('.ver-flow-canvas');
+    if (flowDiv) flowDiv.remove();
+}
+
 async function openVersionsModal(scraperId) {
     document.getElementById('versions-scraper-id').value = scraperId;
     document.getElementById('ver-code-area').style.display = 'none';
@@ -749,8 +760,340 @@ async function viewVersion(scraperId, versionId, versionLabel) {
     label.textContent = `v${versionLabel} \u2014 CODE`;
     try {
         const data = await apiFetch(API.versionCode(scraperId, versionId));
-        pre.textContent = data.code;
+        if (data.flow_data) {
+            label.textContent = `v${versionLabel} \u2014 VISUAL FLOW`;
+            pre.style.display = 'none';
+            let flowDiv = area.querySelector('.ver-flow-canvas');
+            if (!flowDiv) {
+                flowDiv = document.createElement('div');
+                flowDiv.className = 'ver-flow-canvas';
+                flowDiv.style.cssText = 'height:380px;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;display:flex;flex-direction:column';
+                area.appendChild(flowDiv);
+            }
+            flowDiv.innerHTML = '';
+            const previewEl = buildFlowPreviewEl(data.flow_data);
+            if (previewEl) flowDiv.appendChild(previewEl);
+        } else {
+            pre.style.display = '';
+            const flowDiv = area.querySelector('.ver-flow-canvas');
+            if (flowDiv) flowDiv.remove();
+            pre.textContent = data.code;
+        }
     } catch (e) { pre.textContent = `Error: ${e.message}`; }
+}
+
+function openFlowPreviewModal(flowData, title) {
+    const wrap = document.getElementById('flow-preview-canvas');
+    wrap.innerHTML = '';
+    document.getElementById('flow-preview-title').textContent = title || 'Flow Preview';
+    const el = buildFlowPreviewEl(flowData);
+    if (el) wrap.appendChild(el);
+    document.getElementById('flow-preview-modal').style.display = 'flex';
+}
+
+/* Build a self-contained read-only builder canvas (pan + zoom only, no editing). */
+function buildFlowPreviewEl(flowData) {
+    if (!flowData) return null;
+    const nodes = flowData.nodes || [];
+    const edges = flowData.edges || [];
+    if (!nodes.length) {
+        const empty = document.createElement('div');
+        empty.style.cssText = 'color:var(--text-muted);padding:24px;font-size:13px';
+        empty.textContent = 'No flow nodes.';
+        return empty;
+    }
+
+    const pfx = `fp${Date.now().toString(36)}`;
+    const svgNS = 'http://www.w3.org/2000/svg';
+    const boolPresets = ['logic_gate', 'conditional', 'comparison', 'string_match', 'status_check', 'custom_logic'];
+
+    // Root wrapper
+    const root = document.createElement('div');
+    root.style.cssText = 'flex:1;display:flex;flex-direction:column;min-height:0;overflow:hidden';
+
+    // Mini toolbar
+    const bar = document.createElement('div');
+    bar.style.cssText = 'display:flex;align-items:center;gap:8px;padding:5px 10px;border-bottom:1px solid var(--border-light);background:var(--bg-card);flex-shrink:0;font-size:11px;color:var(--text-muted);user-select:none';
+    bar.innerHTML = `<span style="opacity:.5">Read-only</span><span style="opacity:.5;margin-left:auto">Drag to pan · Scroll to zoom</span>`;
+    const fitBtn = document.createElement('button');
+    fitBtn.className = 'btn btn-ghost btn-sm';
+    fitBtn.style.cssText = 'font-size:10px;padding:2px 8px;margin-left:8px';
+    fitBtn.textContent = 'Fit';
+    bar.appendChild(fitBtn);
+
+    // Viewport
+    const viewport = document.createElement('div');
+    viewport.style.cssText = 'flex:1;position:relative;overflow:hidden;cursor:grab;background:var(--bg-input);background-image:radial-gradient(circle,rgba(255,255,255,.045) 1px,transparent 1px);background-size:30px 30px;min-height:0';
+
+    // Canvas (pan/zoom target)
+    const canvas = document.createElement('div');
+    canvas.style.cssText = 'position:absolute;top:0;left:0;transform-origin:0 0;will-change:transform';
+
+    // SVG for connections (infinite, behind nodes)
+    const svg = document.createElementNS(svgNS, 'svg');
+    svg.style.cssText = 'position:absolute;top:0;left:0;width:8000px;height:8000px;pointer-events:none;overflow:visible';
+    // Arrow marker
+    const defs = document.createElementNS(svgNS, 'defs');
+    const marker = document.createElementNS(svgNS, 'marker');
+    marker.setAttribute('id', `${pfx}-arr`);
+    marker.setAttribute('markerWidth', '8');
+    marker.setAttribute('markerHeight', '6');
+    marker.setAttribute('refX', '8');
+    marker.setAttribute('refY', '3');
+    marker.setAttribute('orient', 'auto');
+    const poly = document.createElementNS(svgNS, 'polygon');
+    poly.setAttribute('points', '0 0, 8 3, 0 6');
+    poly.setAttribute('fill', 'rgba(124,106,247,0.55)');
+    marker.appendChild(poly);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+
+    // Nodes container
+    const nodesDiv = document.createElement('div');
+    nodesDiv.style.cssText = 'position:absolute;top:0;left:0;pointer-events:none';
+
+    canvas.appendChild(svg);
+    canvas.appendChild(nodesDiv);
+    viewport.appendChild(canvas);
+    root.appendChild(bar);
+    root.appendChild(viewport);
+
+    // Pan/zoom state
+    const ps = { x: 0, y: 0, zoom: 0.85 };
+
+    const applyT = () => {
+        canvas.style.transform = `translate(${ps.x}px,${ps.y}px) scale(${ps.zoom})`;
+    };
+
+    // ── Render nodes (same CSS classes as real builder) ──
+    nodes.forEach(node => {
+        const nodeTypes = NODE_PRESETS[node.type];
+        const preset = nodeTypes && node.preset ? nodeTypes[node.preset] : null;
+
+        const el = document.createElement('div');
+        el.className = `builder-node builder-node--${node.type}${node.preset ? ' builder-node--' + node.preset : ''}`;
+        if (node.type === 'utility') el.classList.add('builder-node--mini');
+        el.style.cssText = `position:absolute;left:${node.x}px;top:${node.y}px;pointer-events:none`;
+        if (node.width) el.style.width = `${node.width}px`;
+
+        // Title (styled as the real title input, but a div)
+        const titleEl = document.createElement('div');
+        titleEl.className = `builder-node__title builder-node__title--${node.type} node-title-input`;
+        titleEl.style.cssText = 'cursor:default;white-space:nowrap;overflow:hidden;text-overflow:ellipsis';
+        titleEl.textContent = (node.config && node.config.internalLabel) || (preset && preset.title) || node.label || node.preset || node.type;
+        el.appendChild(titleEl);
+
+        // Ports body
+        const portsBody = document.createElement('div');
+        portsBody.className = 'node-ports-body';
+        const inputCol = document.createElement('div');
+        inputCol.className = 'node-ports-col node-ports-col--input';
+        const outputCol = document.createElement('div');
+        outputCol.className = 'node-ports-col node-ports-col--output';
+
+        // Inputs
+        let nodeInputs = [];
+        if (node.dynamic_ports && node.dynamic_ports.length > 0) {
+            nodeInputs = node.dynamic_ports;
+        } else if (preset && preset.logicalInputs) {
+            const count = Number((node.config && node.config.logicalInputs) || preset.logicalInputs);
+            for (let i = 1; i <= count; i++) nodeInputs.push(`In ${i}`);
+        } else if (node.preset === 'conditional') {
+            nodeInputs = ['Input A', 'Input B'];
+        } else {
+            nodeInputs = (preset && preset.inputs) || [];
+        }
+
+        nodeInputs.forEach((lbl, idx) => {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--input';
+            const port = document.createElement('div');
+            port.className = 'node-port node-port--input';
+            port.id = `${pfx}-node-${node.id}-input-${idx}`;
+            const label = document.createElement('span');
+            label.className = 'node-port-label';
+            label.textContent = lbl;
+            row.appendChild(port);
+            row.appendChild(label);
+            inputCol.appendChild(row);
+        });
+
+        // Trigger port
+        if (node.type !== 'input' && node.type !== 'utility' && node.preset !== 'negate') {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--input node-port-row--universal';
+            const port = document.createElement('div');
+            port.className = 'node-port node-port--input node-port--trigger';
+            port.id = `${pfx}-node-${node.id}-input-trigger`;
+            const label = document.createElement('span');
+            label.className = 'node-port-label node-port-label--trigger';
+            label.textContent = 'Trigger';
+            row.appendChild(port);
+            row.appendChild(label);
+            inputCol.appendChild(row);
+        }
+
+        // Outputs
+        let nodeOutputs = [];
+        if (preset && preset.logicalOutputs) {
+            const count = Number((node.config && node.config.logicalOutputs) || preset.logicalOutputs);
+            for (let i = 1; i <= count; i++) nodeOutputs.push(`Out ${i}`);
+        } else {
+            nodeOutputs = (preset && preset.outputs) || [];
+        }
+
+        nodeOutputs.forEach((lbl, idx) => {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--output';
+            const port = document.createElement('div');
+            let portCls = 'node-port node-port--output';
+            if (node.type === 'logic' && boolPresets.includes(node.preset)) {
+                portCls += idx === 0 ? ' node-port--true' : ' node-port--false';
+            }
+            port.className = portCls;
+            port.id = `${pfx}-node-${node.id}-output-${idx}`;
+            const label = document.createElement('span');
+            label.className = `node-port-label${node.type === 'logic' && boolPresets.includes(node.preset) ? (idx === 0 ? ' node-port-label--true' : ' node-port-label--false') : ''}`;
+            label.textContent = lbl;
+            row.appendChild(label);
+            row.appendChild(port);
+            outputCol.appendChild(row);
+        });
+
+        // Error port
+        if (node.type !== 'input' && node.type !== 'sink' && node.type !== 'utility' && node.preset !== 'negate') {
+            const row = document.createElement('div');
+            row.className = 'node-port-row node-port-row--output node-port-row--universal';
+            const port = document.createElement('div');
+            port.className = 'node-port node-port--output node-port--error';
+            port.id = `${pfx}-node-${node.id}-output-error`;
+            const label = document.createElement('span');
+            label.className = 'node-port-label node-port-label--error';
+            label.textContent = 'Error';
+            row.appendChild(label);
+            row.appendChild(port);
+            outputCol.appendChild(row);
+        }
+
+        portsBody.appendChild(inputCol);
+        portsBody.appendChild(outputCol);
+        el.appendChild(portsBody);
+        nodesDiv.appendChild(el);
+    });
+
+    // ── Draw SVG connections ──
+    const drawConnections = () => {
+        // Clear existing paths (keep defs)
+        Array.from(svg.children).forEach(c => { if (c.tagName !== 'defs') c.remove(); });
+
+        const canvasRect = canvas.getBoundingClientRect();
+        if (!canvasRect.width) return; // Not yet laid out
+
+        const portPos = (nodeId, type, idx) => {
+            const portEl = document.getElementById(`${pfx}-node-${nodeId}-${type}-${idx}`);
+            if (portEl) {
+                const r = portEl.getBoundingClientRect();
+                if (r.width > 0) {
+                    return {
+                        x: (r.left + r.width / 2 - canvasRect.left) / ps.zoom,
+                        y: (r.top + r.height / 2 - canvasRect.top) / ps.zoom,
+                    };
+                }
+            }
+            // Geometric fallback
+            const n = nodes.find(n => String(n.id) === String(nodeId));
+            if (!n) return { x: 0, y: 0 };
+            const nw = n.width || 220;
+            return {
+                x: type === 'input' ? n.x : n.x + nw,
+                y: n.y + 52 + (typeof idx === 'number' ? idx : 0) * 24,
+            };
+        };
+
+        edges.forEach(edge => {
+            if (edge.from === undefined || edge.to === undefined) return;
+            const from = portPos(edge.from, 'output', edge.fromIdx);
+            const to = portPos(edge.to, 'input', edge.toIdx);
+
+            const path = document.createElementNS(svgNS, 'path');
+            let cls = 'connection-path';
+            if (edge.sourceHandle === 'true') cls += ' connection-path--true';
+            else if (edge.sourceHandle === 'false') cls += ' connection-path--false';
+            else if (edge.sourceHandle === 'trigger') cls += ' connection-path--trigger';
+            else if (edge.sourceHandle === 'error') cls += ' connection-path--error';
+            path.setAttribute('class', cls);
+            path.setAttribute('d', getBezierPath(from.x, from.y, to.x, to.y));
+            path.setAttribute('marker-end', `url(#${pfx}-arr)`);
+            svg.appendChild(path);
+        });
+    };
+
+    // ── Pan / Zoom ──
+    viewport.addEventListener('mousedown', e => {
+        if (e.button !== 0) return;
+        e.preventDefault();
+        const startX = e.clientX - ps.x;
+        const startY = e.clientY - ps.y;
+        viewport.style.cursor = 'grabbing';
+
+        const onMove = ev => {
+            ps.x = ev.clientX - startX;
+            ps.y = ev.clientY - startY;
+            applyT();
+            requestAnimationFrame(drawConnections);
+        };
+        const onUp = () => {
+            viewport.style.cursor = 'grab';
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+        };
+        document.addEventListener('mousemove', onMove);
+        document.addEventListener('mouseup', onUp);
+    });
+
+    viewport.addEventListener('wheel', e => {
+        e.preventDefault();
+        const vRect = viewport.getBoundingClientRect();
+        const mx = e.clientX - vRect.left;
+        const my = e.clientY - vRect.top;
+        const delta = e.deltaY > 0 ? 0.9 : 1.1;
+        const oldZoom = ps.zoom;
+        ps.zoom = Math.min(Math.max(ps.zoom * delta, 0.1), 3.0);
+        ps.x = mx - (mx - ps.x) * (ps.zoom / oldZoom);
+        ps.y = my - (my - ps.y) * (ps.zoom / oldZoom);
+        applyT();
+        requestAnimationFrame(drawConnections);
+    }, { passive: false });
+
+    // ── Fit-to-view ──
+    const fitView = () => {
+        const vRect = viewport.getBoundingClientRect();
+        if (!vRect.width) return;
+        let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+        nodes.forEach(n => {
+            minX = Math.min(minX, n.x);
+            minY = Math.min(minY, n.y);
+            maxX = Math.max(maxX, n.x + (n.width || 220));
+            maxY = Math.max(maxY, n.y + (n.height || 120));
+        });
+        const pad = 40;
+        const fw = maxX - minX + pad * 2;
+        const fh = maxY - minY + pad * 2;
+        ps.zoom = Math.min(vRect.width / fw, vRect.height / fh, 1.5);
+        ps.x = (vRect.width - fw * ps.zoom) / 2 - (minX - pad) * ps.zoom;
+        ps.y = (vRect.height - fh * ps.zoom) / 2 - (minY - pad) * ps.zoom;
+        applyT();
+        requestAnimationFrame(drawConnections);
+    };
+
+    fitBtn.addEventListener('click', fitView);
+
+    // Initial fit after layout
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        fitView();
+    }));
+
+    return root;
 }
 
 async function revertVersion(scraperId, versionId, versionLabel, btn) {

@@ -66,6 +66,18 @@ function discoverDynamicPorts(nodeId) {
             // Use pre-parsed parameters from backend AST analysis
             const args = Array.isArray(f.parameters) ? f.parameters : [];
 
+            // Always backfill targetHandle on edges to this node — edges created before
+            // the expression was set (or reloaded from DB) lack targetHandle, causing
+            // node_inputs to arrive under key "data" instead of the param name.
+            state.builder.edges.forEach(edge => {
+                if (String(edge.to) === String(nodeId)) {
+                    const portIdx = parseInt(edge.toIdx);
+                    if (!isNaN(portIdx) && portIdx < args.length) {
+                        edge.targetHandle = args[portIdx];
+                    }
+                }
+            });
+
             if (JSON.stringify(node.dynamic_ports) !== JSON.stringify(args)) {
                 node.dynamic_ports = args;
                 console.log(`[Builder] Discovered dynamic ports for ${nodeId}:`, args);

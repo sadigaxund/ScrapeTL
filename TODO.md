@@ -36,24 +36,18 @@ NOTE: If you are AI, do not read this file, it is only for human reference.
 
                                                                       
 45. a pagination to the logs menu
-
-
 51. maybe dynamically update the log entries with the currently in-progress generating results.
 
+
 52. option to mask/unmask the log results, from 'Link' to actual URL, or other complex types: JSON/Array vs abbreviation, Image binary vs rendered, or whatever else i have missed to identify
-
-53. some kind of accumulator, or a way of insert, update, append the BATCH TYPE variables
 54. ability to click and expand an abbreviated cell in logs menu
+55. Ability to see the read-only scraper version that has generated a certain log entry, in the logs menu. However, it should always display a version that has generated it, not the current one in the scraper tab. More specifically, you can use the versioning feature that we have in the scraper creation tab to reference the version that has generated the log entry. I'd like 
 
-feat: math node, generator batch, stealth improvements, string format fix
-fix: image fetch port, merge node redesign, scraper validation, examples
+56. select multiple nodes at the same time and drag or delete
 
+57. The embedded flow view within logs looks awful. Edges not displayed, hard to navigate around. Ideally, instead of such crammed view, it would be better just redirect to the builder menu in a read-only mode displaying the scraper version that has generated a certain log entry.
 
+58. [PENDING] Since stackoverflow started to throttle me, test on different website: potentially Booking.com.
 
-
-Row# | Tags                                                                                                      
-  1    | [tag1, tag2]                                                                                              
-  2    | [a, b]                                                                                                    
-  3    | [x, y]
-
-  https://stackoverflow.com/search?page=10&tab=Votes&pagesize=50&q=hasaccepted%3a1%20[apache-spark]&searchOn=3
+59. Create new menu "Explore" where we can view cached the results of ran scrapers. The way to display data there for now, is by clicking on "Explore" button within log entries. Do not do it with a modal window, we need dedicated page. Moreover, move the "Download:" buttons there, as well as an option to toggle "raw" or "display" mode, however, organize these better, so that it does not look like another download option.
+60. Download Excel is not working.

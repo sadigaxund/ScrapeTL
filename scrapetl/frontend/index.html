@@ -434,6 +434,10 @@
             <div class="custom-dropdown-menu" id="log-menu-statuses" onclick="event.stopPropagation()"></div>
           </div>
 
+          <input type="text" id="log-search" placeholder="Search scraper name…"
+            style="height:32px; padding:0 10px; font-size:12px; border-radius:6px; border:1px solid var(--border-light); background:var(--bg-input); color:var(--text-primary); width:200px;"
+            oninput="onLogSearchInput(this.value)" />
+
           <div style="flex:1"></div>
 
           <button class="btn btn-primary" onclick="collapseAllLogs()"
@@ -900,10 +904,10 @@
 
           <div class="form-row" style="align-items: flex-start; margin-top:14px">
             <div class="form-group" style="flex: 1;">
-              <label>Payload Preview Row Limit <span
+              <label>Payload Cache Row Limit <span
                   style="font-weight:400;color:var(--text-muted);text-transform:none">(0 for unlimited)</span></label>
               <input type="number" id="setting-log-preview-limit" style="height:42px" placeholder="10" min="0" />
-              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Number of data rows saved in DB.</p>
+              <p style="font-size:11px;color:var(--text-muted);margin-top:6px">Max rows stored in the database per run. 0 = store all.</p>
             </div>
             <div class="form-group" style="flex: 1;">
               <label>Batch Throttle (seconds)</label>
@@ -1108,20 +1112,20 @@
   <div class="modal-overlay" id="versions-modal" style="display:none" onclick="closeVersionsModal(event)">
     <div class="modal-box" style="max-width:720px">
       <div class="modal-header">
-        <h2 class="card-title">🕓 Version History</h2>
-        <button class="btn btn-ghost" style="padding:6px 10px" onclick="closeVersionsModal()">✕</button>
+        <h2 class="modal-title">🕓 Version History</h2>
+        <button class="modal-close" onclick="closeVersionsModal()">✕</button>
       </div>
-      <input type="hidden" id="versions-scraper-id" />
-      <div id="versions-list"
-        style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
-      <div id="ver-code-area" style="display:none">
-        <div style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-bottom:8px"
-          id="ver-code-label">VERSION CODE</div>
-        <pre id="ver-code-view"
-          style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;line-height:1.6;overflow:auto;max-height:320px;white-space:pre-wrap;word-break:break-all"></pre>
-      </div>
-      <div style="display:flex;justify-content:flex-end;margin-top:16px">
-        <button class="btn btn-ghost" onclick="closeVersionsModal()">Close</button>
+      <div class="modal-body">
+        <input type="hidden" id="versions-scraper-id" />
+        <div id="versions-list"
+          style="display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto;margin-bottom:16px"></div>
+        <div id="ver-code-area" style="display:none">
+          <div style="font-size:12px;color:var(--text-muted);font-weight:600;letter-spacing:.05em;margin-bottom:8px"
+            id="ver-code-label">VERSION CODE</div>
+          <pre id="ver-code-view"
+            style="background:var(--bg-input);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;font-size:12px;line-height:1.6;overflow:auto;max-height:320px;white-space:pre-wrap;word-break:break-all"></pre>
+          <!-- .ver-flow-canvas injected here by JS for builder scrapers -->
+        </div>
       </div>
     </div>
   </div>
@@ -1941,6 +1945,46 @@
       </div>
     </div>
   </div>
+  <!-- ── Flow Preview Modal (read-only builder canvas) ───────────── -->
+  <div class="modal-overlay" id="flow-preview-modal" style="display:none"
+    onclick="if(event.target===this) this.style.display='none'">
+    <div class="modal-box" style="max-width:92vw;width:1300px;max-height:92vh;display:flex;flex-direction:column">
+      <div class="modal-header">
+        <h2 class="modal-title" id="flow-preview-title">Visual Flow</h2>
+        <button class="modal-close" onclick="document.getElementById('flow-preview-modal').style.display='none'">✕</button>
+      </div>
+      <div id="flow-preview-canvas"
+        style="flex:1;display:flex;flex-direction:column;min-height:400px;overflow:hidden;border-top:1px solid var(--border-light)">
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Results Explorer Modal ───────────────────────────────────── -->
+  <div class="modal-overlay" id="explorer-modal" style="display:none"
+    onclick="if(event.target===this) closeExplorer()">
+    <div class="modal-box" style="max-width:96vw;width:1400px;max-height:96vh;display:flex;flex-direction:column">
+      <div class="modal-header">
+        <h2 class="modal-title" id="explorer-title">Results Explorer</h2>
+        <button class="modal-close" onclick="closeExplorer()">✕</button>
+      </div>
+      <div style="padding:14px 20px;border-bottom:1px solid var(--border-light);display:flex;gap:12px;align-items:center;flex-wrap:wrap;flex-shrink:0">
+        <input type="text" id="explorer-search" placeholder="Search all columns…"
+          style="flex:1;min-width:200px;padding:7px 12px;font-size:13px" oninput="explorerFilter(this.value)">
+        <span id="explorer-count" style="font-size:12px;color:var(--text-muted);white-space:nowrap"></span>
+        <span id="explorer-total" style="font-size:12px;color:var(--text-muted);opacity:0.6;white-space:nowrap"></span>
+        <button class="btn-dl" onclick="explorerDownload('json')">⬇ JSON</button>
+        <button class="btn-dl" onclick="explorerDownload('csv')">⬇ CSV</button>
+        <button class="btn-dl" onclick="explorerDownload('xlsx')">⬇ Excel</button>
+      </div>
+      <div id="explorer-table-wrap" style="overflow:auto;flex:1;padding:0 4px 4px">
+        <table class="payload-table" id="explorer-table" style="min-width:100%">
+          <thead id="explorer-thead"></thead>
+          <tbody id="explorer-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- ── Log Context / HTML Preview Modal ────────────────────────── -->
   <div class="modal-overlay" id="log-context-modal" style="display:none"
     onclick="if(event.target===this) this.style.display='none'">
