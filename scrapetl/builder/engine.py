@@ -889,13 +889,10 @@ class BuilderEngine:
                     return _json_c.dumps(pairs, default=str)
                 return ", ".join(str(v) for v in vals)
 
-            has_batch = any(isinstance(v, (Batch, list)) for v in input_list)
+            has_batch = any(Batch.is_batch_value(v) or isinstance(v, list) for v in input_list)
             if not has_batch:
                 return _apply_mode(input_list)
 
-            # ZIP: align batch ports row-by-row; scalars repeat for every row.
-            # Each row's sub-list elements expand inline. Output is Batch of strings
-            # so row count matches other batch columns and broadcast doesn't occur.
             row_count = max(len(v) if isinstance(v, (Batch, list)) else 1 for v in input_list)
             rows = []
             for i in range(row_count):
@@ -1182,7 +1179,7 @@ class BuilderEngine:
             # 🛠️ DATA SHAPING (Sink Output)
             # We want to provide a list of dicts for the tabular UI.
             # If the user passed a list or specialized Batch/Generator, handle each item.
-            if isinstance(sink_data, (types.GeneratorType, Batch)) or isinstance(sink_data, list):
+            if Batch.is_batch_value(sink_data) or isinstance(sink_data, list):
                 # If each item is a dict, return as-is (tabular formatting). 
                 # Otherwise, wrap each item under the label.
                 return [(item if isinstance(item, dict) else {label: item}) for item in sink_data]

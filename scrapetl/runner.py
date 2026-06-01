@@ -6,6 +6,7 @@ Supports configurable retry with exponential backoff (reads from AppSetting keys
 """
 import json
 import time
+import types
 from datetime import datetime
 from sqlalchemy.orm import Session
 from scrapetl.models import Scraper, ScrapeLog, TaskQueue, AppSetting, GlobalVariable, UserFunction, Batch
@@ -160,21 +161,16 @@ def run_scraper(db: Session, scraper_id: int, triggered_by: str = "scheduler", q
             except Exception as _pre_err:
                 print(f"[Runner] Warning: batch default pre-resolve failed: {_pre_err}")
 
-        # Detect Iterable Inputs (Batches/Generators)
+# Detect Iterable Inputs (Batches/Generators)
         batch_input_name = None
-        iterable_source = [_input_values] # Default: single item list
+        iterable_source = [_input_values]
 
-        import types
-        # The Yield Rule: We only iterate if it's an explicit Stream (Generator)
-        # OR it's a manual array from the Registry (wrapped in Batch)
-        # Standard lists from return statements are treated as single values.
-        all_debug_data = []
         for k, v in _input_values.items():
-            is_iter = isinstance(v, (types.GeneratorType, Batch))
-            if is_iter:
+            if Batch.is_batch_value(v):
                 batch_input_name = k
                 iterable_source = v
-                break        # Instantiation
+                break
+        all_debug_data = []
         if not scraper_record.versions:
             raise ValueError("No code version found for this scraper.")
 

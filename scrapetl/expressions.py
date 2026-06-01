@@ -109,14 +109,17 @@ def resolve_expressions(payload, context_vars, custom_funcs=None):
     for k, v in context_vars.items():
         if k == "__namespaces__": continue
         
+        # If the key is already a registered namespace, don't overwrite it
+        if k in ns and isinstance(ns[k], ObjectDict):
+            if isinstance(v, dict):
+                # Merge dict values into the namespace
+                ns[k].update(to_dot_accessible(v))
+            # else: skip — preserve the namespace structure for {{namespace.key}} access
+            continue
+        
         # If it's a dict (from a JSON variable)
         if isinstance(v, dict):
-            dot_v = to_dot_accessible(v)
-            if k in ns and isinstance(ns[k], ObjectDict):
-                # MERGE: allow access to both the JSON content and other variables in this namespace
-                ns[k].update(dot_v)
-            else:
-                ns[k] = dot_v
+            ns[k] = to_dot_accessible(v)
         elif isinstance(v, str):
             # Numeric Casting
             try:

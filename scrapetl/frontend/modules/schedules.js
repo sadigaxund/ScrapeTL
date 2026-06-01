@@ -43,14 +43,8 @@ async function loadSchedules(skipFetch = false) {
         const tableRows = filtered.map(s => {
             const displayName = s.label || s.scraper_name || 'Unnamed Schedule';
             const subtitle = s.label ? s.scraper_name : null;
-            const thumbUrl = s.thumbnail_url || '';
-            const thumbHtml = thumbUrl
-                ? `<img class="table-thumb" src="${thumbUrl}" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🎌</text></svg>'">`
-                : `<div class="table-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--bg-input);font-size:18px">🎌</div>`;
-
-            const tagsHtml = s.tags && s.tags.length
-                ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')}</div>`
-                : '';
+            const thumbHtml = renderThumb(s.thumbnail_url);
+            const tagsHtml = renderTags(s.tags);
 
             const _scraperDef = (state.scrapers || []).find(sc => sc.id === s.scraper_id);
             const _labelMap = Object.fromEntries(((_scraperDef && _scraperDef.inputs) || []).map(p => [p.name, p.label || p.name]));
@@ -91,12 +85,12 @@ async function loadSchedules(skipFetch = false) {
                 <td style="color:var(--text-secondary); white-space:nowrap"><span title="${s.last_run ? formatDate(s.last_run) : 'Never run'}">${s.last_run ? formatRelativeDate(s.last_run) : 'Never'}</span></td>
                 <td class="action-cell">
                     <div style="display:flex; align-items:center; gap:8px" onclick="event.stopPropagation()">
-                        <div class="action-btn-group">
-                            <button class="icon-btn" onclick="openAssignTagsModal(${s.id}, 'schedule')" title="Manage Tags">🏷️</button>
-                            <button class="icon-btn" onclick="openEditScheduleModal(${s.id})" title="Edit Schedule">✏️</button>
-                            <button class="icon-btn" onclick="duplicateSchedule(${s.id})" title="Duplicate Schedule">📄</button>
-                            <button class="icon-btn icon-btn-danger" onclick="deleteSchedule(${s.id})" title="Delete">✕</button>
-                        </div>
+                        ${createActionGroup([
+                            { icon: '🏷️', title: 'Manage Tags', onclick: `openAssignTagsModal(${s.id}, 'schedule')` },
+                            { icon: '✏️', title: 'Edit Schedule', onclick: `openEditScheduleModal(${s.id})` },
+                            { icon: '📄', title: 'Duplicate Schedule', onclick: `duplicateSchedule(${s.id})` },
+                            { icon: '✕', title: 'Delete', onclick: `deleteSchedule(${s.id})`, danger: true },
+                        ])}
                         <button class="btn ${s.enabled ? 'btn-danger' : 'btn-success'}" style="padding: 6px 14px; min-width: 100px; font-size: 12px;" onclick="toggleSchedule(${s.id})">
                             ${s.enabled ? '⏹ Disable' : '▶ Enable'}
                         </button>
@@ -114,27 +108,21 @@ async function loadSchedules(skipFetch = false) {
             </tr>` : ''}`;
         }).join('');
 
-        list.innerHTML = `
-        <div class="scrapers-table-container">
-            <table class="scrapers-table">
-                <thead>
-                    <tr>
-                        <th style="width:30px"></th>
-                        <th style="width:80px">Photo</th>
-                        <th>Schedule / Scraper</th>
-                        <th style="width:100px">Frequency</th>
-                        <th style="width:100px">Status</th>
-                        <th style="width:100px">Created</th>
-                        <th style="width:100px">Next Run</th>
-                        <th style="width:100px">Last Run</th>
-                        <th class="action-cell">Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${tableRows}
-                </tbody>
-            </table>
-        </div>`;
+        list.innerHTML = createTableContainer(
+            [
+                { label: '', style: 'width:30px' },
+                { label: 'Photo', style: 'width:80px' },
+                { label: 'Schedule / Scraper' },
+                { label: 'Frequency', style: 'width:100px' },
+                { label: 'Status', style: 'width:100px' },
+                { label: 'Created', style: 'width:100px' },
+                { label: 'Next Run', style: 'width:100px' },
+                { label: 'Last Run', style: 'width:100px' },
+                { label: 'Actions', style: 'width:1%;white-space:nowrap' },
+            ],
+            tableRows,
+            { className: 'scrapers-table-container', tableClass: 'scrapers-table' }
+        );
     } catch (e) { toast(e.message, 'error'); }
 }
 

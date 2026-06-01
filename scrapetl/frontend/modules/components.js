@@ -1,4 +1,75 @@
 /* ── Reusable UI Components ─── */
+
+/* ── Table component ──────────────────────────────── */
+function createTableContainer(headers, bodyRows, options = {}) {
+    const { className = '', tableClass = 'data-table', thClass = '', compact = false } = options;
+    return `
+    <div class="table-wrapper ${className}">
+        <table class="${tableClass} ${compact ? 'data-table--compact' : ''}">
+            <thead>
+                <tr>
+                    ${headers.map(h => `<th class="${thClass}" ${h.style ? `style="${h.style}"` : ''}>${h.label}</th>`).join('')}
+                </tr>
+            </thead>
+            <tbody>
+                ${bodyRows}
+            </tbody>
+        </table>
+    </div>`;
+}
+
+/* ── Thumbnail rendering (unified) ──────────────── */
+function renderThumb(url, options = {}) {
+    const { className = 'table-thumb', fallback = '🎌', alt = '' } = options;
+    if (!url || !url.trim()) {
+        return `<div class="${className}" style="display:flex;align-items:center;justify-content:center;background:var(--bg-input);font-size:18px">${fallback}</div>`;
+    }
+    return `<img class="${className}" src="${url}" alt="${alt}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>${encodeURIComponent(fallback)}</text></svg>'">`;
+}
+
+/* ── Tag pills rendering (unified) ──────────────── */
+function renderTags(tags, options = {}) {
+    const { className = 'tag-pill-sm', wrap = true } = options;
+    if (!tags || !tags.length) return '';
+    const html = tags.map(t =>
+        `<span class="${className}">${t.color ? `<span class="tag-color-dot" style="background-color:${t.color}"></span>` : ''}${t.name}</span>`
+    ).join('');
+    return wrap ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${html}</div>` : html;
+}
+
+/* ── Action button group (unified) ──────────────── */
+function createActionGroup(buttons) {
+    const btns = buttons.map(b =>
+        `<button class="icon-btn ${b.danger ? 'icon-btn-danger' : ''}" onclick="${b.onclick}" title="${b.title}">${b.icon}${b.badge ? ` <span class="ver-count-badge">${b.badge}</span>` : ''}</button>`
+    ).join('');
+    return `<div class="action-btn-group">${btns}</div>`;
+}
+
+/* ── Status badge (unified) ────────────────────── */
+function statusBadge(label, variant, icon) {
+    const cls = {
+        success: 'badge-success',
+        failure: 'badge-failure',
+        pending: 'badge-pending',
+        running: 'badge-running',
+        enabled: 'badge-enabled',
+        disabled: 'badge-disabled',
+        cancelled: 'badge-cancelled',
+    }[variant] || 'badge-pending';
+    return `<span class="status-badge ${cls}" style="width:fit-content">${icon ? icon + ' ' : ''}${label}</span>`;
+}
+
+/* ── Health badge (unified) ────────────────────── */
+function healthBadge(health) {
+    const map = {
+        ok: { icon: '✅', label: 'Healthy', cls: 'badge-success' },
+        failing: { icon: '❌', label: 'Failing', cls: 'badge-failure' },
+        untested: { icon: '⚙️', label: 'Untested', cls: 'badge-pending' },
+    };
+    const h = map[health || 'untested'];
+    return `<span class="status-badge ${h.cls}" style="width:fit-content">${h.icon} ${h.label}</span>`;
+}
+
 /* ── Thumbnail helpers ──────────────────────────────── */
 function previewThumb(url) {
     const img = document.getElementById('thumb-preview-img');

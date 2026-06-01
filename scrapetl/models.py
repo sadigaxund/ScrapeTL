@@ -5,8 +5,36 @@ from scrapetl.database import Base
 
 
 class Batch(list):
-    """Signals that this list should be iterated over (one run per item)."""
-    pass
+    """Signals that this list should be iterated over (one run per item).
+
+    Wrapping a list in Batch() marks it for per-element iteration in the
+    pipeline runner. Plain lists from node return values are treated as
+    single values (not iterated). Only Batch or GeneratorType triggers
+    the outer N-runs loop.
+
+    Usage patterns:
+        - Extract list of items:  Batch(hotel_list)
+        - Pass downstream exploded per-element (default Batch behaviour)
+        - To pass whole list without exploding, use a plain list instead
+        - Singular output values get distributed to all output rows
+    """
+
+    def __init__(self, items=None):
+        if items is not None:
+            super().__init__(items)
+        else:
+            super().__init__()
+        self._is_batch = True
+
+    def is_batch(self):
+        return getattr(self, '_is_batch', False)
+
+    @staticmethod
+    def is_batch_value(v):
+        import types
+        return isinstance(v, (types.GeneratorType, Batch)) or (
+            isinstance(v, list) and getattr(v, '_is_batch', False)
+        )
 
 
 # ── Association tables ────────────────────────────────────────────────────────

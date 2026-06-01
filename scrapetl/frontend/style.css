@@ -384,6 +384,8 @@ label {
 
 input[type="text"],
 input[type="number"],
+input[type="url"],
+input[type="search"],
 select {
   background: var(--bg-input);
   border: 1px solid var(--border);
@@ -395,6 +397,42 @@ select {
   outline: none;
   transition: border-color var(--transition), box-shadow var(--transition);
   width: 100%;
+  max-width: 420px;
+}
+
+.form-group input[type="text"],
+.form-group input[type="number"],
+.form-group select {
+  max-width: 100%;
+}
+
+.form-group--action {
+  max-width: none;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+}
+
+.form-grid .form-group {
+  min-width: 0;
+}
+
+.form-section {
+  margin-bottom: 24px;
+}
+
+.form-section-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
 }
 
 input[type="text"]:focus,

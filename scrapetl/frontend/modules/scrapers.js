@@ -97,24 +97,11 @@ function renderScrapersList(scrapers) {
     }
 
     const tableRows = filtered.map(s => {
-        const thumbUrl = s.thumbnail_url || '';
-        const thumbHtml = thumbUrl
-            ? `<img class="table-thumb" src="${thumbUrl}" alt="" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2280%22>🎌</text></svg>'">`
-            : `<div class="table-thumb" style="display:flex;align-items:center;justify-content:center;background:var(--bg-input);font-size:18px">🎌</div>`;
-
-        const tagsHtml = s.tags && s.tags.length
-            ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px">${s.tags.map(t => `<span class="tag-pill-sm"><span class="tag-color-dot" style="background-color:${t.color || '#fff'}"></span>${t.name}</span>`).join('')}</div>`
-            : '';
-
-        const typeBadge = s.scraper_type === 'builder'
+        const thumbHtml = renderThumb(s.thumbnail_url);
+        const tagsHtml = renderTags(s.tags);
+        const typeHtml = s.scraper_type === 'builder'
             ? `<span class="status-badge" style="background:rgba(16,185,129,0.1); color:#10b981; border:1px solid rgba(16,185,129,0.2)">🏗️ Builder</span>`
             : `<span class="status-badge" style="background:rgba(59,130,246,0.1); color:#3b82f6; border:1px solid rgba(59,130,246,0.2)">🐍 Python</span>`;
-
-        const healthInfo = {
-            ok: { icon: '✅', label: 'Healthy', cls: 'badge-success' },
-            failing: { icon: '❌', label: 'Failing', cls: 'badge-failure' },
-            untested: { icon: '⚙️', label: 'Untested', cls: 'badge-pending' },
-        }[s.health || 'untested'];
 
         return `
         <tr draggable="true" 
@@ -132,54 +119,44 @@ function renderScrapersList(scrapers) {
                 <div style="font-size:12px; color:#d1d5db; margin-top:2px;">${s.description || 'No description provided.'}</div>
                 ${tagsHtml}
             </td>
-            <td>${typeBadge}</td>
-            <td>
-                <div style="display:flex; flex-direction:column; gap:6px">
-                    <span class="status-badge ${healthInfo.cls}" style="width:fit-content">${healthInfo.icon} ${healthInfo.label}</span>
-                </div>
-            </td>
+            <td>${typeHtml}</td>
+            <td>${healthBadge(s.health)}</td>
             <td style="color:var(--text-secondary); white-space:nowrap"><span title="${formatDate(s.created_at)}">${formatDateOnly(s.created_at)}</span></td>
             <td style="color:var(--text-secondary); white-space:nowrap"><span title="${formatDate(s.updated_at)}">${formatDateOnly(s.updated_at)}</span></td>
             <td style="color:var(--text-secondary); white-space:nowrap"><span title="${formatDate(s.last_run)}">${formatRelativeDate(s.last_run)}</span></td>
             <td class="action-cell">
                 <div style="display:flex; align-items:center; gap:8px">
-                    <div class="action-btn-group">
-                        <button class="icon-btn" onclick="openAssignTagsModal(${s.id})" title="Manage Tags">🏷️</button>
-                        <button class="icon-btn" onclick="openAssignModal(${s.id})" title="Manage Integrations">🔗</button>
-                        <button class="icon-btn" onclick="openVersionsModal(${s.id})" title="Version History">🕓${s.version_count ? ` <span class="ver-count-badge">${s.version_count}</span>` : ''}</button>
-                        <button class="icon-btn" onclick="openWikiModal(${s.id})" title="Wiki">📖</button>
-                        <button class="icon-btn" onclick="${s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})`}" title="Edit">✏️</button>
-                        <button class="icon-btn" onclick="duplicateScraper(${s.id})" title="Duplicate Scraper">📄</button>
-                        <button class="icon-btn" onclick="downloadScraper(${s.id})" title="Download Code">📥</button>
-                        <button class="icon-btn icon-btn-danger" onclick="deleteScraper(${s.id})" title="Delete">✕</button>
-                    </div>
-                        <button class="btn btn-run" style="padding: 6px 14px; min-width: 80px; justify-content: center;" onclick="runScraper(${s.id}, this)">Run</button>
+                    ${createActionGroup([
+                        { icon: '🏷️', title: 'Manage Tags', onclick: `openAssignTagsModal(${s.id})` },
+                        { icon: '🔗', title: 'Manage Integrations', onclick: `openAssignModal(${s.id})` },
+                        { icon: '🕓', title: 'Version History', onclick: `openVersionsModal(${s.id})`, badge: s.version_count },
+                        { icon: '📖', title: 'Wiki', onclick: `openWikiModal(${s.id})` },
+                        { icon: '✏️', title: 'Edit', onclick: s.scraper_type === 'builder' ? `editInBuilder(${s.id})` : `openEditModal(${s.id})` },
+                        { icon: '📄', title: 'Duplicate Scraper', onclick: `duplicateScraper(${s.id})` },
+                        { icon: '📥', title: 'Download Code', onclick: `downloadScraper(${s.id})` },
+                        { icon: '✕', title: 'Delete', onclick: `deleteScraper(${s.id})`, danger: true },
+                    ])}
+                    <button class="btn btn-run" style="padding: 6px 14px; min-width: 80px; justify-content: center;" onclick="runScraper(${s.id}, this)">Run</button>
                 </div>
             </td>
         </tr>`;
     }).join('');
 
-    container.innerHTML = `
-    <div class="scrapers-table-container">
-        <table class="scrapers-table">
-            <thead>
-                <tr>
-                    <th style="width:30px"></th>
-                    <th style="width:80px">Photo</th>
-                    <th>Scraper Plugin</th>
-                    <th style="width:100px">Type</th>
-                    <th style="width:100px">Status</th>
-                    <th style="width:100px">Created</th>
-                    <th style="width:100px">Updated</th>
-                    <th style="width:100px">Last Run</th>
-                    <th class="action-cell">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${tableRows}
-            </tbody>
-        </table>
-    </div>`;
+    container.innerHTML = createTableContainer(
+        [
+            { label: '', style: 'width:30px' },
+            { label: 'Photo', style: 'width:80px' },
+            { label: 'Scraper Plugin' },
+            { label: 'Type', style: 'width:100px' },
+            { label: 'Status', style: 'width:100px' },
+            { label: 'Created', style: 'width:100px' },
+            { label: 'Updated', style: 'width:100px' },
+            { label: 'Last Run', style: 'width:100px' },
+            { label: 'Actions', style: 'width:1%;white-space:nowrap' },
+        ],
+        tableRows,
+        { className: 'scrapers-table-container', tableClass: 'scrapers-table' }
+    );
 }
 
 function integIcon(type) {
