@@ -27,6 +27,13 @@ class BuilderEngine:
         self.results_cache: Dict[str, Any] = {}
         # Named wire store: wire_relay nodes write here, wire (tap) nodes read from here
         self.wire_store: Dict[str, Any] = {}
+        # Reusable HTTP session with connection pooling
+        # Reusable HTTP session with connection pooling
+        self._http_session = requests.Session()
+        # Counter for throttle between internal batch fetches
+        self._fetch_count = 0
+        # Flag to avoid repeating namespace diagnostics
+        self._namespace_logged = False
 
         # Adjacency list for DAG traversal
         self.adj = {}
@@ -413,11 +420,64 @@ class BuilderEngine:
     def _ensure_single_str(self, val):
         if val is None: return ""
         if isinstance(val, list):
-            # Take the first non-empty string or element
             for item in val:
                 if item: return str(item).strip()
             return ""
         return str(val).strip()
+
+    def _safe_http_fetch(self, url, headers=None, timeout=30, retry_max=2, retry_backoff=2, retry_on_4xx=False, throttle=0, binary=False):
+        """Centralized HTTP GET with retry, backoff, throttle, and structured error handling.
+
+        Returns (response_text_or_bytes, None) on success or (None, error_dict) on failure.
+        Set binary=True to get raw bytes instead of text.
+        """
+        import time as _time
+
+        headers = dict(headers or {})
+        headers.setdefault("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
+
+        # Throttle between successive calls
+        _fetch_count = getattr(self, '_fetch_count', 0)
+        if throttle > 0 and _fetch_count > 0:
+            _time.sleep(throttle)
+        self._fetch_count = _fetch_count + 1
+
+        last_error = None
+        for attempt in range(max(retry_max, 0) + 1):
+            try:
+                if attempt > 0:
+                    _wait = retry_backoff * attempt
+                    print(f"[BuilderEngine] Retry {attempt}/{retry_max} for {url} (wait {_wait}s)")
+                    _time.sleep(_wait)
+
+                resp = self._http_session.get(url, headers=headers, timeout=timeout)
+
+                if resp.status_code >= 400:
+                    can_retry = resp.status_code >= 500 or (resp.status_code >= 400 and retry_on_4xx)
+                    if can_retry and attempt < retry_max:
+                        last_error = {"__error__": f"HTTP {resp.status_code} for {url}", "__node__": "http_fetch", "__status__": resp.status_code}
+                        continue
+                    resp.raise_for_status()
+
+                return (resp.content if binary else resp.text), None
+
+            except requests.exceptions.MissingSchema:
+                return None, {"__error__": f"Invalid URL (no scheme): {url}", "__node__": "http_fetch"}
+            except requests.exceptions.Timeout as e:
+                last_error = {"__error__": f"Timeout fetching {url}", "__node__": "http_fetch"}
+                if attempt < retry_max: continue
+            except requests.exceptions.ConnectionError as e:
+                last_error = {"__error__": f"Connection error: {e}", "__node__": "http_fetch"}
+                if attempt < retry_max: continue
+            except requests.exceptions.HTTPError as e:
+                status = e.response.status_code if e.response else 0
+                last_error = {"__error__": str(e) if not status else f"HTTP {status}", "__node__": "http_fetch", "__status__": status}
+                break
+            except Exception as e:
+                last_error = {"__error__": str(e), "__node__": "http_fetch"}
+                break
+
+        return None, last_error
 
     def _execute_node(self, node: Dict[str, Any], node_inputs: Dict[str, Any], runtime_inputs: Dict[str, Any]) -> Any:
         ntype = self._get_full_type(node)
@@ -469,12 +529,22 @@ class BuilderEngine:
                 return None
 
             headers_raw = data.get("headers") or {}
-            
+            skip_invalid = data.get("skip_invalid", False)
+            retry_max = int(data.get("retry_max", 2))
+            retry_backoff = float(data.get("retry_backoff", 2))
+            retry_on_4xx = data.get("retry_on_4xx", False)
+            batch_throttle = float(data.get("batch_throttle", 0))
+
             def _fetch_single(u):
                 u = self._ensure_single_str(resolve_expressions(u, self._get_execution_context(node_inputs)))
-                if not u: return ""
+                if not u: return None
+
+                if skip_invalid and not u.startswith("http://") and not u.startswith("https://"):
+                    print(f"[BuilderEngine] Skipping invalid URL (no scheme): {u}")
+                    return None
+
                 print(f"[BuilderEngine] Fetcher resolved URL: {u}")
-                
+
                 headers = {}
                 if isinstance(headers_raw, str):
                     try: headers = json.loads(headers_raw.strip() or "{}")
@@ -484,13 +554,17 @@ class BuilderEngine:
                             headers = ast.literal_eval(headers_raw.strip() or "{}")
                         except: pass
                 else: headers = headers_raw
-                
-                resp = requests.get(u, headers=headers, timeout=30)
-                resp.raise_for_status()
-                return resp.text
+
+                text, err = self._safe_http_fetch(u, headers=headers, retry_max=retry_max,
+                    retry_backoff=retry_backoff, retry_on_4xx=retry_on_4xx, throttle=batch_throttle)
+                if err:
+                    return err
+                return text
 
             if isinstance(url_input, list):
-                return Batch([_fetch_single(u) for u in url_input])
+                results = [_fetch_single(u) for u in url_input]
+                results = [r for r in results if r is not None]
+                return Batch(results)
             return _fetch_single(url_input)
 
         elif ntype in ["action_fetch_playwright", "source_fetch_playwright"]:
@@ -1236,20 +1310,19 @@ class BuilderEngine:
                 u = str(u).strip()
                 if not u or u.lower() == "none":
                     return None
-                try:
-                    resp = requests.get(u, timeout=30)
-                    resp.raise_for_status()
-                    img_bytes = resp.content
-                    if output_type == "base64":
-                        import base64
-                        ct = resp.headers.get("content-type", "image/jpeg").split(";")[0]
-                        b64 = base64.b64encode(img_bytes).decode()
-                        return f"data:{ct};base64,{b64}"
-                    elif output_type == "bytes_hex":
-                        return img_bytes.hex()
-                    return u
-                except Exception as e:
-                    return {"__error__": str(e)}
+                img_bytes, err = self._safe_http_fetch(u, timeout=30, binary=True)
+                if err:
+                    return err
+                if output_type == "base64":
+                    import base64
+                    import mimetypes
+                    ct, _ = mimetypes.guess_type(u)
+                    ct = ct or "image/jpeg"
+                    b64 = base64.b64encode(img_bytes).decode()
+                    return f"data:{ct};base64,{b64}"
+                elif output_type == "bytes_hex":
+                    return img_bytes.hex()
+                return u
 
             if isinstance(url, (list, Batch)):
                 return Batch([_fetch_one_image(u) for u in url])
@@ -1390,9 +1463,11 @@ class BuilderEngine:
         }
         
         # Log active namespaces for diagnostics
-        ns_count = len(self.global_vars.get("__namespaces__", {}))
-        if ns_count:
-            print(f"[BuilderEngine] Active Namespaces: {list(self.global_vars['__namespaces__'].keys())}")
+        if not self._namespace_logged:
+            ns_count = len(self.global_vars.get("__namespaces__", {}))
+            if ns_count:
+                print(f"[BuilderEngine] Active Namespaces: {list(self.global_vars['__namespaces__'].keys())}")
+                self._namespace_logged = True
             
         return context
 

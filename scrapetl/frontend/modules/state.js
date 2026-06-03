@@ -136,6 +136,11 @@ const NODE_PRESETS = {
             outputs: ['HTML'],
             configs: [
                 { key: 'method', type: 'select', label: 'Method', options: ['GET', 'POST'] },
+                { key: 'skip_invalid', type: 'checkbox', label: 'Skip non-HTTP URLs (relative, mailto, etc)', default: false },
+                { key: 'retry_max', type: 'number', label: 'Max Retries', default: 2 },
+                { key: 'retry_backoff', type: 'number', label: 'Retry Backoff (s)', default: 2 },
+                { key: 'retry_on_4xx', type: 'checkbox', label: 'Retry on 4xx errors', default: false },
+                { key: 'batch_throttle', type: 'number', label: 'Throttle Between Requests (s)', default: 0 },
                 { key: 'headers', type: 'text', label: 'Extra Headers (JSON)', placeholder: '{"User-Agent": "..."}' }
             ]
         },

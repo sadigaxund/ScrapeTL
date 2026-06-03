@@ -303,6 +303,11 @@ function initBuilder() {
         const node = e.target.closest('.builder-node');
         const port = e.target.closest('.node-port');
 
+        // Blur active input when clicking non-interactive areas
+        if (!node && !port && document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+            document.activeElement.blur();
+        }
+
         // A. If clicking a node or port, let their specific listeners handle it
         if (node || port) {
             console.log("[Builder] Clicked a node or port", node, port);
@@ -614,6 +619,12 @@ function renderBuilderNodes() {
             }
 
             el.addEventListener('mousedown', (e) => {
+                // Blur active input when clicking non-interactive node area
+                if (document.activeElement && ['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName) &&
+                    !['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'LABEL'].includes(e.target.tagName)) {
+                    document.activeElement.blur();
+                }
+
                 // Prevent if clicking port or interactive elements
                 if (e.target.closest('.node-port') ||
                     ['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON', 'LABEL'].includes(e.target.tagName) ||
